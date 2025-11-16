@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>容器运维面板</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .status-running {
+            color: #10b981;
+        }
+        .status-stopped {
+            color: #ef4444;
+        }
+        .status-exited {
+            color: #6b7280;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.5);
+        }
+        .modal.active {
+            display: block;
+        }
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%;
+            max-width: 800px;
+            max-height: 80vh;
+            overflow-y: auto;
+            border-radius: 8px;
+        }
+        .log-container {
+            background-color: #1e1e1e;
+            color: #d4d4d4;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 60vh;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            background-color: #333;
+            color: white;
+            border-radius: 4px;
+            z-index: 2000;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .toast.show {
+            opacity: 1;
+        }
+        .toast.success {
+            background-color: #10b981;
+        }
+        .toast.error {
+            background-color: #ef4444;
+        }
+        @media (max-width: 640px) {
+            .container-table {
+                font-size: 12px;
+            }
+            .btn {
+                padding: 4px 8px;
+                font-size: 12px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- 登录页面 -->
+    <div id="login-page" class="min-h-screen flex items-center justify-center bg-gray-100">
+        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
+            <h1 class="text-2xl font-bold mb-6 text-center">容器运维面板</h1>
+            <form id="login-form" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
+                    <input type="text" id="login-username" name="username" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="admin" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
+                    <input type="password" id="login-password" name="password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="admin" required>
+                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    登录
+                </button>
+            </form>
+            <div id="login-error" class="mt-4 text-red-500 text-sm hidden"></div>
+        </div>
+    </div>
+
+    <!-- 修改密码模态框 -->
+    <div id="change-password-modal" class="modal">
+        <div class="modal-content">
+            <h2 class="text-xl font-bold mb-4">修改密码</h2>
+            <p class="text-sm text-gray-600 mb-4">首次登录需要修改密码，密码必须包含：大写字母、小写字母、数字、特殊字符，长度至少8位</p>
+            <form id="change-password-form" class="space-y-4">
+                <div id="old-password-div" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 mb-1">旧密码</label>
+                    <input type="password" id="old-password" name="old-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                    <input type="password" id="new-password" name="new-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                    <input type="password" id="confirm-password" name="confirm-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">确认修改</button>
+                </div>
+            </form>
+            <div id="change-password-error" class="mt-4 text-red-500 text-sm hidden"></div>
+        </div>
+    </div>
+
+    <!-- 主页面 -->
+    <div id="main-page" class="hidden">
+    <div class="container mx-auto px-4 py-6">
+        <!-- 头部系统监控 -->
+        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h1 class="text-2xl font-bold">容器运维面板</h1>
+                <div class="flex gap-2 items-center">
+                    <span id="current-user" class="text-sm text-gray-600"></span>
+                    <button onclick="handleLogout()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 text-sm">登出</button>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="text-center">
+                    <div class="text-sm text-gray-600">CPU 使用率</div>
+                    <div class="text-2xl font-bold" id="cpu-usage">0%</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-gray-600">内存使用率</div>
+                    <div class="text-2xl font-bold" id="memory-usage">0%</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-gray-600">磁盘使用率</div>
+                    <div class="text-2xl font-bold" id="disk-usage">0%</div>
+                </div>
+                <div class="text-center">
+                    <div class="text-sm text-gray-600">当前时间</div>
+                    <div class="text-lg font-semibold" id="current-time">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 标签页 -->
+        <div class="bg-white rounded-lg shadow-md mb-6">
+            <div class="border-b border-gray-200">
+                <nav class="flex -mb-px">
+                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-tab="containers">
+                        容器管理
+                    </button>
+                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="images">
+                        镜像管理
+                    </button>
+                </nav>
+            </div>
+
+            <!-- 容器管理标签页 -->
+            <div id="containers-tab" class="tab-content active p-6">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">容器列表</h2>
+                    <button onclick="loadContainers()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        刷新
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 container-table">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">镜像</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">端口</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">文件系统</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="containers-tbody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="8" class="px-4 py-8 text-center text-gray-500">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- 镜像管理标签页 -->
+            <div id="images-tab" class="tab-content p-6">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">镜像列表</h2>
+                    <button onclick="loadImages()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                        刷新
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full divide-y divide-gray-200 container-table">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">标签</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">大小</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="images-tbody" class="bg-white divide-y divide-gray-200">
+                            <tr>
+                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 日志弹窗 -->
+    <div id="log-modal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">容器日志</h3>
+                <button onclick="closeLogModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="log-container" class="log-container"></div>
+        </div>
+    </div>
+
+    <!-- 提示消息 -->
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let logEventSource = null;
+        let systemStatsInterval = null;
+        let containersInterval = null;
+
+        // 标签页切换
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', function() {
+                const tab = this.dataset.tab;
+                
+                // 更新按钮状态
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                    b.classList.remove('border-blue-500', 'text-blue-600');
+                    b.classList.add('border-transparent', 'text-gray-500');
+                });
+                this.classList.remove('border-transparent', 'text-gray-500');
+                this.classList.add('border-blue-500', 'text-blue-600');
+
+                // 更新内容显示
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.remove('active');
+                });
+                document.getElementById(tab + '-tab').classList.add('active');
+
+                // 如果切换到容器标签页，开始自动刷新
+                if (tab === 'containers') {
+                    startContainersAutoRefresh();
+                } else {
+                    stopContainersAutoRefresh();
+                }
+            });
+        });
+
+        // 显示提示消息
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            toast.textContent = message;
+            toast.className = `toast ${type} show`;
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 3000);
+        }
+
+        // 加载系统监控数据
+        async function loadSystemStats() {
+            try {
+                const response = await authFetch('/api/system/stats');
+                if (!response.ok) throw new Error('获取系统信息失败');
+                const data = await response.json();
+                
+                document.getElementById('cpu-usage').textContent = data.cpu.toFixed(1) + '%';
+                document.getElementById('memory-usage').textContent = data.memory.toFixed(1) + '%';
+                document.getElementById('disk-usage').textContent = data.disk.toFixed(1) + '%';
+                document.getElementById('current-time').textContent = data.time;
+            } catch (error) {
+                console.error('加载系统监控失败:', error);
+            }
+        }
+
+        // 加载容器列表
+        async function loadContainers() {
+            try {
+                const response = await authFetch('/api/containers');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || '获取容器列表失败');
+                }
+                const data = await response.json();
+                
+                const tbody = document.getElementById('containers-tbody');
+                
+                // 检查数据是否为数组
+                if (!Array.isArray(data)) {
+                    console.error('返回的数据不是数组:', data);
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">数据格式错误</td></tr>';
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">暂无容器</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(container => {
+                    const statusClass = container.state === 'running' ? 'status-running' : 
+                                       container.state === 'exited' ? 'status-exited' : 'status-stopped';
+                    const statusText = container.state === 'running' ? '运行中' : 
+                                      container.state === 'exited' ? '已停止' : '已停止';
+                    
+                    const startBtn = container.state !== 'running' ? 
+                        `<button onclick="containerAction('${container.id}', 'start')" class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 mr-1">启动</button>` : '';
+                    const stopBtn = container.state === 'running' ? 
+                        `<button onclick="containerAction('${container.id}', 'stop')" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600 mr-1">停止</button>` : '';
+                    const restartBtn = container.state === 'running' ? 
+                        `<button onclick="containerAction('${container.id}', 'restart')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 mr-1">重启</button>` : '';
+                    
+                    return `
+                        <tr>
+                            <td class="px-4 py-3 text-sm text-gray-900">${container.id}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${container.name}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${container.image}</td>
+                            <td class="px-4 py-3 text-sm ${statusClass}">${statusText}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${container.ports}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900" title="容器可写层文件系统大小">${container.memory}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${container.created}</td>
+                            <td class="px-4 py-3 text-sm">
+                                ${startBtn}
+                                ${stopBtn}
+                                ${restartBtn}
+                                <button onclick="viewLogs('${container.id}', '${container.name}')" class="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600 mr-1">日志</button>
+                                <button onclick="containerAction('${container.id}', 'remove')" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('加载容器列表失败:', error);
+                showToast('加载容器列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 容器操作
+        async function containerAction(id, action) {
+            const actionMap = {
+                'start': '启动',
+                'stop': '停止',
+                'restart': '重启',
+                'remove': '删除'
+            };
+            
+            if (action === 'remove' && !confirm(`确定要删除容器 ${id} 吗？此操作不可恢复！`)) {
+                return;
+            }
+
+            try {
+                const response = await authFetch('/api/containers/action', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id: id, action: action })
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
+                showToast(`容器${actionMap[action]}成功`, 'success');
+                setTimeout(loadContainers, 500);
+            } catch (error) {
+                showToast(`${actionMap[action]}失败: ${error.message}`, 'error');
+            }
+        }
+
+        // 查看容器日志
+        function viewLogs(id, name) {
+            const modal = document.getElementById('log-modal');
+            const logContainer = document.getElementById('log-container');
+            modal.classList.add('active');
+            logContainer.textContent = '正在加载日志...\n';
+
+            // 关闭之前的连接
+            if (logEventSource) {
+                logEventSource.close();
+                logEventSource = null;
+            }
+
+            // 使用 EventSource 接收日志流
+            const eventSource = new EventSource(`/api/containers/logs?id=${id}`);
+            logEventSource = eventSource;
+
+            let logContent = '';
+
+            eventSource.onmessage = function(event) {
+                if (event.data) {
+                    logContent += event.data + '\n';
+                    logContainer.textContent = logContent;
+                    // 自动滚动到底部
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                }
+            };
+
+            eventSource.onerror = function(error) {
+                console.error('日志流错误:', error);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    if (logContent === '') {
+                        logContainer.textContent = '获取日志失败，请检查容器状态或容器是否正在运行';
+                    } else {
+                        logContent += '\n[日志流已断开]';
+                        logContainer.textContent = logContent;
+                    }
+                    eventSource.close();
+                    logEventSource = null;
+                }
+            };
+        }
+
+        // 关闭日志弹窗
+        function closeLogModal() {
+            const modal = document.getElementById('log-modal');
+            modal.classList.remove('active');
+            
+            if (logEventSource) {
+                logEventSource.close();
+                logEventSource = null;
+            }
+            
+            document.getElementById('log-container').textContent = '';
+        }
+
+        // 加载镜像列表
+        async function loadImages() {
+            try {
+                const response = await authFetch('/api/images');
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(errorText || '获取镜像列表失败');
+                }
+                const data = await response.json();
+                
+                const tbody = document.getElementById('images-tbody');
+                
+                // 检查数据是否为数组
+                if (!Array.isArray(data)) {
+                    console.error('返回的数据不是数组:', data);
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">数据格式错误</td></tr>';
+                    return;
+                }
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无镜像</td></tr>';
+                    return;
+                }
+
+                tbody.innerHTML = data.map(image => {
+                    return `
+                        <tr>
+                            <td class="px-4 py-3 text-sm text-gray-900">${image.id}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${image.name}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${image.tag}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${image.size}</td>
+                            <td class="px-4 py-3 text-sm text-gray-900">${image.created}</td>
+                            <td class="px-4 py-3 text-sm">
+                                <button onclick="removeImage('${image.id}', '${image.name}:${image.tag}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">删除</button>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('加载镜像列表失败:', error);
+                showToast('加载镜像列表失败: ' + error.message, 'error');
+            }
+        }
+
+        // 删除镜像
+        async function removeImage(id, name) {
+            if (!confirm(`确定要删除镜像 ${name} 吗？`)) {
+                return;
+            }
+
+            try {
+                const response = await authFetch('/api/images/remove', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ id: id })
+                });
+
+                if (!response.ok) {
+                    const error = await response.text();
+                    throw new Error(error);
+                }
+
+                showToast('镜像删除成功', 'success');
+                setTimeout(loadImages, 500);
+            } catch (error) {
+                showToast('删除失败: ' + error.message, 'error');
+            }
+        }
+
+        // 开始容器自动刷新
+        function startContainersAutoRefresh() {
+            if (containersInterval) return;
+            containersInterval = setInterval(loadContainers, 5000);
+        }
+
+        // 停止容器自动刷新
+        function stopContainersAutoRefresh() {
+            if (containersInterval) {
+                clearInterval(containersInterval);
+                containersInterval = null;
+            }
+        }
+
+        // 认证相关变量
+        let authToken = '';
+        let needChangePassword = false;
+
+        // 检查登录状态
+        async function checkAuth() {
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    authToken = document.cookie.match(/token=([^;]+)/)?.[1] || '';
+                    needChangePassword = data.need_change_password;
+                    document.getElementById('current-user').textContent = `用户: ${data.username}`;
+                    return true;
+                }
+                return false;
+            } catch (error) {
+                return false;
+            }
+        }
+
+        // 登录
+        async function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            const errorDiv = document.getElementById('login-error');
+
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({ username, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    needChangePassword = data.need_change_password;
+                    
+                    if (needChangePassword) {
+                        // 需要修改密码
+                        document.getElementById('login-page').classList.add('hidden');
+                        showChangePasswordModal(false);
+                    } else {
+                        // 登录成功
+                        showMainPage();
+                    }
+                } else {
+                    errorDiv.textContent = data.error || '登录失败';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = '登录失败: ' + error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        // 修改密码
+        async function handleChangePassword(event) {
+            event.preventDefault();
+            const oldPasswordDiv = document.getElementById('old-password-div');
+            const oldPasswordInput = document.getElementById('old-password');
+            const newPassword = document.getElementById('new-password').value;
+            const confirmPassword = document.getElementById('confirm-password').value;
+            const errorDiv = document.getElementById('change-password-error');
+
+            // 验证新密码
+            if (!newPassword) {
+                errorDiv.textContent = '新密码不能为空';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                errorDiv.textContent = '两次输入的密码不一致';
+                errorDiv.classList.remove('hidden');
+                return;
+            }
+
+            // 如果需要旧密码，验证旧密码
+            if (!oldPasswordDiv.classList.contains('hidden')) {
+                const oldPassword = oldPasswordInput.value;
+                if (!oldPassword) {
+                    errorDiv.textContent = '旧密码不能为空';
+                    errorDiv.classList.remove('hidden');
+                    return;
+                }
+            } else {
+                oldPasswordInput.value = '';
+            }
+
+            const oldPassword = oldPasswordInput.value;
+
+            try {
+                const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        old_password: needChangePassword ? '' : oldPassword,
+                        new_password: newPassword
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    authToken = data.token;
+                    needChangePassword = false;
+                    document.getElementById('change-password-modal').classList.remove('active');
+                    showMainPage();
+                    showToast('密码修改成功', 'success');
+                } else {
+                    errorDiv.textContent = data.error || '修改密码失败';
+                    errorDiv.classList.remove('hidden');
+                }
+            } catch (error) {
+                errorDiv.textContent = '修改密码失败: ' + error.message;
+                errorDiv.classList.remove('hidden');
+            }
+        }
+
+        // 登出
+        async function handleLogout() {
+            try {
+                await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+            } catch (error) {
+                console.error('登出失败:', error);
+            }
+            authToken = '';
+            document.getElementById('main-page').classList.add('hidden');
+            document.getElementById('login-page').classList.remove('hidden');
+        }
+
+        // 显示修改密码模态框
+        function showChangePasswordModal(showOldPassword = false) {
+            const modal = document.getElementById('change-password-modal');
+            const oldPasswordDiv = document.getElementById('old-password-div');
+            const errorDiv = document.getElementById('change-password-error');
+            const form = document.getElementById('change-password-form');
+            
+            // 清除错误信息
+            errorDiv.classList.add('hidden');
+            errorDiv.textContent = '';
+            
+            // 清空表单
+            form.reset();
+            
+            // 显示/隐藏旧密码输入框
+            if (showOldPassword) {
+                oldPasswordDiv.classList.remove('hidden');
+            } else {
+                oldPasswordDiv.classList.add('hidden');
+            }
+            
+            // 显示模态框
+            modal.classList.add('active');
+        }
+
+        // 显示主页面
+        function showMainPage() {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('main-page').classList.remove('hidden');
+            loadSystemStats();
+            loadContainers();
+            loadImages();
+        }
+
+        // 带认证的 fetch 请求
+        async function authFetch(url, options = {}) {
+            const defaultOptions = {
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json',
+                    ...options.headers
+                }
+            };
+
+            const response = await fetch(url, { ...defaultOptions, ...options });
+            
+            if (response.status === 401) {
+                // 未授权，返回登录页
+                handleLogout();
+                throw new Error('未授权，请重新登录');
+            }
+
+            if (response.status === 403) {
+                const data = await response.json();
+                if (data.need_change_password) {
+                    // 需要修改密码
+                    document.getElementById('main-page').classList.add('hidden');
+                    showChangePasswordModal(true);
+                }
+                throw new Error(data.error || '禁止访问');
+            }
+
+            return response;
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 绑定登录表单
+            document.getElementById('login-form').addEventListener('submit', handleLogin);
+            document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
+
+            // 检查是否已登录
+            const isAuthenticated = await checkAuth();
+            if (isAuthenticated) {
+                if (needChangePassword) {
+                    document.getElementById('login-page').classList.add('hidden');
+                    showChangePasswordModal(false);
+                } else {
+                    showMainPage();
+                }
+            } else {
+                document.getElementById('login-page').classList.remove('hidden');
+                document.getElementById('main-page').classList.add('hidden');
+            }
+
+            // 系统监控自动刷新（5秒）- 仅在已登录时
+            if (isAuthenticated && !needChangePassword) {
+                systemStatsInterval = setInterval(loadSystemStats, 5000);
+                startContainersAutoRefresh();
+            }
+
+            // 点击模态框外部关闭
+            const logModal = document.getElementById('log-modal');
+            if (logModal) {
+                logModal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        closeLogModal();
+                    }
+                });
+            }
+
+            // 点击修改密码模态框外部关闭
+            const changePasswordModal = document.getElementById('change-password-modal');
+            if (changePasswordModal) {
+                changePasswordModal.addEventListener('click', function(e) {
+                    if (e.target === this && !needChangePassword) {
+                        this.classList.remove('active');
+                    }
+                });
+            }
+        });
+
+        // 页面卸载时清理
+        window.addEventListener('beforeunload', function() {
+            if (logEventSource) {
+                logEventSource.close();
+            }
+            if (systemStatsInterval) {
+                clearInterval(systemStatsInterval);
+            }
+            if (containersInterval) {
+                clearInterval(containersInterval);
+            }
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,30 @@
+# 编译输出
+dist/
+*.exe
+rabbit-panel
+rabbit-panel-*
+
+# Go 相关
+go.work
+# 注意：go.mod 和 go.sum 应该提交到版本控制
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 临时文件
+*.log
+*.tmp
+tmp/
+build-errors.log
+
+# Air 热重载工具
+.air.toml.bak
+
