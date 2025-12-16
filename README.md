@@ -10,7 +10,7 @@
 - 🧩 **Compose 管理**：在线创建/编辑 `docker-compose.yml`，一键 Up/Down/Restart/Pull/Logs
 - 📊 **系统监控**：CPU/内存/磁盘实时监控（5 秒刷新）
 - 🌐 **响应式设计**：PC/平板/手机良好体验
-- 🔧 **零依赖**：单二进制，无数据库，无额外安装
+- 🔧 **零依赖**：单二进制，内置前端，无数据库，无额外安装
 - 🎯 **多节点管理**：Master/Worker 统一管理多台服务器
 - 🔒 **安全认证**：JWT 登录认证 + HMAC 节点认证
 
@@ -39,19 +39,23 @@ newgrp docker
 
 ```bash
 # 克隆代码
-git clone https://github.com/your-repo/rabbit-panel.git
+git clone https://github.com/reisen7/rabbit-panel.git
 cd rabbit-panel
 
-# 安装依赖
-chmod +x setup-deps.sh
-./setup-deps.sh
+# 编译 (默认依据当前架构输出 dist/)
+chmod +x rabbit.sh
+./rabbit.sh build
 
-# 编译 (支持多架构)
-chmod +x build.sh
-./build.sh
+# 需要交叉编译可指定目标: amd64 | arm64 | armv7 | all
+./rabbit.sh build arm64
 
 # 编译后的文件在 dist/ 目录
+
 ```
+
+> 提示：`rabbit.sh build` 默认配置了 `GOPROXY=https://goproxy.cn,direct` 以加速国内构建。
+> 如果需要跨架构且依赖 CGO，可通过 `CC_AMD64`、`CC_ARM64`、`CC_ARMV7` 指定对应的交叉编译器。
+
 
 ### 3. 运行面板（一键脚本）
 
@@ -77,9 +81,6 @@ chmod +x rabbit.sh
 也可直接运行二进制（默认端口 9999）：
 
 ```bash
-# 确保 static 目录存在
-mkdir -p static
-
 # 运行面板 (默认端口 9999)
 ./rabbit-panel-linux-amd64
 
@@ -164,140 +165,7 @@ PORT=10001 \
 
 > 需要本机已安装 `docker compose`（你已安装：`docker compose version` 返回成功）。
 
-## 快速测试
 
-创建测试容器来验证面板功能：
-
-```bash
-# 方法1: 一键创建测试容器（推荐）
-chmod +x quick-test.sh
-./quick-test.sh
-
-# 方法2: 交互式创建测试容器
-chmod +x test-containers.sh
-./test-containers.sh
-
-# 方法3: 手动创建简单测试容器
-docker run -d --name test-nginx -p 8081:80 nginx:alpine
-docker run -d --name test-redis -p 6379:6379 redis:alpine
-```
-
-## 开发模式（热重载）
-
-项目支持热重载开发模式，修改代码后自动重新编译并重启。
-
-```bash
-# 使用 Air（推荐）
-chmod +x dev.sh
-./dev.sh
-
-# 访问 http://localhost:9999
-# 修改代码后会自动重新编译并重启
-```
-
-## 常见问题
-
-### 1. 无法连接到 Docker
-
-**错误信息**: `无法连接到 Docker: ...`
-
-**解决方法**:
-```bash
-# 检查 Docker 服务状态
-sudo systemctl status docker
-
-# 启动 Docker 服务
-sudo systemctl start docker
-
-# 检查当前用户是否有 Docker 权限
-docker ps
-
-# 如果提示权限错误，将用户添加到 docker 组
-sudo usermod -aG docker $USER
-newgrp docker
-```
-
-### 2. 端口被占用
-
-**错误信息**: `listen tcp :9999: bind: address already in use`
-
-**解决方法**:
-```bash
-# 使用其他端口
-PORT=9090 ./rabbit-panel-linux-amd64
-
-# 或查看占用 9999 端口的进程
-sudo lsof -i :9999
-sudo kill -9 <PID>
-```
-
-### 3. 容器日志无法查看
-
-**可能原因**: 容器已停止、容器 ID 错误、Docker API 权限不足
-
-**解决方法**:
-```bash
-# 检查容器状态
-docker ps -a
-
-# 检查 Docker 权限
-docker logs <container-id>
-```
-
-### 4. 内存占用过高
-
-**优化建议**:
-- 确保使用编译优化版本 (已启用 `-ldflags="-s -w"`)
-- 定期清理无用的容器和镜像
-- 关闭不需要的容器日志流
-
-### 5. 编译失败
-
-**错误信息**: `cannot find package "github.com/docker/docker/client"`
-
-**解决方法**:
-```bash
-# 初始化 Go 模块
-go mod init rabbit-panel
-
-# 下载依赖
-go mod tidy
-
-# 重新编译
-go build -o rabbit-panel main.go
-```
-
-### 6. 网络问题 - 无法下载依赖
-
-**错误信息**: `dial tcp 142.250.196.209:443: i/o timeout`
-
-**解决方法**:
-
-**方法 1: 使用提供的脚本（推荐）**
-```bash
-chmod +x setup-deps.sh
-./setup-deps.sh
-```
-
-**方法 2: 手动设置 Go 代理**
-```bash
-# 设置 Go 代理为国内镜像
-export GOPROXY=https://goproxy.cn,direct
-
-# 下载依赖
-go mod download
-go mod tidy
-```
-
-**方法 3: 永久设置 Go 代理**
-```bash
-# 将代理设置写入 ~/.bashrc
-echo 'export GOPROXY=https://goproxy.cn,direct' >> ~/.bashrc
-source ~/.bashrc
-
-# 或者使用 go env 设置
-go env -w GOPROXY=https://goproxy.cn,direct
-```
 
 ## 配置与安全
 
@@ -367,9 +235,8 @@ rabbit-panel/
 ├── node.go              # 节点管理模块
 ├── scheduler.go         # 容器调度模块
 ├── compose.go           # Compose 在线管理 API
-├── static/index.html    # 前端页面（Tailwind + 原生 JS）
-├── build.sh             # 编译脚本（多架构）
-├── rabbit.sh            # 一键管理脚本（start/stop/restart/status/build/log）
+├── static/index.html    # 前端页面
+├── rabbit.sh            # 一键管理脚本
 ├── .air.toml            # 开发热重载配置
 ├── go.mod / go.sum      # Go 依赖
 └── README.md            # 说明文档
@@ -420,6 +287,7 @@ MIT License
 
 ### v1.1.0 (2025-12-16)
 
+- 支持单文件部署（静态资源嵌入二进制）
 - 添加用户登录认证
 - 添加节点间通信认证 (HMAC-SHA256)
 - 改进多节点管理功能

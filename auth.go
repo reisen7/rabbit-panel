@@ -16,7 +16,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
-	_ "github.com/mattn/go-sqlite3"
+	_ "modernc.org/sqlite"
 )
 
 // 获取节点密钥（从环境变量或使用默认值）
@@ -154,7 +154,7 @@ var authDB *sql.DB
 // 初始化认证数据库
 func initAuthDB() error {
 	var err error
-	authDB, err = sql.Open("sqlite3", "./auth.db")
+	authDB, err = sql.Open("sqlite", "./auth.db")
 	if err != nil {
 		return fmt.Errorf("打开数据库失败: %v", err)
 	}

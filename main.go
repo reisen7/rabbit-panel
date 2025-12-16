@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"context"
+	"embed"
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -23,6 +25,9 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 )
+
+//go:embed static
+var staticFiles embed.FS
 
 // 全局 Docker 客户端
 var dockerClient *client.Client
@@ -879,26 +884,29 @@ func main() {
 	}
 
 	// 静态文件服务（处理所有其他路径）
+	// 使用 embed 嵌入静态文件，实现单文件部署
+	staticFS, err := fs.Sub(staticFiles, "static")
+	if err != nil {
+		log.Fatalf("无法加载静态文件: %v", err)
+	}
+	fileServer := http.FileServer(http.FS(staticFS))
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// 静态资源文件（CSS、JS、图片等）直接返回
-		if strings.HasPrefix(r.URL.Path, "/static/") || 
-		   strings.HasSuffix(r.URL.Path, ".css") || 
-		   strings.HasSuffix(r.URL.Path, ".js") ||
-		   strings.HasSuffix(r.URL.Path, ".png") ||
-		   strings.HasSuffix(r.URL.Path, ".jpg") ||
-		   strings.HasSuffix(r.URL.Path, ".ico") {
-			http.ServeFile(w, r, "static/"+strings.TrimPrefix(r.URL.Path, "/"))
+		// 排除 API 路径（虽然正常不会走到这里，但作为兜底）
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			http.NotFound(w, r)
 			return
 		}
-		
-		// 如果访问根路径或 HTML 页面，返回 index.html（前端路由）
-		if r.URL.Path == "/" || strings.HasSuffix(r.URL.Path, ".html") {
-			http.ServeFile(w, r, "static/index.html")
-			return
+
+		// 兼容 /static/ 前缀的请求
+		if strings.HasPrefix(r.URL.Path, "/static/") {
+			r.URL.Path = strings.TrimPrefix(r.URL.Path, "/static")
 		}
-		
-		// 其他静态文件
-		http.ServeFile(w, r, "static/"+r.URL.Path)
+
+		// 如果是根路径，http.FileServer 会自动寻找 index.html
+		// 但为了确保 SPA 路由（如果有）或明确行为，我们可以显式处理
+		// 这里直接交给 fileServer 处理即可
+		fileServer.ServeHTTP(w, r)
 	})
 
 	// 启动服务器

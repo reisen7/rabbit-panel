@@ -20,6 +20,7 @@ go.work
 Thumbs.db
 
 # 临时文件
+.db
 *.log
 *.pid
 *.tmp
