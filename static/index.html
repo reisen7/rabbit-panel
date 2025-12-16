@@ -182,6 +182,9 @@
                     <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="images">
                         镜像管理
                     </button>
+                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="compose">
+                        Compose 管理
+                    </button>
                 </nav>
             </div>
 
@@ -244,6 +247,63 @@
                     </table>
                 </div>
             </div>
+
+            <!-- Compose 管理标签页 -->
+            <div id="compose-tab" class="tab-content p-6">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-xl font-semibold">Compose 项目</h2>
+                    <div class="flex gap-2">
+                        <button onclick="openCreateComposeModal()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
+                            新建项目
+                        </button>
+                        <button onclick="loadComposeProjects()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+                            刷新
+                        </button>
+                    </div>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="compose-list">
+                    <!-- 项目列表 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Compose 编辑/管理模态框 -->
+    <div id="compose-modal" class="modal">
+        <div class="modal-content" style="max-width: 1000px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold" id="compose-modal-title">项目管理</h3>
+                <button onclick="closeComposeModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div class="mb-4 flex gap-2 flex-wrap">
+                <button onclick="runComposeAction('up')" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">启动 (Up -d)</button>
+                <button onclick="runComposeAction('down')" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">停止 (Down)</button>
+                <button onclick="runComposeAction('restart')" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">重启</button>
+                <button onclick="runComposeAction('pull')" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">拉取镜像</button>
+                <button onclick="runComposeAction('logs')" class="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600">查看日志</button>
+                <button onclick="saveComposeFile()" class="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600 ml-auto">保存文件</button>
+            </div>
+            <textarea id="compose-editor" class="w-full h-96 p-4 font-mono text-sm bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded focus:outline-none focus:border-blue-500" spellcheck="false" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; tab-size: 2;"></textarea>
+            <div id="compose-output" class="mt-4 p-4 bg-black text-white font-mono text-xs h-40 overflow-y-auto hidden rounded whitespace-pre-wrap"></div>
+        </div>
+    </div>
+
+    <!-- 新建 Compose 项目模态框 -->
+    <div id="create-compose-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h3 class="text-lg font-semibold mb-4">新建 Compose 项目</h3>
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">项目名称 (英文)</label>
+                <input type="text" id="new-compose-name" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+            </div>
+            <div class="flex justify-end gap-2">
+                <button onclick="document.getElementById('create-compose-modal').classList.remove('active')" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button onclick="createComposeProject()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">创建</button>
+            </div>
         </div>
     </div>
 
@@ -252,11 +312,17 @@
         <div class="modal-content">
             <div class="flex justify-between items-center mb-4">
                 <h3 class="text-lg font-semibold">容器日志</h3>
-                <button onclick="closeLogModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center text-sm text-gray-600 cursor-pointer">
+                        <input type="checkbox" id="auto-scroll" class="mr-2" checked>
+                        自动滚动
+                    </label>
+                    <button onclick="closeLogModal()" class="text-gray-500 hover:text-gray-700">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div id="log-container" class="log-container"></div>
         </div>
@@ -294,6 +360,11 @@
                     startContainersAutoRefresh();
                 } else {
                     stopContainersAutoRefresh();
+                }
+
+                // 如果切换到 Compose 标签页，刷新列表
+                if (tab === 'compose') {
+                    loadComposeProjects();
                 }
             });
         });
@@ -399,6 +470,14 @@
                 return;
             }
 
+            // 查找所有相关按钮并设置为加载状态
+            const buttons = document.querySelectorAll(`button[onclick*="'${id}', '${action}'"]`);
+            buttons.forEach(btn => {
+                btn.disabled = true;
+                btn.innerHTML = `<svg class="animate-spin h-4 w-4 mr-1 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>执行中...`;
+                btn.classList.add('opacity-75', 'cursor-not-allowed');
+            });
+
             try {
                 const response = await authFetch('/api/containers/action', {
                     method: 'POST',
@@ -417,6 +496,8 @@
                 setTimeout(loadContainers, 500);
             } catch (error) {
                 showToast(`${actionMap[action]}失败: ${error.message}`, 'error');
+                // 恢复按钮状态
+                loadContainers();
             }
         }
 
@@ -444,7 +525,9 @@
                     logContent += event.data + '\n';
                     logContainer.textContent = logContent;
                     // 自动滚动到底部
-                    logContainer.scrollTop = logContainer.scrollHeight;
+                    if (document.getElementById('auto-scroll').checked) {
+                        logContainer.scrollTop = logContainer.scrollHeight;
+                    }
                 }
             };
 
@@ -739,6 +822,7 @@
             loadSystemStats();
             loadContainers();
             loadImages();
+            loadComposeProjects();
         }
 
         // 带认证的 fetch 请求
@@ -774,6 +858,21 @@
 
         // 初始化
         document.addEventListener('DOMContentLoaded', async function() {
+            // Compose 编辑器 Tab 支持
+            const editor = document.getElementById('compose-editor');
+            if (editor) {
+                editor.addEventListener('keydown', function(e) {
+                    if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const start = this.selectionStart;
+                        const end = this.selectionEnd;
+                        // 插入2个空格
+                        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+                        this.selectionStart = this.selectionEnd = start + 2;
+                    }
+                });
+            }
+
             // 绑定登录表单
             document.getElementById('login-form').addEventListener('submit', handleLogin);
             document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
@@ -831,6 +930,148 @@
                 clearInterval(containersInterval);
             }
         });
+        // Compose 相关逻辑
+        let currentComposeProject = '';
+
+        function loadComposeProjects() {
+            fetch('/api/compose/list?t=' + new Date().getTime())
+                .then(response => {
+                    if (response.status === 401) {
+                        handleLogout();
+                        return;
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    const list = document.getElementById('compose-list');
+                    list.innerHTML = '';
+                    if (!data || data.length === 0) {
+                        list.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂无项目</div>';
+                        return;
+                    }
+                    data.forEach(project => {
+                        const card = document.createElement('div');
+                        card.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
+                        card.innerHTML = `
+                            <div class="flex justify-between items-start mb-2">
+                                <h3 class="font-bold text-lg truncate" title="${project.name}">${project.name}</h3>
+                                <span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-600">Unknown</span>
+                            </div>
+                            <div class="mt-4 flex justify-end">
+                                <button onclick="openComposeManager('${project.name}')" class="text-blue-500 hover:text-blue-700 text-sm font-medium">管理 &rarr;</button>
+                            </div>
+                        `;
+                        list.appendChild(card);
+                    });
+                })
+                .catch(err => showToast('加载项目失败: ' + err.message, 'error'));
+        }
+
+        function openCreateComposeModal() {
+            document.getElementById('new-compose-name').value = '';
+            document.getElementById('create-compose-modal').classList.add('active');
+        }
+
+        function createComposeProject() {
+            const name = document.getElementById('new-compose-name').value.trim();
+            if (!name) return;
+
+            fetch('/api/compose/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            })
+            .then(async res => {
+                if (res.ok) {
+                    showToast('创建成功');
+                    document.getElementById('create-compose-modal').classList.remove('active');
+                    loadComposeProjects();
+                } else {
+                    const text = await res.text();
+                    showToast('创建失败: ' + text, 'error');
+                }
+            });
+        }
+
+        function openComposeManager(name) {
+            currentComposeProject = name;
+            document.getElementById('compose-modal-title').textContent = '项目管理: ' + name;
+            document.getElementById('compose-output').classList.add('hidden');
+            document.getElementById('compose-output').textContent = '';
+            
+            fetch(`/api/compose/file?project=${name}`)
+                .then(res => res.text())
+                .then(text => {
+                    document.getElementById('compose-editor').value = text;
+                    document.getElementById('compose-modal').classList.add('active');
+                });
+        }
+
+        function closeComposeModal() {
+            document.getElementById('compose-modal').classList.remove('active');
+            currentComposeProject = '';
+        }
+
+        function saveComposeFile() {
+            if (!currentComposeProject) return;
+            const content = document.getElementById('compose-editor').value;
+            
+            fetch('/api/compose/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project: currentComposeProject, content })
+            })
+            .then(async res => {
+                if (res.ok) {
+                    showToast('保存成功');
+                } else {
+                    const text = await res.text();
+                    showToast('保存失败: ' + text, 'error');
+                }
+            });
+        }
+
+        function runComposeAction(action) {
+            if (!currentComposeProject) return;
+            
+            // 禁用所有操作按钮
+            const buttons = document.querySelectorAll('#compose-modal button');
+            buttons.forEach(btn => {
+                if (btn.textContent.includes('关闭')) return; // 不禁用关闭按钮
+                btn.disabled = true;
+                btn.classList.add('opacity-50', 'cursor-not-allowed');
+            });
+
+            const outputDiv = document.getElementById('compose-output');
+            outputDiv.classList.remove('hidden');
+            outputDiv.textContent = `正在执行 ${action}...\n`;
+            
+            fetch('/api/compose/action', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ project: currentComposeProject, action })
+            })
+            .then(async res => {
+                const text = await res.text();
+                outputDiv.textContent += text;
+                outputDiv.scrollTop = outputDiv.scrollHeight;
+                if (!res.ok) {
+                    showToast('执行出错', 'error');
+                } else {
+                    showToast('执行完成');
+                }
+            })
+            .catch(err => {
+                outputDiv.textContent += '\n请求失败: ' + err.message;
+            })
+            .finally(() => {
+                // 恢复按钮状态
+                buttons.forEach(btn => {
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+            });
+        }
     </script>
 </body>
 </html>

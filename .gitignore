@@ -21,6 +21,7 @@ Thumbs.db
 
 # 临时文件
 *.log
+*.pid
 *.tmp
 tmp/
 build-errors.log
@@ -28,3 +29,4 @@ build-errors.log
 # Air 热重载工具
 .air.toml.bak
 
+compose_projects

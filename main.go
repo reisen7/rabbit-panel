@@ -856,6 +856,14 @@ func main() {
 	http.HandleFunc("/api/images", authOrNodeAuthMiddleware(handleImages)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/images/remove", authMiddleware(handleImageRemove))
 	
+	// Compose 管理 API
+	initCompose()
+	http.HandleFunc("/api/compose/list", authMiddleware(handleComposeList))
+	http.HandleFunc("/api/compose/create", authMiddleware(handleComposeCreate))
+	http.HandleFunc("/api/compose/file", authMiddleware(handleComposeGetFile))
+	http.HandleFunc("/api/compose/save", authMiddleware(handleComposeSaveFile))
+	http.HandleFunc("/api/compose/action", authMiddleware(handleComposeAction))
+
 	// 多节点管理 API（仅 Master 模式）
 	if mode == ModeMaster {
 		http.HandleFunc("/api/nodes", authMiddleware(handleNodesList)) // Web UI 访问需要用户认证
