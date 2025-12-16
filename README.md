@@ -418,14 +418,14 @@ MIT License
 
 ## 更新日志
 
-### v1.1.0 (2024-11-15)
+### v1.1.0 (2025-12-16)
 
 - 添加用户登录认证
 - 添加节点间通信认证 (HMAC-SHA256)
 - 改进多节点管理功能
 - 优化性能和内存占用
 
-### v1.0.0 (2024-01-01)
+### v1.0.0 (2025-11-16)
 
 - 初始版本发布
 - 支持容器管理 (启动/停止/重启/删除/日志)
@@ -433,10 +433,3 @@ MIT License
 - 支持系统监控 (CPU/内存/磁盘)
 - 支持多架构编译 (ARM64/armv7l/x86_64)
 - 支持多节点管理 (Master/Worker 模式)
-
-## 相关文档
-
-- [ARCHITECTURE.md](ARCHITECTURE.md) - 架构设计详解
-- [MULTI-NODE.md](MULTI-NODE.md) - 多节点使用指南
-- [NODE-COMMUNICATION.md](NODE-COMMUNICATION.md) - 节点通信详解
-- [SECURITY.md](SECURITY.md) - 安全说明文档
