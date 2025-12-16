@@ -79,7 +79,8 @@ chmod +x rabbit.sh
 ```
 
 也可直接运行二进制（默认端口 9999）：
-
+> 下载地址：
+> https://github.com/reisen7/rabbit-panel/releases
 ```bash
 # 运行面板 (默认端口 9999)
 ./rabbit-panel-linux-amd64
@@ -242,7 +243,7 @@ rabbit-panel/
 └── README.md            # 说明文档
 ```
 
-## API 接口（摘录）
+## API 接口
 
 ### 单节点 API
 
