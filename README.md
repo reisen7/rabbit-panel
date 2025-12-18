@@ -83,13 +83,13 @@ chmod +x rabbit.sh
 > https://github.com/reisen7/rabbit-panel/releases
 ```bash
 # 运行面板 (默认端口 9999)
-./rabbit-panel-linux-amd64
+./rabbit-panel-linux-arm64
 
 # 或指定端口
-PORT=9090 ./rabbit-panel-linux-amd64
+PORT=9090 ./rabbit-panel-linux-arm64
 
 # 或指定监听地址和端口
-HOST=0.0.0.0 PORT=9999 ./rabbit-panel-linux-amd64
+HOST=0.0.0.0 PORT=9999 ./rabbit-panel-linux-arm64
 ```
 
 ### 4. 访问面板
@@ -126,21 +126,12 @@ Rabbit Panel 支持多节点容器管理，类似 Kubernetes 但更轻量化。
 ### 启动 Master 节点（控制节点）
 
 ```bash
-# 方法 1: 使用启动脚本
-chmod +x start-master.sh
-./start-master.sh
-
-# 方法 2: 直接运行
 MODE=master PORT=9999 ./rabbit-panel-linux-arm64
 ```
 
 ### 启动 Worker 节点（工作节点）
 
 ```bash
-# 方法 1: 使用启动脚本
-MASTER_URL=http://master-ip:9999 NODE_NAME=worker-1 ./start-worker.sh
-
-# 方法 2: 直接运行
 MASTER_URL=http://master-ip:9999 \
 NODE_NAME=worker-1 \
 MODE=worker \
@@ -167,7 +158,6 @@ PORT=10001 \
 > 需要本机已安装 `docker compose`（你已安装：`docker compose version` 返回成功）。
 
 
-
 ## 配置与安全
 
 ### 环境变量配置
@@ -183,7 +173,7 @@ PORT=10001 \
 ```bash
 MODE=master PORT=9999 HOST=0.0.0.0 \
 JWT_SECRET=change-me NODE_SECRET=change-me \
-./rabbit-panel
+./rabbit-panel-linux-arm64
 ```
 
 ### 用户认证
@@ -200,7 +190,7 @@ Master 和 Worker 节点之间的通信使用 HMAC-SHA256 认证机制。
 
 **生产环境必须设置节点密钥**:
 ```bash
-NODE_SECRET=your-secret-key-here ./rabbit-panel-linux-amd64
+NODE_SECRET=your-secret-key-here ./rabbit-panel-linux-arm64
 ```
 
 ### 生产环境建议
@@ -236,7 +226,18 @@ rabbit-panel/
 ├── node.go              # 节点管理模块
 ├── scheduler.go         # 容器调度模块
 ├── compose.go           # Compose 在线管理 API
-├── static/index.html    # 前端页面
+├── static/
+│   ├── index.html       # 前端主页面
+│   ├── css/
+│   │   └── style.css    # 样式文件
+│   └── js/
+│       ├── utils.js     # 工具函数（防抖、Toast、分页器、主题）
+│       ├── auth.js      # 认证模块
+│       ├── containers.js # 容器管理
+│       ├── images.js    # 镜像管理
+│       ├── logs.js      # 日志模块
+│       ├── compose.js   # Compose 管理
+│       └── app.js       # 主应用入口
 ├── rabbit.sh            # 一键管理脚本
 ├── .air.toml            # 开发热重载配置
 ├── go.mod / go.sum      # Go 依赖
@@ -250,9 +251,17 @@ rabbit-panel/
 - `GET /api/system/stats` - 获取系统监控数据
 - `GET /api/containers` - 获取容器列表
 - `POST /api/containers/action` - 容器操作 (start/stop/restart/remove)
+- `POST /api/containers/run` - 创建并运行容器 (docker run)
 - `GET /api/containers/logs?id=<container-id>` - 获取容器日志 (SSE 流式)
 - `GET /api/images` - 获取镜像列表
 - `POST /api/images/remove` - 删除镜像
+- `GET /api/compose/list` - 获取 Compose 项目列表
+- `GET /api/compose/status?project=<name>` - 获取项目容器状态
+- `POST /api/compose/create` - 创建 Compose 项目
+- `POST /api/compose/delete` - 删除 Compose 项目
+- `GET /api/compose/file?project=<name>` - 获取 compose 文件内容
+- `POST /api/compose/save` - 保存 compose 文件
+- `POST /api/compose/action` - 执行 Compose 操作 (up/down/restart/pull/logs)
 - `GET /api/health` - 健康检查
 
 ### 多节点 API（Master）
@@ -285,6 +294,64 @@ MIT License
 欢迎提交 Issue 和 Pull Request！
 
 ## 更新日志
+
+### v1.3.0 (2025-12-18)
+
+**新功能**
+- 🌐 新增国际化支持（中文/英文切换），自动检测浏览器语言
+- 💻 新增容器终端功能，支持在线执行命令
+- 📁 新增容器文件管理功能：
+  - 浏览容器内目录结构
+  - 创建/删除目录和文件
+  - 上传/下载文件（限制 10MB）
+  - 在线编辑文本文件
+- ⚙️ 新增容器配置管理功能：
+  - 查看完整容器配置（基本信息、网络、存储、环境变量、资源限制、高级配置）
+  - 支持热更新：内存限制、CPU 限制、重启策略
+  - 支持容器重命名
+  - 支持重建容器（修改端口、数据卷、环境变量等）
+
+**界面优化**
+- 🎨 优化深色模式下的文字可读性
+- 🔄 重建容器添加加载动画和确认弹窗
+- 📝 重建容器镜像地址和标签分离，方便版本升级
+
+**Bug 修复**
+- 修复 Docker API 版本兼容性问题（支持 API 1.44+）
+- 修复容器内存更新时 MemorySwap 限制错误
+
+### v1.2.0 (2025-12-17)
+
+**前端优化**
+- 🎨 新增深色模式支持，自动保存主题偏好
+- 📱 全面优化移动端适配，Compose 管理支持响应式布局
+- 🔍 容器/镜像列表支持表格排序和分页
+- 🔎 日志搜索支持关键词高亮显示
+- ⚡ 搜索输入添加防抖优化，减少不必要的请求
+
+**功能增强**
+- 🐳 新增「创建容器」功能，支持通过表单配置：
+  - 镜像名称、容器名称
+  - 端口映射（支持多个）
+  - 环境变量（支持多个）
+  - 数据卷挂载（支持多个）
+  - 重启策略、网络模式
+  - 实时命令预览
+- 📦 Compose 管理界面重构：
+  - 左右分栏布局（桌面端）
+  - 项目列表显示容器运行状态
+  - 支持快捷操作（启动/停止/重启）
+  - 容器状态实时显示
+  - 支持删除项目
+- 🔄 容器操作后自动刷新列表
+
+**代码重构**
+- 前端代码拆分为独立模块 (css/style.css, js/*.js)
+- 新增 DOM 缓存和分页器工具类
+
+**Bug 修复**
+- 修复删除容器后列表不刷新的问题
+- 修复后端缓存导致状态更新延迟的问题
 
 ### v1.1.0 (2025-12-16)
 

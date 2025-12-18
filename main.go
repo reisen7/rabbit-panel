@@ -24,6 +24,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 )
 
 //go:embed static
@@ -92,7 +93,13 @@ type ImageInfo struct {
 
 // 初始化 Docker 客户端
 func initDockerClient() error {
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	// 使用空版本字符串，让客户端自动协商 API 版本
+	// 这样可以同时兼容旧版和新版 Docker
+	cli, err := client.NewClientWithOpts(
+		client.FromEnv,
+		client.WithAPIVersionNegotiation(),
+		client.WithVersion(""), // 不指定版本，自动协商
+	)
 	if err != nil {
 		return fmt.Errorf("无法连接到 Docker: %v", err)
 	}
@@ -393,6 +400,132 @@ func handleContainers(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(containerList)
 }
 
+// 创建并运行容器 (docker run)
+func handleContainerRun(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Image   string `json:"image"`
+		Name    string `json:"name"`
+		Restart string `json:"restart"`
+		Network string `json:"network"`
+		Ports   []struct {
+			Host      string `json:"host"`
+			Container string `json:"container"`
+		} `json:"ports"`
+		Envs []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"envs"`
+		Volumes []struct {
+			Host      string `json:"host"`
+			Container string `json:"container"`
+		} `json:"volumes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	if req.Image == "" {
+		http.Error(w, "镜像名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	ctx := context.Background()
+
+	// 尝试拉取镜像（如果本地没有）
+	_, _, err := dockerClient.ImageInspectWithRaw(ctx, req.Image)
+	if err != nil {
+		// 镜像不存在，尝试拉取
+		log.Printf("镜像 %s 不存在，尝试拉取...", req.Image)
+		reader, err := dockerClient.ImagePull(ctx, req.Image, types.ImagePullOptions{})
+		if err != nil {
+			http.Error(w, fmt.Sprintf("拉取镜像失败: %v", err), http.StatusInternalServerError)
+			return
+		}
+		defer reader.Close()
+		// 等待拉取完成
+		io.Copy(io.Discard, reader)
+	}
+
+	// 构建容器配置
+	config := &container.Config{
+		Image: req.Image,
+	}
+
+	// 环境变量
+	for _, env := range req.Envs {
+		if env.Key != "" {
+			config.Env = append(config.Env, fmt.Sprintf("%s=%s", env.Key, env.Value))
+		}
+	}
+
+	// 主机配置
+	hostConfig := &container.HostConfig{}
+
+	// 端口映射
+	if len(req.Ports) > 0 {
+		portBindings := make(map[nat.Port][]nat.PortBinding)
+		exposedPorts := make(map[nat.Port]struct{})
+		for _, p := range req.Ports {
+			if p.Host != "" && p.Container != "" {
+				containerPort := nat.Port(p.Container + "/tcp")
+				exposedPorts[containerPort] = struct{}{}
+				portBindings[containerPort] = []nat.PortBinding{
+					{HostIP: "0.0.0.0", HostPort: p.Host},
+				}
+			}
+		}
+		config.ExposedPorts = exposedPorts
+		hostConfig.PortBindings = portBindings
+	}
+
+	// 数据卷
+	for _, v := range req.Volumes {
+		if v.Host != "" && v.Container != "" {
+			hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", v.Host, v.Container))
+		}
+	}
+
+	// 重启策略
+	if req.Restart != "" {
+		hostConfig.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(req.Restart)}
+	}
+
+	// 网络模式
+	if req.Network != "" {
+		hostConfig.NetworkMode = container.NetworkMode(req.Network)
+	}
+
+	// 创建容器
+	resp, err := dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, req.Name)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("创建容器失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 启动容器
+	if err := dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		// 启动失败，删除已创建的容器
+		dockerClient.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{Force: true})
+		http.Error(w, fmt.Sprintf("启动容器失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 清除容器列表缓存
+	containersCache.Lock()
+	containersCache.lastFetch = time.Time{}
+	containersCache.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "id": resp.ID})
+}
+
 // 容器操作：启动/停止/重启/删除
 func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -431,6 +564,11 @@ func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("操作失败: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// 清除容器列表缓存，确保下次请求获取最新数据
+	containersCache.Lock()
+	containersCache.lastFetch = time.Time{}
+	containersCache.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
@@ -857,9 +995,24 @@ func main() {
 	http.HandleFunc("/api/system/stats", authOrNodeAuthMiddleware(handleSystemStats))
 	http.HandleFunc("/api/containers", authOrNodeAuthMiddleware(handleContainers)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/containers/action", authMiddleware(handleContainerAction))
+	http.HandleFunc("/api/containers/run", authMiddleware(handleContainerRun))
 	http.HandleFunc("/api/containers/logs", authMiddleware(handleContainerLogs)) // 日志流不限制超时
 	http.HandleFunc("/api/images", authOrNodeAuthMiddleware(handleImages)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/images/remove", authMiddleware(handleImageRemove))
+	
+	// 容器终端和文件管理 API
+	http.HandleFunc("/api/containers/exec", authMiddleware(handleContainerExec))
+	http.HandleFunc("/api/containers/files", authMiddleware(handleContainerFilesList))
+	http.HandleFunc("/api/containers/files/mkdir", authMiddleware(handleContainerFileMkdir))
+	http.HandleFunc("/api/containers/files/delete", authMiddleware(handleContainerFileDelete))
+	http.HandleFunc("/api/containers/files/upload", authMiddleware(handleContainerFileUpload))
+	http.HandleFunc("/api/containers/files/download", authMiddleware(handleContainerFileDownload))
+	http.HandleFunc("/api/containers/files/read", authMiddleware(handleContainerFileRead))
+	http.HandleFunc("/api/containers/files/write", authMiddleware(handleContainerFileWrite))
+	http.HandleFunc("/api/containers/inspect", authMiddleware(handleContainerInspect))
+	http.HandleFunc("/api/containers/update", authMiddleware(handleContainerUpdate))
+	http.HandleFunc("/api/containers/rename", authMiddleware(handleContainerRename))
+	http.HandleFunc("/api/containers/recreate", authMiddleware(handleContainerRecreate))
 	
 	// Compose 管理 API
 	initCompose()
@@ -868,6 +1021,8 @@ func main() {
 	http.HandleFunc("/api/compose/file", authMiddleware(handleComposeGetFile))
 	http.HandleFunc("/api/compose/save", authMiddleware(handleComposeSaveFile))
 	http.HandleFunc("/api/compose/action", authMiddleware(handleComposeAction))
+	http.HandleFunc("/api/compose/status", authMiddleware(handleComposeStatus))
+	http.HandleFunc("/api/compose/delete", authMiddleware(handleComposeDelete))
 
 	// 多节点管理 API（仅 Master 模式）
 	if mode == ModeMaster {

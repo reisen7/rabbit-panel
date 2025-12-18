@@ -5,110 +5,41 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>容器运维面板</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        }
-        .tab-content {
-            display: none;
-        }
-        .tab-content.active {
-            display: block;
-        }
-        .status-running {
-            color: #10b981;
-        }
-        .status-stopped {
-            color: #ef4444;
-        }
-        .status-exited {
-            color: #6b7280;
-        }
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.5);
-        }
-        .modal.active {
-            display: block;
-        }
-        .modal-content {
-            background-color: white;
-            margin: 5% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 90%;
-            max-width: 800px;
-            max-height: 80vh;
-            overflow-y: auto;
-            border-radius: 8px;
-        }
-        .log-container {
-            background-color: #1e1e1e;
-            color: #d4d4d4;
-            padding: 15px;
-            border-radius: 4px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 60vh;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-        .toast {
-            position: fixed;
-            bottom: 20px;
-            right: 20px;
-            padding: 12px 24px;
-            background-color: #333;
-            color: white;
-            border-radius: 4px;
-            z-index: 2000;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .toast.show {
-            opacity: 1;
-        }
-        .toast.success {
-            background-color: #10b981;
-        }
-        .toast.error {
-            background-color: #ef4444;
-        }
-        @media (max-width: 640px) {
-            .container-table {
-                font-size: 12px;
-            }
-            .btn {
-                padding: 4px 8px;
-                font-size: 12px;
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        dark: {
+                            bg: '#1a1a2e',
+                            card: '#16213e',
+                            border: '#0f3460',
+                            text: '#e4e4e7',
+                            muted: '#a1a1aa'
+                        }
+                    }
+                }
             }
         }
-    </style>
+    </script>
+    <link rel="stylesheet" href="css/style.css">
 </head>
-<body class="bg-gray-100">
+<body class="bg-gray-100 dark:bg-dark-bg transition-colors duration-300">
     <!-- 登录页面 -->
-    <div id="login-page" class="min-h-screen flex items-center justify-center bg-gray-100">
-        <div class="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-            <h1 class="text-2xl font-bold mb-6 text-center">容器运维面板</h1>
+    <div id="login-page" class="min-h-screen flex items-center justify-center">
+        <div class="bg-white dark:bg-dark-card p-8 rounded-lg shadow-md w-full max-w-md">
+            <h1 class="text-2xl font-bold mb-6 text-center dark:text-dark-text" data-i18n="login.title">容器运维面板</h1>
             <form id="login-form" class="space-y-4">
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">用户名</label>
-                    <input type="text" id="login-username" name="username" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="admin" required>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">用户名</label>
+                    <input type="text" id="login-username" name="username" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">密码</label>
-                    <input type="password" id="login-password" name="password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" value="admin" required>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">密码</label>
+                    <input type="password" id="login-password" name="password" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
-                <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    登录
-                </button>
+                <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500">登录</button>
             </form>
             <div id="login-error" class="mt-4 text-red-500 text-sm hidden"></div>
         </div>
@@ -117,24 +48,22 @@
     <!-- 修改密码模态框 -->
     <div id="change-password-modal" class="modal">
         <div class="modal-content">
-            <h2 class="text-xl font-bold mb-4">修改密码</h2>
-            <p class="text-sm text-gray-600 mb-4">首次登录需要修改密码，密码必须包含：大写字母、小写字母、数字、特殊字符，长度至少8位</p>
+            <h2 class="text-xl font-bold mb-4 dark:text-dark-text">修改密码</h2>
+            <p class="text-sm text-gray-600 dark:text-dark-muted mb-4">首次登录需要修改密码，密码必须包含：大写字母、小写字母、数字、特殊字符，长度至少8位</p>
             <form id="change-password-form" class="space-y-4">
                 <div id="old-password-div" class="hidden">
-                    <label class="block text-sm font-medium text-gray-700 mb-1">旧密码</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">旧密码</label>
                     <input type="password" id="old-password" name="old-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">新密码</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">新密码</label>
                     <input type="password" id="new-password" name="new-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-1">确认新密码</label>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">确认新密码</label>
                     <input type="password" id="confirm-password" name="confirm-password" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500" required>
                 </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="flex-1 bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">确认修改</button>
-                </div>
+                <button type="submit" class="w-full bg-blue-500 text-white py-2 rounded-md hover:bg-blue-600">确认修改</button>
             </form>
             <div id="change-password-error" class="mt-4 text-red-500 text-sm hidden"></div>
         </div>
@@ -142,168 +71,409 @@
 
     <!-- 主页面 -->
     <div id="main-page" class="hidden">
-    <div class="container mx-auto px-4 py-6">
-        <!-- 头部系统监控 -->
-        <div class="bg-white rounded-lg shadow-md p-4 mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <h1 class="text-2xl font-bold">容器运维面板</h1>
-                <div class="flex gap-2 items-center">
-                    <span id="current-user" class="text-sm text-gray-600"></span>
-                    <button onclick="handleLogout()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 text-sm">登出</button>
-                </div>
-            </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div class="text-center">
-                    <div class="text-sm text-gray-600">CPU 使用率</div>
-                    <div class="text-2xl font-bold" id="cpu-usage">0%</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-sm text-gray-600">内存使用率</div>
-                    <div class="text-2xl font-bold" id="memory-usage">0%</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-sm text-gray-600">磁盘使用率</div>
-                    <div class="text-2xl font-bold" id="disk-usage">0%</div>
-                </div>
-                <div class="text-center">
-                    <div class="text-sm text-gray-600">当前时间</div>
-                    <div class="text-lg font-semibold" id="current-time">-</div>
-                </div>
-            </div>
-        </div>
-
-        <!-- 标签页 -->
-        <div class="bg-white rounded-lg shadow-md mb-6">
-            <div class="border-b border-gray-200">
-                <nav class="flex -mb-px">
-                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-tab="containers">
-                        容器管理
-                    </button>
-                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="images">
-                        镜像管理
-                    </button>
-                    <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-tab="compose">
-                        Compose 管理
-                    </button>
-                </nav>
-            </div>
-
-            <!-- 容器管理标签页 -->
-            <div id="containers-tab" class="tab-content active p-6">
-                <div class="mb-4 flex justify-between items-center">
-                    <h2 class="text-xl font-semibold">容器列表</h2>
-                    <button onclick="loadContainers()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        刷新
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 container-table">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">镜像</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">状态</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">端口</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">文件系统</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="containers-tbody" class="bg-white divide-y divide-gray-200">
-                            <tr>
-                                <td colspan="8" class="px-4 py-8 text-center text-gray-500">加载中...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- 镜像管理标签页 -->
-            <div id="images-tab" class="tab-content p-6">
-                <div class="mb-4 flex justify-between items-center">
-                    <h2 class="text-xl font-semibold">镜像列表</h2>
-                    <button onclick="loadImages()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                        刷新
-                    </button>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-200 container-table">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">标签</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">大小</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">创建时间</th>
-                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
-                            </tr>
-                        </thead>
-                        <tbody id="images-tbody" class="bg-white divide-y divide-gray-200">
-                            <tr>
-                                <td colspan="6" class="px-4 py-8 text-center text-gray-500">加载中...</td>
-                            </tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- Compose 管理标签页 -->
-            <div id="compose-tab" class="tab-content p-6">
-                <div class="mb-4 flex justify-between items-center">
-                    <h2 class="text-xl font-semibold">Compose 项目</h2>
-                    <div class="flex gap-2">
-                        <button onclick="openCreateComposeModal()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">
-                            新建项目
+        <div class="container mx-auto px-4 py-6">
+            <!-- 头部系统监控 -->
+            <div class="bg-white dark:bg-dark-card rounded-lg shadow-md p-4 mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h1 class="text-2xl font-bold dark:text-dark-text" data-i18n="app.title">容器运维面板</h1>
+                    <div class="flex gap-2 items-center">
+                        <button id="lang-toggle" class="w-10 h-10 rounded-full border border-gray-300 dark:border-dark-border bg-gray-100 dark:bg-dark-border text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="i18n.toggle()" title="切换语言">EN</button>
+                        <button id="theme-toggle" class="theme-toggle" onclick="ThemeManager.toggle()" title="切换主题">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
                         </button>
-                        <button onclick="loadComposeProjects()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
-                            刷新
-                        </button>
+                        <span id="current-user" class="text-sm text-gray-600 dark:text-dark-muted"></span>
+                        <button onclick="handleLogout()" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600 text-sm" data-i18n="login.logout">登出</button>
                     </div>
                 </div>
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="compose-list">
-                    <!-- 项目列表 -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div class="text-center">
+                        <div class="text-sm text-gray-600 dark:text-dark-muted" data-i18n="monitor.cpu">CPU 使用率</div>
+                        <div class="text-2xl font-bold dark:text-dark-text" id="cpu-usage">0%</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-600 dark:text-dark-muted" data-i18n="monitor.memory">内存使用率</div>
+                        <div class="text-2xl font-bold dark:text-dark-text" id="memory-usage">0%</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-600 dark:text-dark-muted" data-i18n="monitor.disk">磁盘使用率</div>
+                        <div class="text-2xl font-bold dark:text-dark-text" id="disk-usage">0%</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-sm text-gray-600 dark:text-dark-muted" data-i18n="monitor.time">当前时间</div>
+                        <div class="text-lg font-semibold dark:text-dark-text" id="current-time">-</div>
+                    </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- Compose 编辑/管理模态框 -->
-    <div id="compose-modal" class="modal">
-        <div class="modal-content" style="max-width: 1000px;">
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold" id="compose-modal-title">项目管理</h3>
-                <button onclick="closeComposeModal()" class="text-gray-500 hover:text-gray-700">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
-                    </svg>
-                </button>
+            <!-- 标签页 -->
+            <div class="bg-white dark:bg-dark-card rounded-lg shadow-md mb-6">
+                <div class="border-b border-gray-200 dark:border-dark-border">
+                    <nav class="flex -mb-px">
+                        <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-tab="containers" data-i18n="tab.containers">容器管理</button>
+                        <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-dark-muted" data-tab="images" data-i18n="tab.images">镜像管理</button>
+                        <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-dark-muted" data-tab="compose" data-i18n="tab.compose">Compose 管理</button>
+                    </nav>
+                </div>
+
+                <!-- 容器管理标签页 -->
+                <div id="containers-tab" class="tab-content active p-6">
+                    <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h2 class="text-xl font-semibold dark:text-dark-text">容器列表</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="relative">
+                                <input type="text" id="container-search" placeholder="搜索名称/镜像..." 
+                                    class="pl-8 pr-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    oninput="filterContainers()">
+                                <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+                            <select id="container-status-filter" onchange="filterContainers()" 
+                                class="px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">全部状态</option>
+                                <option value="running">运行中</option>
+                                <option value="exited">已停止</option>
+                            </select>
+                            <button onclick="openCreateContainerModal()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                创建容器
+                            </button>
+                            <button id="refresh-containers-btn" onclick="refreshContainers()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2">
+                                <svg id="refresh-containers-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-border container-table" style="table-layout: fixed;">
+                            <colgroup>
+                                <col style="width: 90px;"><col style="width: 110px;"><col style="width: auto; min-width: 160px;">
+                                <col style="width: 60px;"><col style="width: auto; min-width: 120px;"><col style="width: 60px;">
+                                <col style="width: 130px;"><col style="width: 280px;">
+                            </colgroup>
+                            <thead class="bg-gray-50 dark:bg-dark-border">
+                                <tr>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="id" onclick="sortContainers('id')">ID <span class="sort-icon">↕</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="name" onclick="sortContainers('name')">名称 <span class="sort-icon active">↑</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="image" onclick="sortContainers('image')">镜像 <span class="sort-icon">↕</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="state" onclick="sortContainers('state')">状态 <span class="sort-icon">↕</span></th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase">端口</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase">文件系统</th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="created" onclick="sortContainers('created')">创建时间 <span class="sort-icon">↕</span></th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="containers-tbody" class="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-dark-border">
+                                <tr><td colspan="8" class="px-4 py-8 text-center text-gray-500 dark:text-dark-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="containers-pagination"></div>
+                </div>
+
+                <!-- 镜像管理标签页 -->
+                <div id="images-tab" class="tab-content p-6">
+                    <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h2 class="text-xl font-semibold dark:text-dark-text">镜像列表</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="relative">
+                                <input type="text" id="image-search" placeholder="搜索名称/标签..." 
+                                    class="pl-8 pr-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    oninput="filterImages()">
+                                <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+                            <button id="refresh-images-btn" onclick="refreshImages()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2">
+                                <svg id="refresh-images-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                刷新
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-border container-table">
+                            <thead class="bg-gray-50 dark:bg-dark-border">
+                                <tr>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="id" onclick="sortImages('id')">ID <span class="sort-icon">↕</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="name" onclick="sortImages('name')">名称 <span class="sort-icon active">↑</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="tag" onclick="sortImages('tag')">标签 <span class="sort-icon">↕</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="size" onclick="sortImages('size')">大小 <span class="sort-icon">↕</span></th>
+                                    <th class="sortable px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-sort="created" onclick="sortImages('created')">创建时间 <span class="sort-icon">↕</span></th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="images-tbody" class="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-dark-border">
+                                <tr><td colspan="6" class="px-4 py-8 text-center text-gray-500 dark:text-dark-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="images-pagination"></div>
+                </div>
+
+                <!-- Compose 管理标签页 -->
+                <div id="compose-tab" class="tab-content p-4">
+                    <!-- 移动端：项目列表视图 -->
+                    <div id="compose-mobile-list" class="md:hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-lg font-semibold dark:text-dark-text">Compose 项目</h2>
+                            <div class="flex gap-2">
+                                <button onclick="openCreateComposeModal()" class="p-2 text-green-600 bg-green-50 dark:bg-green-900/30 rounded-lg" title="新建">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                </button>
+                                <button id="refresh-compose-btn-mobile" onclick="refreshCompose()" class="p-2 text-blue-600 bg-blue-50 dark:bg-blue-900/30 rounded-lg" title="刷新">
+                                    <svg id="refresh-compose-icon-mobile" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="compose-list-mobile" class="space-y-3"></div>
+                    </div>
+                    
+                    <!-- 移动端：项目详情视图（默认隐藏） -->
+                    <div id="compose-mobile-detail" class="md:hidden hidden">
+                        <button onclick="backToComposeList()" class="flex items-center gap-1 text-blue-500 mb-3">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+                            返回列表
+                        </button>
+                        <div class="flex items-center gap-2 mb-3">
+                            <h2 id="compose-mobile-name" class="text-lg font-semibold dark:text-dark-text"></h2>
+                            <span id="compose-mobile-status" class="px-2 py-0.5 text-xs rounded"></span>
+                        </div>
+                        <!-- 操作按钮 -->
+                        <div class="grid grid-cols-5 gap-2 mb-4">
+                            <button onclick="composeAction('up')" class="flex flex-col items-center p-2 bg-green-500 text-white rounded-lg text-xs">
+                                <svg class="w-5 h-5 mb-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path></svg>
+                                启动
+                            </button>
+                            <button onclick="composeAction('down')" class="flex flex-col items-center p-2 bg-red-500 text-white rounded-lg text-xs">
+                                <svg class="w-5 h-5 mb-1" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z"></path></svg>
+                                停止
+                            </button>
+                            <button onclick="composeAction('restart')" class="flex flex-col items-center p-2 bg-yellow-500 text-white rounded-lg text-xs">
+                                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                重启
+                            </button>
+                            <button onclick="composeAction('pull')" class="flex flex-col items-center p-2 bg-blue-500 text-white rounded-lg text-xs">
+                                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                拉取
+                            </button>
+                            <button onclick="deleteComposeProject()" class="flex flex-col items-center p-2 bg-gray-500 text-white rounded-lg text-xs">
+                                <svg class="w-5 h-5 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                删除
+                            </button>
+                        </div>
+                        <!-- 容器状态 -->
+                        <div class="bg-gray-50 dark:bg-dark-border rounded-lg p-3 mb-4">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-sm font-medium dark:text-dark-muted">容器状态</h4>
+                                <button onclick="refreshCurrentComposeStatus()" class="text-xs text-blue-500">刷新</button>
+                            </div>
+                            <div id="compose-containers-list-mobile" class="space-y-2"></div>
+                        </div>
+                        <!-- 编辑器 -->
+                        <div class="mb-3">
+                            <div class="flex justify-between items-center mb-2">
+                                <h4 class="text-sm font-medium dark:text-dark-muted">docker-compose.yml</h4>
+                                <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded">保存</button>
+                            </div>
+                            <textarea id="compose-mobile-editor" class="w-full h-48 p-3 font-mono text-xs bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded" spellcheck="false"></textarea>
+                        </div>
+                        <!-- 输出 -->
+                        <div id="compose-mobile-output" class="p-3 bg-black text-green-400 font-mono text-xs h-32 overflow-y-auto rounded hidden whitespace-pre-wrap"></div>
+                    </div>
+
+                    <!-- 桌面端：左右分栏布局 -->
+                    <div class="hidden md:flex gap-4 h-[calc(100vh-280px)] min-h-[400px]">
+                        <!-- 左侧：项目列表 -->
+                        <div class="w-56 flex-shrink-0 bg-gray-50 dark:bg-dark-border rounded-lg p-3 flex flex-col">
+                            <div class="flex justify-between items-center mb-3">
+                                <h3 class="font-semibold text-sm dark:text-dark-text">项目列表</h3>
+                                <div class="flex gap-1">
+                                    <button onclick="openCreateComposeModal()" class="p-1.5 text-green-600 hover:bg-green-100 dark:hover:bg-green-900 rounded" title="新建项目">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                    </button>
+                                    <button id="refresh-compose-btn" onclick="refreshCompose()" class="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900 rounded" title="刷新">
+                                        <svg id="refresh-compose-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="compose-list" class="flex-1 overflow-y-auto space-y-1"></div>
+                        </div>
+                        <!-- 右侧：项目详情 -->
+                        <div class="flex-1 flex flex-col min-w-0">
+                            <div id="compose-detail-empty" class="flex-1 flex items-center justify-center text-gray-400 dark:text-dark-muted">
+                                <div class="text-center">
+                                    <svg class="w-12 h-12 mx-auto mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                                    <p class="text-sm">选择项目查看详情</p>
+                                </div>
+                            </div>
+                            <div id="compose-detail" class="hidden flex-1 flex flex-col">
+                                <!-- 项目头部 -->
+                                <div class="flex flex-wrap justify-between items-center gap-2 mb-3">
+                                    <div class="flex items-center gap-2">
+                                        <h3 id="compose-detail-name" class="text-lg font-semibold dark:text-dark-text"></h3>
+                                        <span id="compose-detail-status" class="px-2 py-0.5 text-xs rounded"></span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1">
+                                        <button onclick="composeAction('up')" class="px-3 py-1.5 text-xs bg-green-500 text-white rounded hover:bg-green-600 flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"></path></svg>
+                                            启动
+                                        </button>
+                                        <button onclick="composeAction('down')" class="px-3 py-1.5 text-xs bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1V8a1 1 0 00-1-1H8z"></path></svg>
+                                            停止
+                                        </button>
+                                        <button onclick="composeAction('restart')" class="px-3 py-1.5 text-xs bg-yellow-500 text-white rounded hover:bg-yellow-600 flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                                            重启
+                                        </button>
+                                        <button onclick="composeAction('pull')" class="px-3 py-1.5 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                            拉取
+                                        </button>
+                                        <button onclick="deleteComposeProject()" class="px-3 py-1.5 text-xs bg-gray-500 text-white rounded hover:bg-gray-600 flex items-center gap-1">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                                            删除
+                                        </button>
+                                    </div>
+                                </div>
+                                <!-- 容器列表 -->
+                                <div class="bg-gray-50 dark:bg-dark-border rounded-lg p-3 mb-3">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h4 class="text-sm font-medium text-gray-600 dark:text-dark-muted">容器状态</h4>
+                                        <button onclick="refreshCurrentComposeStatus()" class="text-xs text-blue-500 hover:text-blue-700">刷新</button>
+                                    </div>
+                                    <div id="compose-containers-list" class="space-y-1 max-h-32 overflow-y-auto"></div>
+                                </div>
+                                <!-- 编辑器和输出 -->
+                                <div class="flex-1 flex flex-col min-h-0">
+                                    <div class="flex justify-between items-center mb-2">
+                                        <h4 class="text-sm font-medium text-gray-600 dark:text-dark-muted">docker-compose.yml</h4>
+                                        <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600">保存</button>
+                                    </div>
+                                    <textarea id="compose-detail-editor" class="flex-1 min-h-[200px] p-3 font-mono text-sm bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded focus:outline-none focus:border-blue-500 resize-none" spellcheck="false" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; tab-size: 2;"></textarea>
+                                    <div id="compose-detail-output" class="mt-2 p-3 bg-black text-green-400 font-mono text-xs h-32 overflow-y-auto rounded hidden whitespace-pre-wrap"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-            <div class="mb-4 flex gap-2 flex-wrap">
-                <button onclick="runComposeAction('up')" class="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600">启动 (Up -d)</button>
-                <button onclick="runComposeAction('down')" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">停止 (Down)</button>
-                <button onclick="runComposeAction('restart')" class="bg-yellow-500 text-white px-3 py-1 rounded hover:bg-yellow-600">重启</button>
-                <button onclick="runComposeAction('pull')" class="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600">拉取镜像</button>
-                <button onclick="runComposeAction('logs')" class="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600">查看日志</button>
-                <button onclick="saveComposeFile()" class="bg-indigo-500 text-white px-3 py-1 rounded hover:bg-indigo-600 ml-auto">保存文件</button>
-            </div>
-            <textarea id="compose-editor" class="w-full h-96 p-4 font-mono text-sm bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded focus:outline-none focus:border-blue-500" spellcheck="false" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; tab-size: 2;"></textarea>
-            <div id="compose-output" class="mt-4 p-4 bg-black text-white font-mono text-xs h-40 overflow-y-auto hidden rounded whitespace-pre-wrap"></div>
         </div>
     </div>
 
     <!-- 新建 Compose 项目模态框 -->
     <div id="create-compose-modal" class="modal">
         <div class="modal-content" style="max-width: 500px;">
-            <h3 class="text-lg font-semibold mb-4">新建 Compose 项目</h3>
+            <h3 class="text-lg font-semibold mb-4 dark:text-dark-text">新建 Compose 项目</h3>
             <div class="mb-4">
-                <label class="block text-sm font-medium text-gray-700 mb-1">项目名称 (英文)</label>
-                <input type="text" id="new-compose-name" class="w-full px-3 py-2 border border-gray-300 rounded-md">
+                <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">项目名称 (英文)</label>
+                <input type="text" id="new-compose-name" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md">
             </div>
             <div class="flex justify-end gap-2">
-                <button onclick="document.getElementById('create-compose-modal').classList.remove('active')" class="px-4 py-2 border border-gray-300 rounded-md hover:bg-gray-50">取消</button>
+                <button onclick="document.getElementById('create-compose-modal').classList.remove('active')" class="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-md hover:bg-gray-50 dark:hover:bg-dark-border dark:text-dark-text">取消</button>
                 <button onclick="createComposeProject()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">创建</button>
             </div>
+        </div>
+    </div>
+
+    <!-- 创建容器模态框 -->
+    <div id="create-container-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text">创建容器</h3>
+                <button onclick="closeCreateContainerModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="create-container-form" class="space-y-4">
+                <!-- 基本信息 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">镜像名称 <span class="text-red-500">*</span></label>
+                        <input type="text" id="cc-image" placeholder="nginx:latest" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm" required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">容器名称</label>
+                        <input type="text" id="cc-name" placeholder="my-container (可选)" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm">
+                    </div>
+                </div>
+                <!-- 端口映射 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">端口映射</label>
+                    <div id="cc-ports" class="space-y-2">
+                        <div class="flex gap-2 items-center">
+                            <input type="text" placeholder="主机端口" class="cc-port-host w-24 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <span class="text-gray-500">:</span>
+                            <input type="text" placeholder="容器端口" class="cc-port-container w-24 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <button type="button" onclick="addPortMapping()" class="text-green-500 hover:text-green-700 p-1">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 环境变量 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">环境变量</label>
+                    <div id="cc-envs" class="space-y-2">
+                        <div class="flex gap-2 items-center">
+                            <input type="text" placeholder="变量名" class="cc-env-key flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <span class="text-gray-500">=</span>
+                            <input type="text" placeholder="值" class="cc-env-value flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <button type="button" onclick="addEnvVar()" class="text-green-500 hover:text-green-700 p-1">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 数据卷挂载 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">数据卷挂载</label>
+                    <div id="cc-volumes" class="space-y-2">
+                        <div class="flex gap-2 items-center">
+                            <input type="text" placeholder="主机路径" class="cc-vol-host flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <span class="text-gray-500">:</span>
+                            <input type="text" placeholder="容器路径" class="cc-vol-container flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <button type="button" onclick="addVolumeMapping()" class="text-green-500 hover:text-green-700 p-1">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                <!-- 高级选项 -->
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">重启策略</label>
+                        <select id="cc-restart" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm">
+                            <option value="">不自动重启</option>
+                            <option value="always">总是重启</option>
+                            <option value="unless-stopped">除非手动停止</option>
+                            <option value="on-failure">失败时重启</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">网络模式</label>
+                        <select id="cc-network" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm">
+                            <option value="">默认 (bridge)</option>
+                            <option value="host">host</option>
+                            <option value="none">none</option>
+                        </select>
+                    </div>
+                </div>
+                <!-- 命令预览 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">命令预览</label>
+                    <div id="cc-preview" class="p-3 bg-gray-900 text-green-400 rounded text-xs font-mono overflow-x-auto whitespace-pre">docker run -d</div>
+                </div>
+                <!-- 按钮 -->
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeCreateContainerModal()" class="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-md hover:bg-gray-50 dark:hover:bg-dark-border dark:text-dark-text">取消</button>
+                    <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">创建并运行</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -311,16 +481,24 @@
     <div id="log-modal" class="modal">
         <div class="modal-content">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-lg font-semibold">容器日志</h3>
+                <h3 class="text-lg font-semibold dark:text-dark-text" id="log-modal-title">容器日志</h3>
                 <div class="flex items-center gap-4">
-                    <label class="flex items-center text-sm text-gray-600 cursor-pointer">
-                        <input type="checkbox" id="auto-scroll" class="mr-2" checked>
-                        自动滚动
-                    </label>
-                    <button onclick="closeLogModal()" class="text-gray-500 hover:text-gray-700">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    <div class="relative">
+                        <input type="text" id="log-search" placeholder="搜索日志..." 
+                            class="pl-8 pr-3 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm w-40 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            oninput="filterLogs()">
+                        <svg class="w-4 h-4 absolute left-2.5 top-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                         </svg>
+                    </div>
+                    <label class="flex items-center text-sm text-gray-600 dark:text-dark-muted cursor-pointer">
+                        <input type="checkbox" id="auto-scroll" class="mr-2" checked> 自动滚动
+                    </label>
+                    <button onclick="downloadLogs()" class="text-blue-500 hover:text-blue-700" title="下载日志">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                    </button>
+                    <button onclick="closeLogModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                     </button>
                 </div>
             </div>
@@ -328,751 +506,491 @@
         </div>
     </div>
 
-    <!-- 提示消息 -->
-    <div id="toast" class="toast"></div>
+    <!-- Toast 容器 -->
+    <div id="toast-container" class="toast-container"></div>
+    
+    <!-- 确认弹窗 -->
+    <div id="confirm-modal" class="confirm-modal">
+        <div class="confirm-content">
+            <div id="confirm-icon" class="confirm-icon danger">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+            </div>
+            <h3 id="confirm-title" class="confirm-title">确认操作</h3>
+            <p id="confirm-message" class="confirm-message">确定要执行此操作吗？</p>
+            <div class="confirm-buttons">
+                <button id="confirm-cancel" class="confirm-btn confirm-btn-cancel">取消</button>
+                <button id="confirm-ok" class="confirm-btn confirm-btn-danger">确认</button>
+            </div>
+        </div>
+    </div>
 
-    <script>
-        let logEventSource = null;
-        let systemStatsInterval = null;
-        let containersInterval = null;
+    <!-- 终端模态框 -->
+    <div id="terminal-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text">终端 - <span id="terminal-container-name"></span></h3>
+                <button onclick="closeTerminalModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="terminal-output" class="bg-gray-900 text-gray-300 p-4 rounded font-mono text-sm h-80 overflow-y-auto mb-3"></div>
+            <div class="flex gap-2">
+                <span class="text-green-400 font-mono py-2">$</span>
+                <input type="text" id="terminal-input" class="flex-1 bg-gray-800 text-white px-3 py-2 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入命令..." onkeydown="handleTerminalKeydown(event)">
+                <button onclick="executeTerminalCommand()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">执行</button>
+            </div>
+        </div>
+    </div>
 
-        // 标签页切换
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', function() {
-                const tab = this.dataset.tab;
-                
-                // 更新按钮状态
-                document.querySelectorAll('.tab-btn').forEach(b => {
-                    b.classList.remove('border-blue-500', 'text-blue-600');
-                    b.classList.add('border-transparent', 'text-gray-500');
-                });
-                this.classList.remove('border-transparent', 'text-gray-500');
-                this.classList.add('border-blue-500', 'text-blue-600');
-
-                // 更新内容显示
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.remove('active');
-                });
-                document.getElementById(tab + '-tab').classList.add('active');
-
-                // 如果切换到容器标签页，开始自动刷新
-                if (tab === 'containers') {
-                    startContainersAutoRefresh();
-                } else {
-                    stopContainersAutoRefresh();
-                }
-
-                // 如果切换到 Compose 标签页，刷新列表
-                if (tab === 'compose') {
-                    loadComposeProjects();
-                }
-            });
-        });
-
-        // 显示提示消息
-        function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            toast.textContent = message;
-            toast.className = `toast ${type} show`;
-            setTimeout(() => {
-                toast.classList.remove('show');
-            }, 3000);
-        }
-
-        // 加载系统监控数据
-        async function loadSystemStats() {
-            try {
-                const response = await authFetch('/api/system/stats');
-                if (!response.ok) throw new Error('获取系统信息失败');
-                const data = await response.json();
-                
-                document.getElementById('cpu-usage').textContent = data.cpu.toFixed(1) + '%';
-                document.getElementById('memory-usage').textContent = data.memory.toFixed(1) + '%';
-                document.getElementById('disk-usage').textContent = data.disk.toFixed(1) + '%';
-                document.getElementById('current-time').textContent = data.time;
-            } catch (error) {
-                console.error('加载系统监控失败:', error);
-            }
-        }
-
-        // 加载容器列表
-        async function loadContainers() {
-            try {
-                const response = await authFetch('/api/containers');
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || '获取容器列表失败');
-                }
-                const data = await response.json();
-                
-                const tbody = document.getElementById('containers-tbody');
-                
-                // 检查数据是否为数组
-                if (!Array.isArray(data)) {
-                    console.error('返回的数据不是数组:', data);
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-red-500">数据格式错误</td></tr>';
-                    return;
-                }
-                
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="8" class="px-4 py-8 text-center text-gray-500">暂无容器</td></tr>';
-                    return;
-                }
-
-                tbody.innerHTML = data.map(container => {
-                    const statusClass = container.state === 'running' ? 'status-running' : 
-                                       container.state === 'exited' ? 'status-exited' : 'status-stopped';
-                    const statusText = container.state === 'running' ? '运行中' : 
-                                      container.state === 'exited' ? '已停止' : '已停止';
-                    
-                    const startBtn = container.state !== 'running' ? 
-                        `<button onclick="containerAction('${container.id}', 'start')" class="bg-green-500 text-white px-2 py-1 rounded text-xs hover:bg-green-600 mr-1">启动</button>` : '';
-                    const stopBtn = container.state === 'running' ? 
-                        `<button onclick="containerAction('${container.id}', 'stop')" class="bg-yellow-500 text-white px-2 py-1 rounded text-xs hover:bg-yellow-600 mr-1">停止</button>` : '';
-                    const restartBtn = container.state === 'running' ? 
-                        `<button onclick="containerAction('${container.id}', 'restart')" class="bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600 mr-1">重启</button>` : '';
-                    
-                    return `
+    <!-- 文件管理模态框 -->
+    <div id="files-modal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text">文件管理 - <span id="files-container-name"></span></h3>
+                <button onclick="closeFilesModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <!-- 路径和操作栏 -->
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+                <button onclick="goParentDir()" class="px-3 py-1.5 bg-gray-200 dark:bg-dark-border rounded hover:bg-gray-300 text-sm" title="上级目录">⬆️ 上级</button>
+                <div class="flex-1 px-3 py-1.5 bg-gray-100 dark:bg-dark-border rounded text-sm font-mono overflow-x-auto">
+                    <span id="current-path">/</span>
+                </div>
+                <button onclick="createDirectory()" class="px-3 py-1.5 bg-green-500 text-white rounded hover:bg-green-600 text-sm">📁 新建目录</button>
+                <button onclick="triggerUpload()" class="px-3 py-1.5 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm">⬆️ 上传</button>
+                <input type="file" id="file-upload-input" class="hidden" onchange="handleFileUpload(this)">
+            </div>
+            <!-- 文件列表 -->
+            <div class="overflow-x-auto" style="max-height: 50vh; overflow-y: auto;">
+                <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-border">
+                    <thead class="bg-gray-50 dark:bg-dark-border sticky top-0">
                         <tr>
-                            <td class="px-4 py-3 text-sm text-gray-900">${container.id}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${container.name}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${container.image}</td>
-                            <td class="px-4 py-3 text-sm ${statusClass}">${statusText}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${container.ports}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900" title="容器可写层文件系统大小">${container.memory}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${container.created}</td>
-                            <td class="px-4 py-3 text-sm">
-                                ${startBtn}
-                                ${stopBtn}
-                                ${restartBtn}
-                                <button onclick="viewLogs('${container.id}', '${container.name}')" class="bg-purple-500 text-white px-2 py-1 rounded text-xs hover:bg-purple-600 mr-1">日志</button>
-                                <button onclick="containerAction('${container.id}', 'remove')" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">删除</button>
-                            </td>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">名称</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">大小</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">权限</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">修改时间</th>
+                            <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">操作</th>
                         </tr>
-                    `;
-                }).join('');
-            } catch (error) {
-                console.error('加载容器列表失败:', error);
-                showToast('加载容器列表失败: ' + error.message, 'error');
-            }
-        }
+                    </thead>
+                    <tbody id="files-tbody" class="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-dark-border">
+                        <tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">加载中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 
-        // 容器操作
-        async function containerAction(id, action) {
-            const actionMap = {
-                'start': '启动',
-                'stop': '停止',
-                'restart': '重启',
-                'remove': '删除'
-            };
+    <!-- 文件编辑模态框 -->
+    <div id="file-edit-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text">编辑文件</h3>
+                <button onclick="document.getElementById('file-edit-modal').classList.remove('active')" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <input type="hidden" id="edit-file-path">
+            <textarea id="edit-file-content" class="w-full h-96 p-3 font-mono text-sm bg-gray-900 text-gray-300 rounded focus:outline-none" spellcheck="false"></textarea>
+            <div class="flex justify-end gap-2 mt-4">
+                <button onclick="document.getElementById('file-edit-modal').classList.remove('active')" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text">取消</button>
+                <button onclick="saveEditedFile()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 容器配置模态框 -->
+    <div id="container-config-modal" class="modal">
+        <div class="modal-content" style="max-width: 800px; max-height: 90vh; overflow-y: auto;">
+            <div class="flex justify-between items-center mb-4 sticky top-0 bg-white dark:bg-dark-card py-2 -mt-2 z-10">
+                <h3 class="text-lg font-semibold dark:text-dark-text" data-i18n="config.title">容器配置</h3>
+                <button onclick="closeContainerConfigModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <input type="hidden" id="config-container-id">
             
-            if (action === 'remove' && !confirm(`确定要删除容器 ${id} 吗？此操作不可恢复！`)) {
-                return;
-            }
+            <!-- 标签页导航 -->
+            <div class="border-b border-gray-200 dark:border-dark-border mb-4">
+                <nav class="flex gap-4 -mb-px">
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-config-tab="basic">基本信息</button>
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-config-tab="network">网络</button>
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-config-tab="storage">存储</button>
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-config-tab="env">环境变量</button>
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-config-tab="resources">资源限制</button>
+                    <button class="config-tab-btn px-3 py-2 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700" data-config-tab="advanced">高级</button>
+                </nav>
+            </div>
 
-            // 查找所有相关按钮并设置为加载状态
-            const buttons = document.querySelectorAll(`button[onclick*="'${id}', '${action}'"]`);
-            buttons.forEach(btn => {
-                btn.disabled = true;
-                btn.innerHTML = `<svg class="animate-spin h-4 w-4 mr-1 inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>执行中...`;
-                btn.classList.add('opacity-75', 'cursor-not-allowed');
-            });
+            <!-- 基本信息 -->
+            <div id="config-tab-basic" class="config-tab-content">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">容器 ID</div>
+                        <div id="config-full-id" class="text-sm font-mono dark:text-dark-text break-all"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">状态</div>
+                        <div id="config-state" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">镜像</div>
+                        <div id="config-image" class="text-sm dark:text-dark-text break-all"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">创建时间</div>
+                        <div id="config-created" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">启动时间</div>
+                        <div id="config-started" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">PID</div>
+                        <div id="config-pid" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                </div>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            容器名称 <span class="text-green-500 text-xs">✎ 可修改</span>
+                        </label>
+                        <div class="flex gap-2">
+                            <input type="text" id="config-container-name" class="flex-1 px-3 py-2 border border-green-300 dark:border-green-600 rounded text-sm">
+                            <button onclick="renameContainer()" class="px-3 py-2 bg-blue-500 text-white rounded text-sm hover:bg-blue-600">重命名</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            重启策略 <span class="text-green-500 text-xs">✎ 可修改</span>
+                        </label>
+                        <select id="config-restart" class="w-full px-3 py-2 border border-green-300 dark:border-green-600 rounded text-sm">
+                            <option value="no">不自动重启 (no)</option>
+                            <option value="always">总是重启 (always)</option>
+                            <option value="unless-stopped">除非手动停止 (unless-stopped)</option>
+                            <option value="on-failure">失败时重启 (on-failure)</option>
+                        </select>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                                命令 (CMD) <span class="text-gray-400 text-xs">🔒 只读</span>
+                            </label>
+                            <input type="text" id="config-cmd" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                                入口点 (Entrypoint) <span class="text-gray-400 text-xs">🔒 只读</span>
+                            </label>
+                            <input type="text" id="config-entrypoint" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                                用户 <span class="text-gray-400 text-xs">🔒 只读</span>
+                            </label>
+                            <input type="text" id="config-user" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                                工作目录 <span class="text-gray-400 text-xs">🔒 只读</span>
+                            </label>
+                            <input type="text" id="config-workdir" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
-            try {
-                const response = await authFetch('/api/containers/action', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ id: id, action: action })
-                });
+            <!-- 网络配置 -->
+            <div id="config-tab-network" class="config-tab-content hidden">
+                <div class="mb-3 p-2 bg-gray-100 dark:bg-dark-border rounded text-xs text-gray-500">
+                    🔒 网络配置为只读，修改需要重建容器
+                </div>
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">网络模式</div>
+                        <div id="config-network-mode" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">IP 地址</div>
+                        <div id="config-ip" class="text-sm font-mono dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">网关</div>
+                        <div id="config-gateway" class="text-sm font-mono dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">MAC 地址</div>
+                        <div id="config-mac" class="text-sm font-mono dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">主机名</div>
+                        <div id="config-hostname" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="text-xs text-gray-500 mb-1">域名</div>
+                        <div id="config-domain" class="text-sm dark:text-dark-text"></div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-2">端口映射</label>
+                    <div id="config-ports-list" class="space-y-2"></div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">DNS 服务器</label>
+                        <div id="config-dns" class="text-sm font-mono dark:text-dark-text p-2 bg-gray-50 dark:bg-dark-border rounded min-h-[40px]"></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Extra Hosts</label>
+                        <div id="config-extra-hosts" class="text-sm font-mono dark:text-dark-text p-2 bg-gray-50 dark:bg-dark-border rounded min-h-[40px]"></div>
+                    </div>
+                </div>
+            </div>
 
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error);
-                }
+            <!-- 存储配置 -->
+            <div id="config-tab-storage" class="config-tab-content hidden">
+                <div class="mb-3 p-2 bg-gray-100 dark:bg-dark-border rounded text-xs text-gray-500">
+                    🔒 存储配置为只读，修改需要重建容器
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-2">数据卷挂载</label>
+                    <div id="config-volumes-list" class="space-y-2"></div>
+                    <div id="config-volumes-empty" class="text-sm text-gray-500 p-3 bg-gray-50 dark:bg-dark-border rounded hidden">无数据卷挂载</div>
+                </div>
+                <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                    <div class="flex items-center gap-2">
+                        <span class="text-sm text-gray-500">只读根文件系统:</span>
+                        <span id="config-readonly" class="text-sm dark:text-dark-text"></span>
+                    </div>
+                </div>
+            </div>
 
-                showToast(`容器${actionMap[action]}成功`, 'success');
-                setTimeout(loadContainers, 500);
-            } catch (error) {
-                showToast(`${actionMap[action]}失败: ${error.message}`, 'error');
-                // 恢复按钮状态
-                loadContainers();
-            }
-        }
+            <!-- 环境变量 -->
+            <div id="config-tab-env" class="config-tab-content hidden">
+                <div class="mb-3 p-2 bg-gray-100 dark:bg-dark-border rounded text-xs text-gray-500">
+                    🔒 环境变量为只读，修改需要重建容器
+                </div>
+                <div id="config-env-list" class="space-y-1 max-h-96 overflow-y-auto"></div>
+                <div id="config-env-empty" class="text-sm text-gray-500 p-3 bg-gray-50 dark:bg-dark-border rounded hidden">无环境变量</div>
+            </div>
 
-        // 查看容器日志
-        function viewLogs(id, name) {
-            const modal = document.getElementById('log-modal');
-            const logContainer = document.getElementById('log-container');
-            modal.classList.add('active');
-            logContainer.textContent = '正在加载日志...\n';
+            <!-- 资源限制 -->
+            <div id="config-tab-resources" class="config-tab-content hidden">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            内存限制 (MB) <span class="text-green-500 text-xs">✎ 可修改</span>
+                        </label>
+                        <input type="number" id="config-memory" placeholder="不限制 (0)" class="w-full px-3 py-2 border border-green-300 dark:border-green-600 rounded text-sm">
+                        <div class="text-xs text-gray-400 mt-1">当前: <span id="config-memory-current"></span></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            内存+Swap (MB) <span class="text-gray-400 text-xs">🔒 只读</span>
+                        </label>
+                        <input type="number" id="config-memory-swap" placeholder="不限制 (0)" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            CPU 限制 (核) <span class="text-green-500 text-xs">✎ 可修改</span>
+                        </label>
+                        <input type="number" id="config-cpus" step="0.1" placeholder="不限制 (0)" class="w-full px-3 py-2 border border-green-300 dark:border-green-600 rounded text-sm">
+                        <div class="text-xs text-gray-400 mt-1">当前: <span id="config-cpus-current"></span></div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            CPU Shares <span class="text-gray-400 text-xs">🔒 只读</span>
+                        </label>
+                        <input type="number" id="config-cpu-shares" placeholder="默认 1024" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            CPU 绑定 <span class="text-gray-400 text-xs">🔒 只读</span>
+                        </label>
+                        <input type="text" id="config-cpuset" placeholder="如: 0,1 或 0-3" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                            进程数限制 <span class="text-gray-400 text-xs">🔒 只读</span>
+                        </label>
+                        <input type="number" id="config-pids" placeholder="不限制" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm bg-gray-100 cursor-not-allowed" readonly>
+                    </div>
+                </div>
+                <div class="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded text-sm text-blue-700 dark:text-blue-400">
+                    <strong>💡 提示:</strong> 带 <span class="text-green-500">✎ 可修改</span> 标记的配置可以热更新，带 <span class="text-gray-500">🔒 只读</span> 标记的配置需要重建容器才能修改。
+                </div>
+            </div>
 
-            // 关闭之前的连接
-            if (logEventSource) {
-                logEventSource.close();
-                logEventSource = null;
-            }
+            <!-- 高级配置 -->
+            <div id="config-tab-advanced" class="config-tab-content hidden">
+                <div class="grid grid-cols-2 gap-4 mb-4">
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">特权模式:</span>
+                            <span id="config-privileged" class="text-sm dark:text-dark-text"></span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">TTY:</span>
+                            <span id="config-tty" class="text-sm dark:text-dark-text"></span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">OOM Kill:</span>
+                            <span id="config-oom" class="text-sm dark:text-dark-text"></span>
+                        </div>
+                    </div>
+                    <div class="p-3 bg-gray-50 dark:bg-dark-border rounded">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm text-gray-500">日志驱动:</span>
+                            <span id="config-log-driver" class="text-sm dark:text-dark-text"></span>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-2">添加的 Capabilities</label>
+                    <div id="config-cap-add" class="text-sm font-mono dark:text-dark-text p-2 bg-gray-50 dark:bg-dark-border rounded min-h-[40px]"></div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-2">移除的 Capabilities</label>
+                    <div id="config-cap-drop" class="text-sm font-mono dark:text-dark-text p-2 bg-gray-50 dark:bg-dark-border rounded min-h-[40px]"></div>
+                </div>
+                <div class="mb-4">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-2">标签 (Labels)</label>
+                    <div id="config-labels-list" class="space-y-1 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
 
-            // 使用 EventSource 接收日志流
-            const eventSource = new EventSource(`/api/containers/logs?id=${id}`);
-            logEventSource = eventSource;
+            <!-- 底部按钮 -->
+            <div class="flex justify-between items-center mt-6 pt-4 border-t border-gray-200 dark:border-dark-border sticky bottom-0 bg-white dark:bg-dark-card">
+                <button onclick="openRecreateContainerModal()" class="px-4 py-2 bg-orange-500 text-white rounded hover:bg-orange-600 flex items-center gap-2" title="使用新配置重建容器">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                    重建容器
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="closeContainerConfigModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text">关闭</button>
+                    <button onclick="saveContainerConfig()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">保存修改</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
-            let logContent = '';
-
-            eventSource.onmessage = function(event) {
-                if (event.data) {
-                    logContent += event.data + '\n';
-                    logContainer.textContent = logContent;
-                    // 自动滚动到底部
-                    if (document.getElementById('auto-scroll').checked) {
-                        logContainer.scrollTop = logContainer.scrollHeight;
-                    }
-                }
-            };
-
-            eventSource.onerror = function(error) {
-                console.error('日志流错误:', error);
-                if (eventSource.readyState === EventSource.CLOSED) {
-                    if (logContent === '') {
-                        logContainer.textContent = '获取日志失败，请检查容器状态或容器是否正在运行';
-                    } else {
-                        logContent += '\n[日志流已断开]';
-                        logContainer.textContent = logContent;
-                    }
-                    eventSource.close();
-                    logEventSource = null;
-                }
-            };
-        }
-
-        // 关闭日志弹窗
-        function closeLogModal() {
-            const modal = document.getElementById('log-modal');
-            modal.classList.remove('active');
+    <!-- 重建容器模态框 -->
+    <div id="recreate-container-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text">重建容器</h3>
+                <button onclick="closeRecreateContainerModal()" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
             
-            if (logEventSource) {
-                logEventSource.close();
-                logEventSource = null;
-            }
-            
-            document.getElementById('log-container').textContent = '';
-        }
+            <div class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 rounded text-sm text-yellow-700 dark:text-yellow-400">
+                <strong>⚠️ 警告:</strong> 重建容器会停止并删除当前容器，然后使用新配置创建新容器。容器内未挂载的数据将丢失！
+            </div>
 
-        // 加载镜像列表
-        async function loadImages() {
-            try {
-                const response = await authFetch('/api/images');
-                if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(errorText || '获取镜像列表失败');
-                }
-                const data = await response.json();
+            <input type="hidden" id="recreate-container-id">
+            <input type="hidden" id="recreate-container-image">
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">容器名称</label>
+                    <input type="text" id="recreate-name" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                </div>
                 
-                const tbody = document.getElementById('images-tbody');
-                
-                // 检查数据是否为数组
-                if (!Array.isArray(data)) {
-                    console.error('返回的数据不是数组:', data);
-                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-red-500">数据格式错误</td></tr>';
-                    return;
-                }
-                
-                if (data.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="6" class="px-4 py-8 text-center text-gray-500">暂无镜像</td></tr>';
-                    return;
-                }
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="config.imageAddr">镜像地址</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="recreate-image" class="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm" placeholder="nginx">
+                        <span class="flex items-center text-gray-400">:</span>
+                        <input type="text" id="recreate-image-tag" class="w-32 px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm" placeholder="latest">
+                    </div>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="config.imageHint">升级时只需修改标签即可</p>
+                </div>
 
-                tbody.innerHTML = data.map(image => {
-                    return `
-                        <tr>
-                            <td class="px-4 py-3 text-sm text-gray-900">${image.id}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${image.name}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${image.tag}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${image.size}</td>
-                            <td class="px-4 py-3 text-sm text-gray-900">${image.created}</td>
-                            <td class="px-4 py-3 text-sm">
-                                <button onclick="removeImage('${image.id}', '${image.name}:${image.tag}')" class="bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600">删除</button>
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-            } catch (error) {
-                console.error('加载镜像列表失败:', error);
-                showToast('加载镜像列表失败: ' + error.message, 'error');
-            }
-        }
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">端口映射</label>
+                    <div id="recreate-ports-list" class="space-y-2"></div>
+                    <button onclick="addRecreatePort()" class="mt-2 text-sm text-blue-500 hover:text-blue-700">+ 添加端口映射</button>
+                </div>
 
-        // 删除镜像
-        async function removeImage(id, name) {
-            if (!confirm(`确定要删除镜像 ${name} 吗？`)) {
-                return;
-            }
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">数据卷挂载</label>
+                    <div id="recreate-volumes-list" class="space-y-2"></div>
+                    <button onclick="addRecreateVolume()" class="mt-2 text-sm text-blue-500 hover:text-blue-700">+ 添加数据卷</button>
+                </div>
 
-            try {
-                const response = await authFetch('/api/images/remove', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ id: id })
-                });
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">环境变量</label>
+                    <div id="recreate-env-list" class="space-y-2"></div>
+                    <button onclick="addRecreateEnv()" class="mt-2 text-sm text-blue-500 hover:text-blue-700">+ 添加环境变量</button>
+                </div>
 
-                if (!response.ok) {
-                    const error = await response.text();
-                    throw new Error(error);
-                }
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">重启策略</label>
+                        <select id="recreate-restart" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <option value="no">不自动重启</option>
+                            <option value="always">总是重启</option>
+                            <option value="unless-stopped">除非手动停止</option>
+                            <option value="on-failure">失败时重启</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">网络模式</label>
+                        <select id="recreate-network" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                            <option value="bridge">bridge</option>
+                            <option value="host">host</option>
+                            <option value="none">none</option>
+                        </select>
+                    </div>
+                </div>
 
-                showToast('镜像删除成功', 'success');
-                setTimeout(loadImages, 500);
-            } catch (error) {
-                showToast('删除失败: ' + error.message, 'error');
-            }
-        }
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">内存限制 (MB)</label>
+                        <input type="number" id="recreate-memory" placeholder="不限制" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">CPU 限制 (核)</label>
+                        <input type="number" id="recreate-cpus" step="0.1" placeholder="不限制" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                    </div>
+                </div>
 
-        // 开始容器自动刷新
-        function startContainersAutoRefresh() {
-            if (containersInterval) return;
-            containersInterval = setInterval(loadContainers, 5000);
-        }
+                <div class="flex items-center gap-4">
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="recreate-privileged" class="rounded">
+                        <span class="text-sm text-gray-700 dark:text-dark-muted">特权模式</span>
+                    </label>
+                    <label class="flex items-center gap-2">
+                        <input type="checkbox" id="recreate-tty" class="rounded" checked>
+                        <span class="text-sm text-gray-700 dark:text-dark-muted">分配 TTY</span>
+                    </label>
+                </div>
+            </div>
 
-        // 停止容器自动刷新
-        function stopContainersAutoRefresh() {
-            if (containersInterval) {
-                clearInterval(containersInterval);
-                containersInterval = null;
-            }
-        }
+            <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-dark-border">
+                <button onclick="closeRecreateContainerModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text dark:border-dark-border" data-i18n="common.cancel">取消</button>
+                <button id="recreate-confirm-btn" onclick="executeRecreateContainer()" class="bg-orange-500 text-white px-4 py-2 rounded hover:bg-orange-600" data-i18n="config.confirmRecreate">确认重建</button>
+            </div>
+        </div>
+    </div>
 
-        // 认证相关变量
-        let authToken = '';
-        let needChangePassword = false;
-
-        // 检查登录状态
-        async function checkAuth() {
-            try {
-                const response = await fetch('/api/auth/me', {
-                    credentials: 'include'
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    authToken = document.cookie.match(/token=([^;]+)/)?.[1] || '';
-                    needChangePassword = data.need_change_password;
-                    document.getElementById('current-user').textContent = `用户: ${data.username}`;
-                    return true;
-                }
-                return false;
-            } catch (error) {
-                return false;
-            }
-        }
-
-        // 登录
-        async function handleLogin(event) {
-            event.preventDefault();
-            const username = document.getElementById('login-username').value;
-            const password = document.getElementById('login-password').value;
-            const errorDiv = document.getElementById('login-error');
-
-            try {
-                const response = await fetch('/api/auth/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    authToken = data.token;
-                    needChangePassword = data.need_change_password;
-                    
-                    if (needChangePassword) {
-                        // 需要修改密码
-                        document.getElementById('login-page').classList.add('hidden');
-                        showChangePasswordModal(false);
-                    } else {
-                        // 登录成功
-                        showMainPage();
-                    }
-                } else {
-                    errorDiv.textContent = data.error || '登录失败';
-                    errorDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                errorDiv.textContent = '登录失败: ' + error.message;
-                errorDiv.classList.remove('hidden');
-            }
-        }
-
-        // 修改密码
-        async function handleChangePassword(event) {
-            event.preventDefault();
-            const oldPasswordDiv = document.getElementById('old-password-div');
-            const oldPasswordInput = document.getElementById('old-password');
-            const newPassword = document.getElementById('new-password').value;
-            const confirmPassword = document.getElementById('confirm-password').value;
-            const errorDiv = document.getElementById('change-password-error');
-
-            // 验证新密码
-            if (!newPassword) {
-                errorDiv.textContent = '新密码不能为空';
-                errorDiv.classList.remove('hidden');
-                return;
-            }
-
-            if (newPassword !== confirmPassword) {
-                errorDiv.textContent = '两次输入的密码不一致';
-                errorDiv.classList.remove('hidden');
-                return;
-            }
-
-            // 如果需要旧密码，验证旧密码
-            if (!oldPasswordDiv.classList.contains('hidden')) {
-                const oldPassword = oldPasswordInput.value;
-                if (!oldPassword) {
-                    errorDiv.textContent = '旧密码不能为空';
-                    errorDiv.classList.remove('hidden');
-                    return;
-                }
-            } else {
-                oldPasswordInput.value = '';
-            }
-
-            const oldPassword = oldPasswordInput.value;
-
-            try {
-                const response = await fetch('/api/auth/change-password', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    credentials: 'include',
-                    body: JSON.stringify({
-                        old_password: needChangePassword ? '' : oldPassword,
-                        new_password: newPassword
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    authToken = data.token;
-                    needChangePassword = false;
-                    document.getElementById('change-password-modal').classList.remove('active');
-                    showMainPage();
-                    showToast('密码修改成功', 'success');
-                } else {
-                    errorDiv.textContent = data.error || '修改密码失败';
-                    errorDiv.classList.remove('hidden');
-                }
-            } catch (error) {
-                errorDiv.textContent = '修改密码失败: ' + error.message;
-                errorDiv.classList.remove('hidden');
-            }
-        }
-
-        // 登出
-        async function handleLogout() {
-            try {
-                await fetch('/api/auth/logout', {
-                    method: 'POST',
-                    credentials: 'include'
-                });
-            } catch (error) {
-                console.error('登出失败:', error);
-            }
-            authToken = '';
-            document.getElementById('main-page').classList.add('hidden');
-            document.getElementById('login-page').classList.remove('hidden');
-        }
-
-        // 显示修改密码模态框
-        function showChangePasswordModal(showOldPassword = false) {
-            const modal = document.getElementById('change-password-modal');
-            const oldPasswordDiv = document.getElementById('old-password-div');
-            const errorDiv = document.getElementById('change-password-error');
-            const form = document.getElementById('change-password-form');
-            
-            // 清除错误信息
-            errorDiv.classList.add('hidden');
-            errorDiv.textContent = '';
-            
-            // 清空表单
-            form.reset();
-            
-            // 显示/隐藏旧密码输入框
-            if (showOldPassword) {
-                oldPasswordDiv.classList.remove('hidden');
-            } else {
-                oldPasswordDiv.classList.add('hidden');
-            }
-            
-            // 显示模态框
-            modal.classList.add('active');
-        }
-
-        // 显示主页面
-        function showMainPage() {
-            document.getElementById('login-page').classList.add('hidden');
-            document.getElementById('main-page').classList.remove('hidden');
-            loadSystemStats();
-            loadContainers();
-            loadImages();
-            loadComposeProjects();
-        }
-
-        // 带认证的 fetch 请求
-        async function authFetch(url, options = {}) {
-            const defaultOptions = {
-                credentials: 'include',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...options.headers
-                }
-            };
-
-            const response = await fetch(url, { ...defaultOptions, ...options });
-            
-            if (response.status === 401) {
-                // 未授权，返回登录页
-                handleLogout();
-                throw new Error('未授权，请重新登录');
-            }
-
-            if (response.status === 403) {
-                const data = await response.json();
-                if (data.need_change_password) {
-                    // 需要修改密码
-                    document.getElementById('main-page').classList.add('hidden');
-                    showChangePasswordModal(true);
-                }
-                throw new Error(data.error || '禁止访问');
-            }
-
-            return response;
-        }
-
-        // 初始化
-        document.addEventListener('DOMContentLoaded', async function() {
-            // Compose 编辑器 Tab 支持
-            const editor = document.getElementById('compose-editor');
-            if (editor) {
-                editor.addEventListener('keydown', function(e) {
-                    if (e.key === 'Tab') {
-                        e.preventDefault();
-                        const start = this.selectionStart;
-                        const end = this.selectionEnd;
-                        // 插入2个空格
-                        this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
-                        this.selectionStart = this.selectionEnd = start + 2;
-                    }
-                });
-            }
-
-            // 绑定登录表单
-            document.getElementById('login-form').addEventListener('submit', handleLogin);
-            document.getElementById('change-password-form').addEventListener('submit', handleChangePassword);
-
-            // 检查是否已登录
-            const isAuthenticated = await checkAuth();
-            if (isAuthenticated) {
-                if (needChangePassword) {
-                    document.getElementById('login-page').classList.add('hidden');
-                    showChangePasswordModal(false);
-                } else {
-                    showMainPage();
-                }
-            } else {
-                document.getElementById('login-page').classList.remove('hidden');
-                document.getElementById('main-page').classList.add('hidden');
-            }
-
-            // 系统监控自动刷新（5秒）- 仅在已登录时
-            if (isAuthenticated && !needChangePassword) {
-                systemStatsInterval = setInterval(loadSystemStats, 5000);
-                startContainersAutoRefresh();
-            }
-
-            // 点击模态框外部关闭
-            const logModal = document.getElementById('log-modal');
-            if (logModal) {
-                logModal.addEventListener('click', function(e) {
-                    if (e.target === this) {
-                        closeLogModal();
-                    }
-                });
-            }
-
-            // 点击修改密码模态框外部关闭
-            const changePasswordModal = document.getElementById('change-password-modal');
-            if (changePasswordModal) {
-                changePasswordModal.addEventListener('click', function(e) {
-                    if (e.target === this && !needChangePassword) {
-                        this.classList.remove('active');
-                    }
-                });
-            }
-        });
-
-        // 页面卸载时清理
-        window.addEventListener('beforeunload', function() {
-            if (logEventSource) {
-                logEventSource.close();
-            }
-            if (systemStatsInterval) {
-                clearInterval(systemStatsInterval);
-            }
-            if (containersInterval) {
-                clearInterval(containersInterval);
-            }
-        });
-        // Compose 相关逻辑
-        let currentComposeProject = '';
-
-        function loadComposeProjects() {
-            fetch('/api/compose/list?t=' + new Date().getTime())
-                .then(response => {
-                    if (response.status === 401) {
-                        handleLogout();
-                        return;
-                    }
-                    return response.json();
-                })
-                .then(data => {
-                    const list = document.getElementById('compose-list');
-                    list.innerHTML = '';
-                    if (!data || data.length === 0) {
-                        list.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">暂无项目</div>';
-                        return;
-                    }
-                    data.forEach(project => {
-                        const card = document.createElement('div');
-                        card.className = 'bg-white border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow';
-                        card.innerHTML = `
-                            <div class="flex justify-between items-start mb-2">
-                                <h3 class="font-bold text-lg truncate" title="${project.name}">${project.name}</h3>
-                                <span class="px-2 py-1 text-xs rounded bg-gray-100 text-gray-600">Unknown</span>
-                            </div>
-                            <div class="mt-4 flex justify-end">
-                                <button onclick="openComposeManager('${project.name}')" class="text-blue-500 hover:text-blue-700 text-sm font-medium">管理 &rarr;</button>
-                            </div>
-                        `;
-                        list.appendChild(card);
-                    });
-                })
-                .catch(err => showToast('加载项目失败: ' + err.message, 'error'));
-        }
-
-        function openCreateComposeModal() {
-            document.getElementById('new-compose-name').value = '';
-            document.getElementById('create-compose-modal').classList.add('active');
-        }
-
-        function createComposeProject() {
-            const name = document.getElementById('new-compose-name').value.trim();
-            if (!name) return;
-
-            fetch('/api/compose/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
-            })
-            .then(async res => {
-                if (res.ok) {
-                    showToast('创建成功');
-                    document.getElementById('create-compose-modal').classList.remove('active');
-                    loadComposeProjects();
-                } else {
-                    const text = await res.text();
-                    showToast('创建失败: ' + text, 'error');
-                }
-            });
-        }
-
-        function openComposeManager(name) {
-            currentComposeProject = name;
-            document.getElementById('compose-modal-title').textContent = '项目管理: ' + name;
-            document.getElementById('compose-output').classList.add('hidden');
-            document.getElementById('compose-output').textContent = '';
-            
-            fetch(`/api/compose/file?project=${name}`)
-                .then(res => res.text())
-                .then(text => {
-                    document.getElementById('compose-editor').value = text;
-                    document.getElementById('compose-modal').classList.add('active');
-                });
-        }
-
-        function closeComposeModal() {
-            document.getElementById('compose-modal').classList.remove('active');
-            currentComposeProject = '';
-        }
-
-        function saveComposeFile() {
-            if (!currentComposeProject) return;
-            const content = document.getElementById('compose-editor').value;
-            
-            fetch('/api/compose/save', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ project: currentComposeProject, content })
-            })
-            .then(async res => {
-                if (res.ok) {
-                    showToast('保存成功');
-                } else {
-                    const text = await res.text();
-                    showToast('保存失败: ' + text, 'error');
-                }
-            });
-        }
-
-        function runComposeAction(action) {
-            if (!currentComposeProject) return;
-            
-            // 禁用所有操作按钮
-            const buttons = document.querySelectorAll('#compose-modal button');
-            buttons.forEach(btn => {
-                if (btn.textContent.includes('关闭')) return; // 不禁用关闭按钮
-                btn.disabled = true;
-                btn.classList.add('opacity-50', 'cursor-not-allowed');
-            });
-
-            const outputDiv = document.getElementById('compose-output');
-            outputDiv.classList.remove('hidden');
-            outputDiv.textContent = `正在执行 ${action}...\n`;
-            
-            fetch('/api/compose/action', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ project: currentComposeProject, action })
-            })
-            .then(async res => {
-                const text = await res.text();
-                outputDiv.textContent += text;
-                outputDiv.scrollTop = outputDiv.scrollHeight;
-                if (!res.ok) {
-                    showToast('执行出错', 'error');
-                } else {
-                    showToast('执行完成');
-                }
-            })
-            .catch(err => {
-                outputDiv.textContent += '\n请求失败: ' + err.message;
-            })
-            .finally(() => {
-                // 恢复按钮状态
-                buttons.forEach(btn => {
-                    btn.disabled = false;
-                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                });
-            });
-        }
-    </script>
+    <!-- JS 模块 -->
+    <script src="js/i18n.js"></script>
+    <script src="js/utils.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/containers.js"></script>
+    <script src="js/logs.js"></script>
+    <script src="js/images.js"></script>
+    <script src="js/compose.js"></script>
+    <script src="js/terminal.js"></script>
+    <script src="js/app.js"></script>
 </body>
 </html>
-

@@ -5,7 +5,7 @@ go 1.24.0
 toolchain go1.24.10
 
 require (
-	github.com/docker/docker v24.0.7+incompatible
+	github.com/docker/docker v25.0.6+incompatible
 	github.com/docker/go-connections v0.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
 	golang.org/x/crypto v0.44.0

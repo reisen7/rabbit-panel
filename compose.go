@@ -14,8 +14,17 @@ import (
 const composeBaseDir = "./compose_projects"
 
 type ComposeProject struct {
-	Name   string `json:"name"`
-	Status string `json:"status"` // "running", "stopped", "unknown"
+	Name       string             `json:"name"`
+	Status     string             `json:"status"` // "running", "partial", "stopped", "unknown"
+	Containers []ComposeContainer `json:"containers,omitempty"`
+}
+
+type ComposeContainer struct {
+	Name    string `json:"name"`
+	Service string `json:"service"`
+	State   string `json:"state"`   // "running", "exited", "paused", etc.
+	Status  string `json:"status"`  // 详细状态如 "Up 2 hours"
+	Ports   string `json:"ports"`
 }
 
 type ComposeFileRequest struct {
@@ -163,6 +172,110 @@ func handleComposeSaveFile(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+// 获取 Compose 项目状态（包含容器详情）
+func handleComposeStatus(w http.ResponseWriter, r *http.Request) {
+	project := r.URL.Query().Get("project")
+	if project == "" {
+		http.Error(w, "Missing project parameter", http.StatusBadRequest)
+		return
+	}
+
+	projectDir := filepath.Join(composeBaseDir, project)
+	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
+		http.Error(w, "Project not found", http.StatusNotFound)
+		return
+	}
+
+	// 使用 docker compose ps --format json 获取容器状态
+	cmd := exec.Command("docker", "compose", "ps", "--format", "json", "-a")
+	cmd.Dir = projectDir
+	output, err := cmd.Output()
+	if err != nil {
+		// 可能是没有运行的容器，返回空列表
+		result := ComposeProject{
+			Name:       project,
+			Status:     "stopped",
+			Containers: []ComposeContainer{},
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(result)
+		return
+	}
+
+	// 解析 JSON 输出（每行一个 JSON 对象）
+	containers := []ComposeContainer{}
+	runningCount := 0
+	totalCount := 0
+
+	// docker compose ps --format json 输出每行一个 JSON
+	lines := splitLines(string(output))
+	for _, line := range lines {
+		if line == "" {
+			continue
+		}
+		var containerInfo struct {
+			Name    string `json:"Name"`
+			Service string `json:"Service"`
+			State   string `json:"State"`
+			Status  string `json:"Status"`
+			Ports   string `json:"Ports"`
+		}
+		if err := json.Unmarshal([]byte(line), &containerInfo); err != nil {
+			continue
+		}
+		totalCount++
+		if containerInfo.State == "running" {
+			runningCount++
+		}
+		containers = append(containers, ComposeContainer{
+			Name:    containerInfo.Name,
+			Service: containerInfo.Service,
+			State:   containerInfo.State,
+			Status:  containerInfo.Status,
+			Ports:   containerInfo.Ports,
+		})
+	}
+
+	// 计算整体状态
+	status := "stopped"
+	if totalCount > 0 {
+		if runningCount == totalCount {
+			status = "running"
+		} else if runningCount > 0 {
+			status = "partial"
+		}
+	}
+
+	result := ComposeProject{
+		Name:       project,
+		Status:     status,
+		Containers: containers,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// 辅助函数：分割行
+func splitLines(s string) []string {
+	var lines []string
+	start := 0
+	for i := 0; i < len(s); i++ {
+		if s[i] == '\n' {
+			line := s[start:i]
+			if len(line) > 0 && line[len(line)-1] == '\r' {
+				line = line[:len(line)-1]
+			}
+			lines = append(lines, line)
+			start = i + 1
+		}
+	}
+	if start < len(s) {
+		lines = append(lines, s[start:])
+	}
+	return lines
+}
+
 // 执行 Compose 操作
 func handleComposeAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -206,4 +319,45 @@ func handleComposeAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(output)
+}
+
+// 删除 Compose 项目
+func handleComposeDelete(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Project string `json:"project"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Project == "" {
+		http.Error(w, "项目名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	projectDir := filepath.Join(composeBaseDir, req.Project)
+	if _, err := os.Stat(projectDir); os.IsNotExist(err) {
+		http.Error(w, "项目不存在", http.StatusNotFound)
+		return
+	}
+
+	// 先尝试停止容器
+	cmd := exec.Command("docker", "compose", "down")
+	cmd.Dir = projectDir
+	cmd.Run() // 忽略错误，可能本来就没有运行
+
+	// 删除项目目录
+	if err := os.RemoveAll(projectDir); err != nil {
+		http.Error(w, fmt.Sprintf("删除失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("OK"))
 }
