@@ -89,6 +89,10 @@ function initTabs() {
             if (tab === 'compose') {
                 loadComposeProjects();
             }
+
+            if (tab === 'networks') {
+                loadNetworks();
+            }
         });
     });
 }

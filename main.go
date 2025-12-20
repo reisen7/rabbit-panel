@@ -23,6 +23,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
@@ -436,21 +437,25 @@ func handleContainerRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[Container] Creating container, image: %s, name: %s", req.Image, req.Name)
+
 	ctx := context.Background()
 
 	// 尝试拉取镜像（如果本地没有）
 	_, _, err := dockerClient.ImageInspectWithRaw(ctx, req.Image)
 	if err != nil {
 		// 镜像不存在，尝试拉取
-		log.Printf("镜像 %s 不存在，尝试拉取...", req.Image)
+		log.Printf("[Container] Image %s not found, pulling...", req.Image)
 		reader, err := dockerClient.ImagePull(ctx, req.Image, types.ImagePullOptions{})
 		if err != nil {
+			log.Printf("[Container] Failed to pull image: %v", err)
 			http.Error(w, fmt.Sprintf("拉取镜像失败: %v", err), http.StatusInternalServerError)
 			return
 		}
 		defer reader.Close()
 		// 等待拉取完成
 		io.Copy(io.Discard, reader)
+		log.Printf("[Container] Image %s pulled successfully", req.Image)
 	}
 
 	// 构建容器配置
@@ -505,17 +510,21 @@ func handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	// 创建容器
 	resp, err := dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, req.Name)
 	if err != nil {
+		log.Printf("[Container] Failed to create, image: %s, name: %s, error: %v", req.Image, req.Name, err)
 		http.Error(w, fmt.Sprintf("创建容器失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// 启动容器
 	if err := dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		log.Printf("[Container] Failed to start, id: %s, error: %v", resp.ID, err)
 		// 启动失败，删除已创建的容器
 		dockerClient.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{Force: true})
 		http.Error(w, fmt.Sprintf("启动容器失败: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[Container] Created successfully, id: %s, name: %s, image: %s", resp.ID[:12], req.Name, req.Image)
 
 	// 清除容器列表缓存
 	containersCache.Lock()
@@ -543,6 +552,8 @@ func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[Container] Action: %s, id: %s", req.Action, req.ID)
+
 	ctx := context.Background()
 	var err error
 
@@ -561,9 +572,12 @@ func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err != nil {
+		log.Printf("[Container] Action failed, action: %s, id: %s, error: %v", req.Action, req.ID, err)
 		http.Error(w, fmt.Sprintf("操作失败: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	log.Printf("[Container] Action success, action: %s, id: %s", req.Action, req.ID)
 
 	// 清除容器列表缓存，确保下次请求获取最新数据
 	containersCache.Lock()
@@ -783,6 +797,140 @@ func handleImages(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(imageList)
 }
 
+// 构建镜像 (从 Dockerfile)
+func handleImageBuild(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ImageName  string `json:"image_name"`  // 镜像名称
+		Tag        string `json:"tag"`         // 标签
+		Dockerfile string `json:"dockerfile"`  // Dockerfile 内容
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	if req.ImageName == "" {
+		http.Error(w, "镜像名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	if req.Dockerfile == "" {
+		http.Error(w, "Dockerfile 内容不能为空", http.StatusBadRequest)
+		return
+	}
+
+	if req.Tag == "" {
+		req.Tag = "latest"
+	}
+
+	// 构建完整的镜像标签
+	imageTag := req.ImageName + ":" + req.Tag
+
+	// 创建临时目录作为构建上下文
+	tempDir, err := os.MkdirTemp("", "docker-build-")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("创建临时目录失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer os.RemoveAll(tempDir)
+
+	// 写入 Dockerfile
+	dockerfilePath := tempDir + "/Dockerfile"
+	if err := os.WriteFile(dockerfilePath, []byte(req.Dockerfile), 0644); err != nil {
+		http.Error(w, fmt.Sprintf("写入 Dockerfile 失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 设置 SSE 响应头
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE 不支持", http.StatusInternalServerError)
+		return
+	}
+
+	// 发送开始消息
+	fmt.Fprintf(w, "data: {\"type\":\"start\",\"message\":\"开始构建镜像 %s\"}\n\n", imageTag)
+	flusher.Flush()
+
+	// 使用 docker build 命令构建（更简单可靠）
+	cmd := exec.Command("docker", "build", "-t", imageTag, tempDir)
+	
+	// 获取命令输出
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"获取输出失败: %v\"}\n\n", err)
+		flusher.Flush()
+		return
+	}
+	
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"获取错误输出失败: %v\"}\n\n", err)
+		flusher.Flush()
+		return
+	}
+
+	// 启动命令
+	if err := cmd.Start(); err != nil {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"启动构建失败: %v\"}\n\n", err)
+		flusher.Flush()
+		return
+	}
+
+	// 读取并发送输出
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			// 转义 JSON 特殊字符
+			line = strings.ReplaceAll(line, "\\", "\\\\")
+			line = strings.ReplaceAll(line, "\"", "\\\"")
+			line = strings.ReplaceAll(line, "\n", "\\n")
+			fmt.Fprintf(w, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", line)
+			flusher.Flush()
+		}
+	}()
+
+	// 读取错误输出
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			line = strings.ReplaceAll(line, "\\", "\\\\")
+			line = strings.ReplaceAll(line, "\"", "\\\"")
+			line = strings.ReplaceAll(line, "\n", "\\n")
+			fmt.Fprintf(w, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", line)
+			flusher.Flush()
+		}
+	}()
+
+	// 等待命令完成
+	if err := cmd.Wait(); err != nil {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"构建失败: %v\"}\n\n", err)
+		flusher.Flush()
+		return
+	}
+
+	// 清除镜像缓存
+	imagesCache.Lock()
+	imagesCache.lastFetch = time.Time{}
+	imagesCache.Unlock()
+
+	fmt.Fprintf(w, "data: {\"type\":\"success\",\"message\":\"镜像 %s 构建成功！\"}\n\n", imageTag)
+	flusher.Flush()
+}
+
 // 删除镜像
 func handleImageRemove(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -799,44 +947,324 @@ func handleImageRemove(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 查找完整的镜像 ID
-	images, err := dockerClient.ImageList(context.Background(), types.ImageListOptions{})
+	log.Printf("[Image] Remove request, id: %s", req.ID)
+
+	// 直接用传入的 ID 删除（Docker API 支持短 ID）
+	deleted, err := dockerClient.ImageRemove(context.Background(), req.ID, types.ImageRemoveOptions{})
 	if err != nil {
-		http.Error(w, fmt.Sprintf("获取镜像列表失败: %v", err), http.StatusInternalServerError)
+		log.Printf("[Image] Remove failed, id: %s, error: %v", req.ID, err)
+		errMsg := err.Error()
+		// 友好的错误提示
+		if strings.Contains(errMsg, "is being used") || strings.Contains(errMsg, "using") {
+			http.Error(w, "删除失败: 镜像正在被容器使用，请先停止并删除相关容器", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(errMsg, "has dependent child") || strings.Contains(errMsg, "image has dependent") {
+			http.Error(w, "删除失败: 镜像有子镜像依赖，请先删除依赖的镜像", http.StatusBadRequest)
+			return
+		}
+		if strings.Contains(errMsg, "image is referenced") {
+			http.Error(w, "删除失败: 镜像被其他镜像引用", http.StatusBadRequest)
+			return
+		}
+		http.Error(w, fmt.Sprintf("删除失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	var imageID string
-	for _, img := range images {
-		// 匹配完整的镜像 ID 或短 ID
-		fullID := img.ID
-		shortID := fullID
-		if strings.HasPrefix(fullID, "sha256:") {
-			shortID = fullID[7:]
+	log.Printf("[Image] Remove success, id: %s, result: %+v", req.ID, deleted)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// ========== 网络管理 API ==========
+
+// 网络信息
+type NetworkInfo struct {
+	ID         string   `json:"id"`
+	Name       string   `json:"name"`
+	Driver     string   `json:"driver"`
+	Scope      string   `json:"scope"`
+	IPAM       string   `json:"ipam"`
+	Internal   bool     `json:"internal"`
+	Containers int      `json:"containers"`
+	Created    string   `json:"created"`
+}
+
+// 获取网络列表
+func handleNetworks(w http.ResponseWriter, r *http.Request) {
+	networks, err := dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("获取网络列表失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	networkList := make([]NetworkInfo, 0, len(networks))
+	for _, n := range networks {
+		// 获取网络 ID
+		networkID := n.ID
+		if len(networkID) > 12 {
+			networkID = networkID[:12]
 		}
-		// 取前12位进行比较
+
+		// 获取 IPAM 配置
+		ipam := "-"
+		if len(n.IPAM.Config) > 0 {
+			ipam = n.IPAM.Config[0].Subnet
+		}
+
+		// 格式化创建时间
+		created := n.Created.Format("2006-01-02 15:04:05")
+
+		networkList = append(networkList, NetworkInfo{
+			ID:         networkID,
+			Name:       n.Name,
+			Driver:     n.Driver,
+			Scope:      n.Scope,
+			IPAM:       ipam,
+			Internal:   n.Internal,
+			Containers: len(n.Containers),
+			Created:    created,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(networkList)
+}
+
+// 创建网络
+func handleNetworkCreate(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Name     string `json:"name"`
+		Driver   string `json:"driver"`
+		Subnet   string `json:"subnet"`
+		Gateway  string `json:"gateway"`
+		Internal bool   `json:"internal"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	if req.Name == "" {
+		http.Error(w, "网络名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	if req.Driver == "" {
+		req.Driver = "bridge"
+	}
+
+	// 构建 IPAM 配置
+	ipamConfig := []network.IPAMConfig{}
+	if req.Subnet != "" {
+		config := network.IPAMConfig{
+			Subnet: req.Subnet,
+		}
+		if req.Gateway != "" {
+			config.Gateway = req.Gateway
+		}
+		ipamConfig = append(ipamConfig, config)
+	}
+
+	options := types.NetworkCreate{
+		Driver:   req.Driver,
+		Internal: req.Internal,
+	}
+
+	if len(ipamConfig) > 0 {
+		options.IPAM = &network.IPAM{
+			Config: ipamConfig,
+		}
+	}
+
+	log.Printf("[Network] Creating network, name: %s, driver: %s", req.Name, req.Driver)
+
+	resp, err := dockerClient.NetworkCreate(context.Background(), req.Name, options)
+	if err != nil {
+		log.Printf("[Network] Create failed, name: %s, error: %v", req.Name, err)
+		http.Error(w, fmt.Sprintf("创建网络失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Network] Created successfully, name: %s, id: %s", req.Name, resp.ID[:12])
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success", "id": resp.ID})
+}
+
+// 删除网络
+func handleNetworkRemove(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		ID string `json:"id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[Network] Remove request, id: %s", req.ID)
+
+	// 查找完整的网络 ID
+	networks, err := dockerClient.NetworkList(context.Background(), types.NetworkListOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("获取网络列表失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	var networkID string
+	var networkName string
+	for _, n := range networks {
+		shortID := n.ID
 		if len(shortID) > 12 {
 			shortID = shortID[:12]
 		}
-		if strings.HasPrefix(fullID, req.ID) || strings.HasPrefix(shortID, req.ID) || req.ID == shortID {
-			imageID = img.ID
+		if strings.HasPrefix(n.ID, req.ID) || shortID == req.ID || n.Name == req.ID {
+			networkID = n.ID
+			networkName = n.Name
 			break
 		}
 	}
 
-	if imageID == "" {
-		http.Error(w, "镜像不存在", http.StatusNotFound)
+	if networkID == "" {
+		http.Error(w, "网络不存在", http.StatusNotFound)
 		return
 	}
 
-	_, err = dockerClient.ImageRemove(context.Background(), imageID, types.ImageRemoveOptions{})
+	err = dockerClient.NetworkRemove(context.Background(), networkID)
 	if err != nil {
-		// 检查是否是依赖错误
-		if strings.Contains(err.Error(), "is being used") {
-			http.Error(w, "镜像正在被容器使用，请先删除相关容器", http.StatusBadRequest)
+		log.Printf("[Network] Remove failed, name: %s, error: %v", networkName, err)
+		if strings.Contains(err.Error(), "has active endpoints") {
+			http.Error(w, "网络正在被容器使用，请先断开连接", http.StatusBadRequest)
 			return
 		}
-		http.Error(w, fmt.Sprintf("删除失败: %v", err), http.StatusInternalServerError)
+		http.Error(w, fmt.Sprintf("删除网络失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[Network] Removed successfully, name: %s", networkName)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// 获取网络详情
+func handleNetworkInspect(w http.ResponseWriter, r *http.Request) {
+	networkID := r.URL.Query().Get("id")
+	if networkID == "" {
+		http.Error(w, "网络 ID 不能为空", http.StatusBadRequest)
+		return
+	}
+
+	network, err := dockerClient.NetworkInspect(context.Background(), networkID, types.NetworkInspectOptions{})
+	if err != nil {
+		http.Error(w, fmt.Sprintf("获取网络详情失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 获取连接的容器
+	containers := make([]map[string]string, 0)
+	for id, endpoint := range network.Containers {
+		shortID := id
+		if len(shortID) > 12 {
+			shortID = shortID[:12]
+		}
+		containers = append(containers, map[string]string{
+			"id":   shortID,
+			"name": endpoint.Name,
+			"ipv4": endpoint.IPv4Address,
+			"ipv6": endpoint.IPv6Address,
+			"mac":  endpoint.MacAddress,
+		})
+	}
+
+	result := map[string]interface{}{
+		"id":         network.ID,
+		"name":       network.Name,
+		"driver":     network.Driver,
+		"scope":      network.Scope,
+		"internal":   network.Internal,
+		"attachable": network.Attachable,
+		"ingress":    network.Ingress,
+		"ipam":       network.IPAM,
+		"options":    network.Options,
+		"labels":     network.Labels,
+		"containers": containers,
+		"created":    network.Created.Format("2006-01-02 15:04:05"),
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+// 连接容器到网络
+func handleNetworkConnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		NetworkID   string `json:"network_id"`
+		ContainerID string `json:"container_id"`
+		IPv4        string `json:"ipv4"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	endpointConfig := &network.EndpointSettings{}
+	if req.IPv4 != "" {
+		endpointConfig.IPAMConfig = &network.EndpointIPAMConfig{
+			IPv4Address: req.IPv4,
+		}
+	}
+
+	err := dockerClient.NetworkConnect(context.Background(), req.NetworkID, req.ContainerID, endpointConfig)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("连接失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "success"})
+}
+
+// 断开容器与网络的连接
+func handleNetworkDisconnect(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		NetworkID   string `json:"network_id"`
+		ContainerID string `json:"container_id"`
+		Force       bool   `json:"force"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	err := dockerClient.NetworkDisconnect(context.Background(), req.NetworkID, req.ContainerID, req.Force)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("断开连接失败: %v", err), http.StatusInternalServerError)
 		return
 	}
 
@@ -999,6 +1427,15 @@ func main() {
 	http.HandleFunc("/api/containers/logs", authMiddleware(handleContainerLogs)) // 日志流不限制超时
 	http.HandleFunc("/api/images", authOrNodeAuthMiddleware(handleImages)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/images/remove", authMiddleware(handleImageRemove))
+	http.HandleFunc("/api/images/build", authMiddleware(handleImageBuild))
+	
+	// 网络管理 API
+	http.HandleFunc("/api/networks", authMiddleware(handleNetworks))
+	http.HandleFunc("/api/networks/create", authMiddleware(handleNetworkCreate))
+	http.HandleFunc("/api/networks/remove", authMiddleware(handleNetworkRemove))
+	http.HandleFunc("/api/networks/inspect", authMiddleware(handleNetworkInspect))
+	http.HandleFunc("/api/networks/connect", authMiddleware(handleNetworkConnect))
+	http.HandleFunc("/api/networks/disconnect", authMiddleware(handleNetworkDisconnect))
 	
 	// 容器终端和文件管理 API
 	http.HandleFunc("/api/containers/exec", authMiddleware(handleContainerExec))

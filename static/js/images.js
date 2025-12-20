@@ -105,9 +105,10 @@ async function removeImage(id, name) {
 
         if (!response.ok) throw new Error(await response.text());
         showToast(`镜像 ${name} 已删除`, 'success', { title: '删除成功' });
-        setTimeout(loadImages, 500);
+        loadImages();
     } catch (error) {
         showToast(error.message, 'error', { title: '删除失败' });
+        loadImages();
     }
 }
 
@@ -117,4 +118,148 @@ async function refreshImages() {
     icon.classList.add('refresh-spinning');
     await loadImages();
     setTimeout(() => icon.classList.remove('refresh-spinning'), 300);
+}
+
+// ========== 构建镜像功能 ==========
+
+// 打开构建镜像模态框
+function openBuildImageModal() {
+    document.getElementById('build-image-name').value = '';
+    document.getElementById('build-image-tag').value = 'latest';
+    document.getElementById('build-dockerfile').value = `FROM alpine:latest
+
+# 安装依赖
+RUN apk add --no-cache bash
+
+# 设置工作目录
+WORKDIR /app
+
+# 复制文件
+# COPY . .
+
+# 启动命令
+CMD ["sh"]`;
+    document.getElementById('build-output').innerHTML = '';
+    document.getElementById('build-output-container').classList.add('hidden');
+    document.getElementById('build-image-modal').classList.add('active');
+}
+
+// 关闭构建镜像模态框
+function closeBuildImageModal() {
+    document.getElementById('build-image-modal').classList.remove('active');
+}
+
+// 上传 Dockerfile 文件
+function handleDockerfileUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // 限制文件大小 1MB
+    if (file.size > 1024 * 1024) {
+        showToast(t('build.fileTooLarge'), 'error');
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        document.getElementById('build-dockerfile').value = content;
+        showToast(t('build.fileLoaded'), 'success');
+    };
+    reader.onerror = function() {
+        showToast(t('build.fileReadError'), 'error');
+    };
+    reader.readAsText(file);
+    
+    // 清空 input，允许重复上传同一文件
+    input.value = '';
+}
+
+// 构建镜像
+async function buildImage() {
+    const imageName = document.getElementById('build-image-name').value.trim();
+    const tag = document.getElementById('build-image-tag').value.trim() || 'latest';
+    const dockerfile = document.getElementById('build-dockerfile').value;
+
+    if (!imageName) {
+        showToast(t('build.nameRequired'), 'error');
+        return;
+    }
+
+    if (!dockerfile.trim()) {
+        showToast(t('build.dockerfileRequired'), 'error');
+        return;
+    }
+
+    // 显示输出区域
+    const outputContainer = document.getElementById('build-output-container');
+    const output = document.getElementById('build-output');
+    outputContainer.classList.remove('hidden');
+    output.innerHTML = '<div class="text-blue-400">' + t('build.starting') + '</div>';
+
+    // 禁用按钮
+    const btn = document.getElementById('build-btn');
+    const originalText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="inline-flex items-center"><svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>' + t('build.building') + '</span>';
+
+    try {
+        const response = await authFetch('/api/images/build', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                image_name: imageName,
+                tag: tag,
+                dockerfile: dockerfile
+            })
+        });
+
+        // 读取 SSE 流
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+
+            const text = decoder.decode(value);
+            const lines = text.split('\n');
+
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'log') {
+                            output.innerHTML += '<div class="text-gray-300">' + escapeHtml(data.message) + '</div>';
+                        } else if (data.type === 'error') {
+                            output.innerHTML += '<div class="text-red-400">❌ ' + escapeHtml(data.message) + '</div>';
+                        } else if (data.type === 'success') {
+                            output.innerHTML += '<div class="text-green-400">✅ ' + escapeHtml(data.message) + '</div>';
+                            showToast(t('build.success'), 'success');
+                            loadImages();
+                        } else if (data.type === 'start') {
+                            output.innerHTML += '<div class="text-blue-400">🚀 ' + escapeHtml(data.message) + '</div>';
+                        }
+                        output.scrollTop = output.scrollHeight;
+                    } catch (e) {
+                        // 忽略解析错误
+                    }
+                }
+            }
+        }
+    } catch (error) {
+        output.innerHTML += '<div class="text-red-400">❌ ' + t('build.failed') + ': ' + escapeHtml(error.message) + '</div>';
+        showToast(t('build.failed') + ': ' + error.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+    }
+}
+
+// HTML 转义
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
 }

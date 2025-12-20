@@ -31,41 +31,68 @@
 
 ## 快速开始
 
-### 1. 安装 Docker (如果未安装)
+### 1. Docker 部署（推荐）
+
+**方式一：docker run 快速启动**
 
 ```bash
-# Ubuntu/Debian
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
-
-# 将当前用户添加到 docker 组
-sudo usermod -aG docker $USER
-newgrp docker
+docker run -d \
+  --name rabbit-panel \
+  --restart unless-stopped \
+  -p 9999:9999 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/compose_projects:/app/compose_projects \
+  -e TZ=Asia/Shanghai \
+  -e JWT_SECRET=your-secret-key \
+  ghcr.io/reisen7/rabbit-panel:latest
 ```
 
-### 2. 从源码编译
+**方式二：docker-compose 部署**
 
 ```bash
 # 克隆代码
 git clone https://github.com/reisen7/rabbit-panel.git
 cd rabbit-panel
 
-# 编译 (默认依据当前架构输出 dist/)
+# 一键启动
+docker compose -f docker-compose.deploy.yml up -d
+
+# 查看日志
+docker logs -f rabbit-panel
+
+# 停止
+docker compose -f docker-compose.deploy.yml down
+```
+
+> ⚠️ 生产环境请修改 `JWT_SECRET` 和 `NODE_SECRET`
+
+### 2. 源码编译部署
+
+```bash
+# 安装 Docker (如果未安装)
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
+newgrp docker
+
+# 克隆代码
+git clone https://github.com/reisen7/rabbit-panel.git
+cd rabbit-panel
+
+# 编译
 chmod +x rabbit.sh
 ./rabbit.sh build
 
-# 需要交叉编译可指定目标: amd64 | arm64 | armv7 | all
-./rabbit.sh build arm64
+# 启动
+./rabbit.sh start
 
-# 编译后的文件在 dist/ 目录
-
+# 访问 http://localhost:9999
 ```
 
-> 提示：`rabbit.sh build` 默认配置了 `GOPROXY=https://goproxy.cn,direct` 以加速国内构建。
-> 如果需要跨架构且依赖 CGO，可通过 `CC_AMD64`、`CC_ARM64`、`CC_ARMV7` 指定对应的交叉编译器。
+> 交叉编译：`./rabbit.sh build arm64`（支持 amd64 | arm64 | armv7 | all）
 
-
-### 3. 运行面板（一键脚本）
+### 3. 运行管理
 
 推荐使用集成脚本 `rabbit.sh` 管理启动/停止/重启/状态/编译：
 
@@ -131,14 +158,34 @@ HOST=0.0.0.0 PORT=9999 ./rabbit-panel-linux-arm64
 
 Rabbit Panel 支持多节点容器管理，类似 Kubernetes 但更轻量化。
 
-### 启动 Master 节点（控制节点）
+### Docker 部署（推荐）
 
+**Master 节点：**
+```bash
+# 在 Master 服务器上
+docker compose -f docker-compose.master.yml up -d
+```
+
+**Worker 节点：**
+```bash
+# 1. 修改 docker-compose.worker.yml 中的配置：
+#    - MASTER_URL: Master 节点地址
+#    - NODE_NAME: 当前节点名称
+
+# 2. 在 Worker 服务器上启动
+docker compose -f docker-compose.worker.yml up -d
+```
+
+> ⚠️ Master 和 Worker 的 `JWT_SECRET` 和 `NODE_SECRET` 必须相同
+
+### 二进制部署
+
+**Master 节点：**
 ```bash
 MODE=master PORT=9999 ./rabbit-panel-linux-arm64
 ```
 
-### 启动 Worker 节点（工作节点）
-
+**Worker 节点：**
 ```bash
 MASTER_URL=http://master-ip:9999 \
 NODE_NAME=worker-1 \
@@ -201,30 +248,6 @@ Master 和 Worker 节点之间的通信使用 HMAC-SHA256 认证机制。
 NODE_SECRET=your-secret-key-here ./rabbit-panel-linux-arm64
 ```
 
-### 生产环境建议
-
-1. **使用 HTTPS**: 通过 Nginx/Caddy 配置 HTTPS 反向代理
-2. **防火墙配置**: 限制访问端口
-3. **定期更新密钥**: 定期更换 `NODE_SECRET` 和 `JWT_SECRET`
-
-详细文档请参考: [SECURITY.md](SECURITY.md)
-
-## 性能优化
-
-### 资源占用
-
-- **运行时内存**: ≤30MB
-- **二进制文件大小**: ≤10MB
-- **静态资源**: ≤100KB (Tailwind CSS 通过 CDN 加载)
-
-### 优化措施
-
-1. **编译优化**: 使用 `-ldflags="-s -w"` 去除符号表和调试信息
-2. **无数据库**: 所有数据直接从 Docker API 获取，无持久化存储
-3. **连接管理**: 容器日志流关闭后立即释放连接
-4. **内存管理**: 定期清理无用协程，避免内存泄漏
-5. **数据缓存**: 容器和镜像列表使用内存缓存，减少 Docker API 调用
-
 ## 项目结构
 
 ```
@@ -252,47 +275,6 @@ rabbit-panel/
 └── README.md            # 说明文档
 ```
 
-## API 接口
-
-### 单节点 API
-
-- `GET /api/system/stats` - 获取系统监控数据
-- `GET /api/containers` - 获取容器列表
-- `POST /api/containers/action` - 容器操作 (start/stop/restart/remove)
-- `POST /api/containers/run` - 创建并运行容器 (docker run)
-- `GET /api/containers/logs?id=<container-id>` - 获取容器日志 (SSE 流式)
-- `GET /api/images` - 获取镜像列表
-- `POST /api/images/remove` - 删除镜像
-- `GET /api/compose/list` - 获取 Compose 项目列表
-- `GET /api/compose/status?project=<name>` - 获取项目容器状态
-- `POST /api/compose/create` - 创建 Compose 项目
-- `POST /api/compose/delete` - 删除 Compose 项目
-- `GET /api/compose/file?project=<name>` - 获取 compose 文件内容
-- `POST /api/compose/save` - 保存 compose 文件
-- `POST /api/compose/action` - 执行 Compose 操作 (up/down/restart/pull/logs)
-- `GET /api/health` - 健康检查
-
-### 多节点 API（Master）
-
-- `GET /api/nodes` - 获取所有节点列表
-- `POST /api/containers/schedule` - 跨节点调度容器
-- `GET /api/containers/all` - 获取所有节点的容器
-
-### 认证 API
-
-- `POST /api/auth/login` - 用户登录
-- `POST /api/auth/logout` - 用户登出
-- `POST /api/auth/change-password` - 修改密码
-
-## 扩展开发
-
-如需添加新功能，请遵循以下原则:
-
-1. **保持轻量化**: 新增功能不应显著增加内存占用
-2. **无数据库**: 如需缓存，使用内存临时存储
-3. **单文件后端**: 尽量将代码集中在主文件中
-4. **原生前端**: 使用原生 HTML/CSS/JS，避免引入框架
-
 ## 许可证
 
 MIT License
@@ -302,6 +284,29 @@ MIT License
 欢迎提交 Issue 和 Pull Request！
 
 ## 更新日志
+
+### v1.3.1 (2025-12-20)
+
+**新功能**
+- 🌐 新增网络管理功能：
+  - 查看网络列表（名称、驱动、范围、IPAM、容器数）
+  - 创建自定义网络（支持 bridge/overlay/macvlan/host/none 驱动）
+  - 删除网络（系统网络受保护）
+  - 查看网络详情和连接的容器
+- 🏗️ 新增镜像构建功能：
+  - 支持在线编辑 Dockerfile
+  - 支持上传 Dockerfile 文件
+  - 实时显示构建日志（SSE 流式输出）
+- 📤 Compose 编辑器支持上传 docker-compose.yml 文件
+- 🐳 新增 Docker 部署支持：
+  - 提供 Dockerfile 和 docker-compose.yml
+  - 支持 Master/Worker 多节点 Docker 部署
+
+**优化改进**
+- 📱 网络管理移动端适配，响应式隐藏部分列
+- 📝 主要功能添加英文日志输出，便于排查问题
+- 🔧 镜像删除添加友好错误提示（被使用、有子镜像依赖等）
+- 🎨 修复网络详情 ID 过长导致布局错乱
 
 ### v1.3.0 (2025-12-18)
 

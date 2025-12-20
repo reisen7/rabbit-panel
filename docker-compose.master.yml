@@ -1,0 +1,29 @@
+version: '3.8'
+
+# Master 节点部署配置
+# 使用方法: docker compose -f docker-compose.master.yml up -d
+
+services:
+  rabbit-panel-master:
+    image: rabbit-panel:latest
+    container_name: rabbit-panel-master
+    restart: unless-stopped
+    user: root
+    ports:
+      - "9999:9999"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /root/rabbit-panel/compose_projects:/app/compose_projects
+      - /root/rabbit-panel/data:/app/data
+    environment:
+      - TZ=Asia/Shanghai
+      - MODE=master
+      - PORT=9999
+      # 生产环境请修改以下密钥（Master 和 Worker 必须使用相同的密钥）
+      - JWT_SECRET=change-me-in-production
+      - NODE_SECRET=change-me-in-production
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9999/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

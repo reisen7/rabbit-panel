@@ -289,6 +289,8 @@ func handleComposeAction(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Printf("[Compose] Action: %s, project: %s", req.Action, req.Project)
+
 	projectDir := filepath.Join(composeBaseDir, req.Project)
 	var cmd *exec.Cmd
 
@@ -312,11 +314,14 @@ func handleComposeAction(w http.ResponseWriter, r *http.Request) {
 	cmd.Dir = projectDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
+		log.Printf("[Compose] Action failed, project: %s, action: %s, error: %v", req.Project, req.Action, err)
 		// 返回错误信息和输出
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte(fmt.Sprintf("Error: %v\nOutput:\n%s", err, string(output))))
 		return
 	}
+
+	log.Printf("[Compose] Action success, project: %s, action: %s", req.Project, req.Action)
 
 	w.Write(output)
 }

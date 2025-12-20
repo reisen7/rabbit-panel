@@ -229,6 +229,37 @@ function refreshCurrentComposeStatus() {
     }
 }
 
+// 上传 docker-compose.yml 文件
+function handleComposeFileUpload(input, type) {
+    const file = input.files[0];
+    if (!file) return;
+
+    // 限制文件大小 1MB
+    if (file.size > 1024 * 1024) {
+        showToast(t('compose.fileTooLarge'), 'error');
+        input.value = '';
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const content = e.target.result;
+        const editorId = type === 'mobile' ? 'compose-mobile-editor' : 'compose-detail-editor';
+        const editor = document.getElementById(editorId);
+        if (editor) {
+            editor.value = content;
+            showToast(t('compose.fileLoaded'), 'success');
+        }
+    };
+    reader.onerror = function() {
+        showToast(t('compose.fileReadError'), 'error');
+    };
+    reader.readAsText(file);
+    
+    // 清空 input，允许重复上传同一文件
+    input.value = '';
+}
+
 // 保存当前项目文件
 function saveCurrentComposeFile() {
     if (!currentComposeProject) return;

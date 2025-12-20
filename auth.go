@@ -153,8 +153,14 @@ var authDB *sql.DB
 
 // 初始化认证数据库
 func initAuthDB() error {
+	// 确保 data 目录存在
+	dataDir := "./data"
+	if err := os.MkdirAll(dataDir, 0755); err != nil {
+		return fmt.Errorf("创建数据目录失败: %v", err)
+	}
+
 	var err error
-	authDB, err = sql.Open("sqlite", "./auth.db")
+	authDB, err = sql.Open("sqlite", "./data/auth.db")
 	if err != nil {
 		return fmt.Errorf("打开数据库失败: %v", err)
 	}
@@ -411,6 +417,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	// 验证用户
 	user, err := verifyUser(req.Username, req.Password)
 	if err != nil {
+		log.Printf("[Auth] Login failed, user: %s, reason: %v", req.Username, err)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]interface{}{
@@ -444,6 +451,8 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 		SameSite: http.SameSiteStrictMode,
 	})
+
+	log.Printf("[Auth] Login success, user: %s", user.Username)
 
 	// 返回响应
 	w.Header().Set("Content-Type", "application/json")

@@ -20,6 +20,9 @@ const i18n = {
             'common.create': '创建',
             'common.edit': '编辑',
             'common.close': '关闭',
+            'common.detail': '详情',
+            'common.actions': '操作',
+            'common.created': '创建时间',
             'common.success': '成功',
             'common.error': '错误',
             'common.warning': '警告',
@@ -48,6 +51,7 @@ const i18n = {
             // 标签页
             'tab.containers': '容器管理',
             'tab.images': '镜像管理',
+            'tab.networks': '网络管理',
             'tab.compose': 'Compose 管理',
             
             // 容器管理
@@ -112,6 +116,24 @@ const i18n = {
             'image.remove': '删除',
             'image.empty': '暂无匹配的镜像',
             
+            // 构建镜像
+            'build.title': '构建镜像',
+            'build.imageName': '镜像名称',
+            'build.tag': '标签',
+            'build.hint': '提示：仅支持基于基础镜像构建，不支持 COPY 本地文件',
+            'build.output': '构建输出',
+            'build.start': '开始构建',
+            'build.building': '构建中...',
+            'build.starting': '正在准备构建环境...',
+            'build.success': '镜像构建成功',
+            'build.failed': '构建失败',
+            'build.nameRequired': '镜像名称不能为空',
+            'build.dockerfileRequired': 'Dockerfile 内容不能为空',
+            'build.upload': '上传文件',
+            'build.fileLoaded': 'Dockerfile 已加载',
+            'build.fileTooLarge': '文件过大，最大支持 1MB',
+            'build.fileReadError': '读取文件失败',
+            
             // Compose 管理
             'compose.projects': 'Compose 项目',
             'compose.list': '项目列表',
@@ -122,6 +144,31 @@ const i18n = {
             'compose.pull': '拉取',
             'compose.status': '容器状态',
             'compose.select': '选择项目查看详情',
+            'compose.upload': '上传',
+            'compose.fileLoaded': '文件已加载',
+            'compose.fileTooLarge': '文件过大，最大支持 1MB',
+            'compose.fileReadError': '读取文件失败',
+            
+            // 网络管理
+            'network.list': '网络列表',
+            'network.name': '名称',
+            'network.driver': '驱动',
+            'network.scope': '范围',
+            'network.containers': '容器数',
+            'network.internal': '内部网络',
+            'network.create': '创建网络',
+            'network.delete': '删除网络',
+            'network.detail': '网络详情',
+            'network.empty': '暂无网络',
+            'network.loadFailed': '加载网络列表失败',
+            'network.nameRequired': '网络名称不能为空',
+            'network.createSuccess': '网络创建成功',
+            'network.createFailed': '创建网络失败',
+            'network.deleteConfirm': '确定要删除网络',
+            'network.deleteSuccess': '网络已删除',
+            'network.deleteFailed': '删除网络失败',
+            'network.noContainers': '暂无连接的容器',
+            'network.connectedContainers': '连接的容器',
             
             // 日志
             'logs.title': '容器日志',
@@ -237,6 +284,9 @@ const i18n = {
             'common.create': 'Create',
             'common.edit': 'Edit',
             'common.close': 'Close',
+            'common.detail': 'Detail',
+            'common.actions': 'Actions',
+            'common.created': 'Created',
             'common.success': 'Success',
             'common.error': 'Error',
             'common.warning': 'Warning',
@@ -265,6 +315,7 @@ const i18n = {
             // Tabs
             'tab.containers': 'Containers',
             'tab.images': 'Images',
+            'tab.networks': 'Networks',
             'tab.compose': 'Compose',
             
             // Container Management
@@ -329,6 +380,24 @@ const i18n = {
             'image.remove': 'Remove',
             'image.empty': 'No images found',
             
+            // Build Image
+            'build.title': 'Build Image',
+            'build.imageName': 'Image Name',
+            'build.tag': 'Tag',
+            'build.hint': 'Note: Only supports building from base images, COPY local files is not supported',
+            'build.output': 'Build Output',
+            'build.start': 'Start Build',
+            'build.building': 'Building...',
+            'build.starting': 'Preparing build environment...',
+            'build.success': 'Image built successfully',
+            'build.failed': 'Build failed',
+            'build.nameRequired': 'Image name is required',
+            'build.dockerfileRequired': 'Dockerfile content is required',
+            'build.upload': 'Upload File',
+            'build.fileLoaded': 'Dockerfile loaded',
+            'build.fileTooLarge': 'File too large, max 1MB',
+            'build.fileReadError': 'Failed to read file',
+            
             // Compose Management
             'compose.projects': 'Compose Projects',
             'compose.list': 'Project List',
@@ -339,6 +408,31 @@ const i18n = {
             'compose.pull': 'Pull',
             'compose.status': 'Container Status',
             'compose.select': 'Select a project to view details',
+            'compose.upload': 'Upload',
+            'compose.fileLoaded': 'File loaded',
+            'compose.fileTooLarge': 'File too large, max 1MB',
+            'compose.fileReadError': 'Failed to read file',
+            
+            // Network Management
+            'network.list': 'Network List',
+            'network.name': 'Name',
+            'network.driver': 'Driver',
+            'network.scope': 'Scope',
+            'network.containers': 'Containers',
+            'network.internal': 'Internal',
+            'network.create': 'Create Network',
+            'network.delete': 'Delete Network',
+            'network.detail': 'Network Details',
+            'network.empty': 'No networks found',
+            'network.loadFailed': 'Failed to load networks',
+            'network.nameRequired': 'Network name is required',
+            'network.createSuccess': 'Network created',
+            'network.createFailed': 'Failed to create network',
+            'network.deleteConfirm': 'Are you sure to delete network',
+            'network.deleteSuccess': 'Network deleted',
+            'network.deleteFailed': 'Failed to delete network',
+            'network.noContainers': 'No connected containers',
+            'network.connectedContainers': 'Connected Containers',
             
             // Logs
             'logs.title': 'Container Logs',

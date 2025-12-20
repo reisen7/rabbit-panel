@@ -70,13 +70,16 @@
     </div>
 
     <!-- 主页面 -->
-    <div id="main-page" class="hidden">
-        <div class="container mx-auto px-4 py-6">
+    <div id="main-page" class="hidden min-h-screen flex flex-col">
+        <div class="container mx-auto px-4 py-6 flex-1">
             <!-- 头部系统监控 -->
             <div class="bg-white dark:bg-dark-card rounded-lg shadow-md p-4 mb-6">
                 <div class="flex justify-between items-center mb-4">
                     <h1 class="text-2xl font-bold dark:text-dark-text" data-i18n="app.title">容器运维面板</h1>
                     <div class="flex gap-2 items-center">
+                        <a href="https://github.com/reisen7/rabbit-panel" target="_blank" rel="noopener noreferrer" class="w-10 h-10 rounded-full border border-gray-300 dark:border-dark-border bg-gray-100 dark:bg-dark-border flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" title="GitHub">
+                            <svg class="w-5 h-5 dark:text-dark-text" fill="currentColor" viewBox="0 0 24 24"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+                        </a>
                         <button id="lang-toggle" class="w-10 h-10 rounded-full border border-gray-300 dark:border-dark-border bg-gray-100 dark:bg-dark-border text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors" onclick="i18n.toggle()" title="切换语言">EN</button>
                         <button id="theme-toggle" class="theme-toggle" onclick="ThemeManager.toggle()" title="切换主题">
                             <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z"></path></svg>
@@ -111,6 +114,7 @@
                     <nav class="flex -mb-px">
                         <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600" data-tab="containers" data-i18n="tab.containers">容器管理</button>
                         <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-dark-muted" data-tab="images" data-i18n="tab.images">镜像管理</button>
+                        <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-dark-muted" data-tab="networks" data-i18n="tab.networks">网络管理</button>
                         <button class="tab-btn px-6 py-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-dark-muted" data-tab="compose" data-i18n="tab.compose">Compose 管理</button>
                     </nav>
                 </div>
@@ -186,6 +190,12 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                                 </svg>
                             </div>
+                            <button onclick="openBuildImageModal()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2" data-i18n="build.title">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+                                </svg>
+                                构建镜像
+                            </button>
                             <button id="refresh-images-btn" onclick="refreshImages()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2">
                                 <svg id="refresh-images-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
@@ -212,6 +222,52 @@
                         </table>
                     </div>
                     <div id="images-pagination"></div>
+                </div>
+
+                <!-- 网络管理标签页 -->
+                <div id="networks-tab" class="tab-content p-6">
+                    <div class="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h2 class="text-xl font-semibold dark:text-dark-text" data-i18n="network.list">网络列表</h2>
+                        <div class="flex flex-wrap items-center gap-2">
+                            <div class="relative">
+                                <input type="text" id="network-search" placeholder="搜索名称/驱动..." 
+                                    class="pl-8 pr-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm w-48 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    oninput="filterNetworks()">
+                                <svg class="w-4 h-4 absolute left-2.5 top-2.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                                </svg>
+                            </div>
+                            <button onclick="openCreateNetworkModal()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600 flex items-center gap-2" data-i18n="network.create">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                                创建网络
+                            </button>
+                            <button onclick="refreshNetworks()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600 flex items-center gap-2">
+                                <svg id="refresh-networks-icon" class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                                </svg>
+                                <span data-i18n="common.refresh">刷新</span>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full divide-y divide-gray-200 dark:divide-dark-border">
+                            <thead class="bg-gray-50 dark:bg-dark-border">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase hidden md:table-cell">ID</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-i18n="network.name">名称</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-i18n="network.driver">驱动</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase hidden sm:table-cell" data-i18n="network.scope">范围</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase hidden lg:table-cell">IPAM</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-i18n="network.containers">容器数</th>
+                                    <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-dark-muted uppercase" data-i18n="common.actions">操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="networks-tbody" class="bg-white dark:bg-dark-card divide-y divide-gray-200 dark:divide-dark-border">
+                                <tr><td colspan="7" class="px-4 py-8 text-center text-gray-500 dark:text-dark-muted">加载中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="networks-pagination"></div>
                 </div>
 
                 <!-- Compose 管理标签页 -->
@@ -277,7 +333,14 @@
                         <div class="mb-3">
                             <div class="flex justify-between items-center mb-2">
                                 <h4 class="text-sm font-medium dark:text-dark-muted">docker-compose.yml</h4>
-                                <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded">保存</button>
+                                <div class="flex gap-2">
+                                    <label class="cursor-pointer text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                        <span data-i18n="compose.upload">上传</span>
+                                        <input type="file" accept=".yml,.yaml" class="hidden" onchange="handleComposeFileUpload(this, 'mobile')">
+                                    </label>
+                                    <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded">保存</button>
+                                </div>
                             </div>
                             <textarea id="compose-mobile-editor" class="w-full h-48 p-3 font-mono text-xs bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded" spellcheck="false"></textarea>
                         </div>
@@ -352,7 +415,14 @@
                                 <div class="flex-1 flex flex-col min-h-0">
                                     <div class="flex justify-between items-center mb-2">
                                         <h4 class="text-sm font-medium text-gray-600 dark:text-dark-muted">docker-compose.yml</h4>
-                                        <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600">保存</button>
+                                        <div class="flex gap-2">
+                                            <label class="cursor-pointer text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                                                <span data-i18n="compose.upload">上传</span>
+                                                <input type="file" accept=".yml,.yaml" class="hidden" onchange="handleComposeFileUpload(this, 'desktop')">
+                                            </label>
+                                            <button onclick="saveCurrentComposeFile()" class="px-3 py-1 text-sm bg-indigo-500 text-white rounded hover:bg-indigo-600">保存</button>
+                                        </div>
                                     </div>
                                     <textarea id="compose-detail-editor" class="flex-1 min-h-[200px] p-3 font-mono text-sm bg-[#1e1e1e] text-[#d4d4d4] border border-gray-600 rounded focus:outline-none focus:border-blue-500 resize-none" spellcheck="false" style="font-family: 'Menlo', 'Monaco', 'Courier New', monospace; tab-size: 2;"></textarea>
                                     <div id="compose-detail-output" class="mt-2 p-3 bg-black text-green-400 font-mono text-xs h-32 overflow-y-auto rounded hidden whitespace-pre-wrap"></div>
@@ -363,6 +433,15 @@
                 </div>
             </div>
         </div>
+        
+        <!-- Footer -->
+        <footer class="text-center py-3 px-4 text-xs sm:text-sm text-gray-500 dark:text-dark-muted">
+            <a href="https://github.com/reisen7/rabbit-panel" target="_blank" rel="noopener noreferrer" class="hover:text-blue-500 transition-colors">
+                Rabbit Panel
+            </a>
+            <span class="mx-1">·</span>
+            <span>MIT License</span>
+        </footer>
     </div>
 
     <!-- 新建 Compose 项目模态框 -->
@@ -982,6 +1061,161 @@
         </div>
     </div>
 
+    <!-- 构建镜像模态框 -->
+    <div id="build-image-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px; max-height: 90vh; overflow-y: auto;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text" data-i18n="build.title">构建镜像</h3>
+                <button onclick="closeBuildImageModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <!-- 镜像名称和标签 -->
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="build.imageName">镜像名称 <span class="text-red-500">*</span></label>
+                        <input type="text" id="build-image-name" placeholder="my-app" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="build.tag">标签</label>
+                        <input type="text" id="build-image-tag" placeholder="latest" value="latest" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                    </div>
+                </div>
+
+                <!-- Dockerfile 编辑器 -->
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted">Dockerfile <span class="text-red-500">*</span></label>
+                        <label class="cursor-pointer text-sm text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path></svg>
+                            <span data-i18n="build.upload">上传文件</span>
+                            <input type="file" id="dockerfile-upload" accept=".dockerfile,Dockerfile,*" class="hidden" onchange="handleDockerfileUpload(this)">
+                        </label>
+                    </div>
+                    <textarea id="build-dockerfile" rows="12" 
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm font-mono bg-gray-900 text-green-400"
+                        spellcheck="false"></textarea>
+                    <p class="text-xs text-gray-500 mt-1" data-i18n="build.hint">提示：仅支持基于基础镜像构建，不支持 COPY 本地文件</p>
+                </div>
+
+                <!-- 构建输出 -->
+                <div id="build-output-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="build.output">构建输出</label>
+                    <div id="build-output" class="h-48 overflow-y-auto bg-gray-900 text-gray-300 p-3 rounded text-xs font-mono"></div>
+                </div>
+            </div>
+
+            <!-- 底部按钮 -->
+            <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-dark-border">
+                <button onclick="closeBuildImageModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text dark:border-dark-border" data-i18n="common.cancel">取消</button>
+                <button id="build-btn" onclick="buildImage()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" data-i18n="build.start">开始构建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 创建网络模态框 -->
+    <div id="create-network-modal" class="modal">
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text" data-i18n="network.create">创建网络</h3>
+                <button onclick="closeCreateNetworkModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="network.name">网络名称 <span class="text-red-500">*</span></label>
+                    <input type="text" id="create-network-name" placeholder="my-network" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1" data-i18n="network.driver">驱动</label>
+                    <select id="create-network-driver" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                        <option value="bridge">bridge</option>
+                        <option value="host">host</option>
+                        <option value="overlay">overlay</option>
+                        <option value="macvlan">macvlan</option>
+                        <option value="none">none</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Subnet <span class="text-gray-400 text-xs">(可选)</span></label>
+                    <input type="text" id="create-network-subnet" placeholder="172.20.0.0/16" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">Gateway <span class="text-gray-400 text-xs">(可选)</span></label>
+                    <input type="text" id="create-network-gateway" placeholder="172.20.0.1" class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded text-sm">
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="checkbox" id="create-network-internal" class="rounded">
+                    <label for="create-network-internal" class="text-sm text-gray-700 dark:text-dark-muted" data-i18n="network.internal">内部网络（禁止外部访问）</label>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6 pt-4 border-t border-gray-200 dark:border-dark-border">
+                <button onclick="closeCreateNetworkModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text dark:border-dark-border" data-i18n="common.cancel">取消</button>
+                <button id="create-network-btn" onclick="createNetwork()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600" data-i18n="common.create">创建</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 网络详情模态框 -->
+    <div id="network-detail-modal" class="modal">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold dark:text-dark-text" data-i18n="network.detail">网络详情</h3>
+                <button onclick="closeNetworkDetailModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted">ID</label>
+                        <div id="network-detail-id" class="font-mono text-sm dark:text-dark-text break-all"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted" data-i18n="network.name">名称</label>
+                        <div id="network-detail-name" class="font-medium dark:text-dark-text break-all"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted" data-i18n="network.driver">驱动</label>
+                        <div id="network-detail-driver" class="dark:text-dark-text"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted" data-i18n="network.scope">范围</label>
+                        <div id="network-detail-scope" class="dark:text-dark-text"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted" data-i18n="network.internal">内部网络</label>
+                        <div id="network-detail-internal" class="dark:text-dark-text"></div>
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500 dark:text-dark-muted" data-i18n="common.created">创建时间</label>
+                        <div id="network-detail-created" class="dark:text-dark-text"></div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="text-xs text-gray-500 dark:text-dark-muted">IPAM</label>
+                    <div id="network-detail-ipam" class="dark:text-dark-text"></div>
+                </div>
+
+                <div>
+                    <label class="text-xs text-gray-500 dark:text-dark-muted mb-2 block" data-i18n="network.connectedContainers">连接的容器</label>
+                    <div id="network-detail-containers" class="space-y-2 max-h-48 overflow-y-auto"></div>
+                </div>
+            </div>
+
+            <div class="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-dark-border">
+                <button onclick="closeNetworkDetailModal()" class="px-4 py-2 border border-gray-300 rounded hover:bg-gray-50 dark:text-dark-text dark:border-dark-border" data-i18n="common.close">关闭</button>
+            </div>
+        </div>
+    </div>
+
     <!-- JS 模块 -->
     <script src="js/i18n.js"></script>
     <script src="js/utils.js"></script>
@@ -989,6 +1223,7 @@
     <script src="js/containers.js"></script>
     <script src="js/logs.js"></script>
     <script src="js/images.js"></script>
+    <script src="js/networks.js"></script>
     <script src="js/compose.js"></script>
     <script src="js/terminal.js"></script>
     <script src="js/app.js"></script>
