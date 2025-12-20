@@ -41,11 +41,10 @@ docker run -d \
   --restart unless-stopped \
   -p 9999:9999 \
   -v /var/run/docker.sock:/var/run/docker.sock \
-  -v $(pwd)/data:/app/data \
-  -v $(pwd)/compose_projects:/app/compose_projects \
+  -v /root/rabbit-panel/compose_projects:/app/compose_projects \
+  -v /root/rabbit-panel/data:/app/data \
   -e TZ=Asia/Shanghai \
-  -e JWT_SECRET=your-secret-key \
-  ghcr.io/reisen7/rabbit-panel:latest
+  rabbit-panel:latest
 ```
 
 **方式二：docker-compose 部署**

@@ -73,7 +73,12 @@ function renderImagesTable(data) {
         return;
     }
 
-    tbody.innerHTML = data.map(image => `
+    tbody.innerHTML = data.map(image => {
+        // 如果有名称和标签，用名称:标签删除；否则用 ID
+        const deleteRef = (image.name !== '<none>' && image.tag !== '<none>') 
+            ? `${image.name}:${image.tag}` 
+            : image.id;
+        return `
         <tr class="hover:bg-gray-50 dark:hover:bg-dark-border transition-colors">
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text">${image.id}</td>
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text">${image.name}</td>
@@ -81,10 +86,10 @@ function renderImagesTable(data) {
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text">${image.size}</td>
             <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text">${image.created}</td>
             <td class="px-4 py-3 text-sm">
-                <button onclick="removeImage('${image.id}', '${image.name}:${image.tag}')" class="action-btn bg-red-500 text-white rounded text-xs hover:bg-red-600">${t('image.remove')}</button>
+                <button onclick="removeImage('${deleteRef}', '${image.name}:${image.tag}')" class="action-btn bg-red-500 text-white rounded text-xs hover:bg-red-600">${t('image.remove')}</button>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
 }
 
 // 删除镜像

@@ -738,7 +738,7 @@ func handleImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	imageList := make([]ImageInfo, 0, len(images)) // 预分配容量
+	imageList := make([]ImageInfo, 0, len(images)*2) // 预分配容量（一个镜像可能有多个标签）
 	for _, img := range images {
 		// 获取镜像 ID（处理不同的 ID 格式）
 		imageID := img.ID
@@ -752,38 +752,48 @@ func handleImages(w http.ResponseWriter, r *http.Request) {
 			imageID = imageID[:12]
 		}
 
-		// 获取镜像名称和标签
-		name := "<none>"
-		tag := "<none>"
-		if len(img.RepoTags) > 0 {
-			for _, repoTag := range img.RepoTags {
-				if repoTag != "<none>:<none>" {
-					parts := strings.Split(repoTag, ":")
-					if len(parts) >= 2 {
-						name = strings.Join(parts[:len(parts)-1], ":")
-						tag = parts[len(parts)-1]
-					} else {
-						name = repoTag
-						tag = "latest"
-					}
-					break // 使用第一个有效的标签
-				}
-			}
-		}
-
 		// 格式化大小
 		size := fmt.Sprintf("%.2f MB", float64(img.Size)/1024/1024)
 
 		// 格式化创建时间
 		created := time.Unix(img.Created, 0).Format("2006-01-02 15:04:05")
 
-		imageList = append(imageList, ImageInfo{
-			ID:      imageID,
-			Name:    name,
-			Tag:     tag,
-			Size:    size,
-			Created: created,
-		})
+		// 处理所有标签，每个标签生成一条记录
+		if len(img.RepoTags) > 0 {
+			for _, repoTag := range img.RepoTags {
+				if repoTag == "<none>:<none>" {
+					continue
+				}
+				name := "<none>"
+				tag := "<none>"
+				parts := strings.Split(repoTag, ":")
+				if len(parts) >= 2 {
+					name = strings.Join(parts[:len(parts)-1], ":")
+					tag = parts[len(parts)-1]
+				} else {
+					name = repoTag
+					tag = "latest"
+				}
+				imageList = append(imageList, ImageInfo{
+					ID:      imageID,
+					Name:    name,
+					Tag:     tag,
+					Size:    size,
+					Created: created,
+				})
+			}
+		}
+
+		// 如果没有有效标签，添加一条 <none> 记录
+		if len(img.RepoTags) == 0 || (len(img.RepoTags) == 1 && img.RepoTags[0] == "<none>:<none>") {
+			imageList = append(imageList, ImageInfo{
+				ID:      imageID,
+				Name:    "<none>",
+				Tag:     "<none>",
+				Size:    size,
+				Created: created,
+			})
+		}
 	}
 
 	// 更新缓存
