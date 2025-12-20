@@ -717,19 +717,24 @@ func handleContainerLogs(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// 获取镜像列表（带缓存）
+// 获取镜像列表（带缓存，支持 ?refresh=true 强制刷新）
 func handleImages(w http.ResponseWriter, r *http.Request) {
-	// 检查缓存
-	imagesCache.RLock()
-	if time.Since(imagesCache.lastFetch) < cacheTTL*2 && len(imagesCache.data) > 0 {
-		data := imagesCache.data
+	// 检查是否强制刷新
+	forceRefresh := r.URL.Query().Get("refresh") == "true"
+
+	// 检查缓存（如果不是强制刷新）
+	if !forceRefresh {
+		imagesCache.RLock()
+		if time.Since(imagesCache.lastFetch) < cacheTTL*2 && len(imagesCache.data) > 0 {
+			data := imagesCache.data
+			imagesCache.RUnlock()
+			w.Header().Set("Content-Type", "application/json")
+			w.Header().Set("Cache-Control", "private, max-age=4") // 客户端缓存 4 秒
+			json.NewEncoder(w).Encode(data)
+			return
+		}
 		imagesCache.RUnlock()
-		w.Header().Set("Content-Type", "application/json")
-		w.Header().Set("Cache-Control", "private, max-age=4") // 客户端缓存 4 秒
-		json.NewEncoder(w).Encode(data)
-		return
 	}
-	imagesCache.RUnlock()
 
 	// 从 Docker API 获取
 	images, err := dockerClient.ImageList(context.Background(), types.ImageListOptions{})
@@ -982,6 +987,11 @@ func handleImageRemove(w http.ResponseWriter, r *http.Request) {
 	}
 
 	log.Printf("[Image] Remove success, id: %s, result: %+v", req.ID, deleted)
+
+	// 清除镜像缓存
+	imagesCache.Lock()
+	imagesCache.lastFetch = time.Time{}
+	imagesCache.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "success"})

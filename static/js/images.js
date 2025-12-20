@@ -14,10 +14,11 @@ const imagePaginator = new Paginator({
 });
 window.paginators['images-pagination'] = imagePaginator;
 
-// 加载镜像列表
-async function loadImages() {
+// 加载镜像列表（支持强制刷新）
+async function loadImages(forceRefresh = false) {
     try {
-        const response = await authFetch('/api/images');
+        const url = forceRefresh ? '/api/images?refresh=true' : '/api/images';
+        const response = await authFetch(url);
         if (!response.ok) throw new Error(await response.text() || '获取镜像列表失败');
         
         const data = await response.json();
@@ -102,18 +103,37 @@ async function removeImage(id, name) {
     });
     if (!confirmed) return;
 
+    // 先从本地列表中移除，提供即时反馈
+    const originalData = [...allImagesData];
+    allImagesData = allImagesData.filter(img => {
+        const imgRef = (img.name !== '<none>' && img.tag !== '<none>') 
+            ? `${img.name}:${img.tag}` 
+            : img.id;
+        return imgRef !== id;
+    });
+    imagePaginator.setData(allImagesData);
+    applyImageSort();
+    filterImages();
+
     try {
         const response = await authFetch('/api/images/remove', {
             method: 'POST',
             body: JSON.stringify({ id })
         });
 
-        if (!response.ok) throw new Error(await response.text());
+        if (!response.ok) {
+            // 删除失败，恢复原数据
+            allImagesData = originalData;
+            imagePaginator.setData(allImagesData);
+            applyImageSort();
+            filterImages();
+            throw new Error(await response.text());
+        }
         showToast(`镜像 ${name} 已删除`, 'success', { title: '删除成功' });
-        loadImages();
+        // 强制刷新列表
+        loadImages(true);
     } catch (error) {
         showToast(error.message, 'error', { title: '删除失败' });
-        loadImages();
     }
 }
 
