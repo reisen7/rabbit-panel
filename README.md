@@ -44,7 +44,7 @@ docker run -d \
   -v /root/rabbit-panel/compose_projects:/app/compose_projects \
   -v /root/rabbit-panel/data:/app/data \
   -e TZ=Asia/Shanghai \
-  rabbit-panel:latest
+  reisen7/rabbit-panel:latest
 ```
 
 **方式二：docker-compose 部署**

@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   rabbit-panel:
-    image: rabbit-panel:latest
+    image: reisen7/rabbit-panel:latest
     container_name: rabbit-panel
     restart: unless-stopped
     ports:

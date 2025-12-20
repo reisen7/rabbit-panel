@@ -5,7 +5,7 @@ version: '3.8'
 
 services:
   rabbit-panel-master:
-    image: rabbit-panel:latest
+    image: reisen7/rabbit-panel:latest
     container_name: rabbit-panel-master
     restart: unless-stopped
     user: root

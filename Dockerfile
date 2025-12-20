@@ -2,13 +2,11 @@ FROM golang:1.25-alpine AS builder
 
 WORKDIR /app
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
-
 RUN apk add --no-cache gcc musl-dev
 
 COPY go.mod go.sum ./
 
-RUN go env -w GOPROXY=https://mirrors.aliyun.com/goproxy/,direct
+RUN go env -w GOPROXY=https://proxy.golang.org,direct
 
 RUN go mod tidy
 
@@ -20,8 +18,7 @@ FROM alpine:latest
 
 WORKDIR /app
 
-RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories \
-    && apk add --no-cache \
+RUN apk add --no-cache \
     docker-cli \ 
     docker-cli-compose \  
     tzdata=2025c-r0 \
