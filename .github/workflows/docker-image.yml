@@ -50,7 +50,7 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ${{ secrets.reisen7 }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
-            ${{ secrets.reisen7 }}/${{ env.IMAGE_NAME }}:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.tag }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
