@@ -1470,6 +1470,7 @@ func main() {
 	http.HandleFunc("/api/containers/update", authMiddleware(handleContainerUpdate))
 	http.HandleFunc("/api/containers/rename", authMiddleware(handleContainerRename))
 	http.HandleFunc("/api/containers/recreate", authMiddleware(handleContainerRecreate))
+	http.HandleFunc("/api/containers/stats", authMiddleware(handleContainerStats))
 	
 	// Compose 管理 API
 	initCompose()

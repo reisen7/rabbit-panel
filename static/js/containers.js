@@ -86,6 +86,9 @@ function updateSortIcons(type) {
     }
 }
 
+// 容器资源统计缓存
+const containerStatsCache = {};
+
 // 渲染容器表格
 function renderContainersTable(data) {
     const tbody = DOM.get('containers-tbody');
@@ -114,6 +117,17 @@ function renderContainersTable(data) {
         const filesBtn = isRunning ?
             `<button onclick="openFilesModal('${container.id}', '${escapedName}')" class="action-btn bg-indigo-500 text-white rounded text-xs hover:bg-indigo-600">${t('container.files')}</button>` : '';
         
+        // 资源列：优先使用缓存数据，避免闪烁
+        let resourcesCell = '-';
+        if (isRunning) {
+            const cached = containerStatsCache[container.id];
+            if (cached) {
+                resourcesCell = `<span id="stats-${container.id}">${cached}</span>`;
+            } else {
+                resourcesCell = `<span id="stats-${container.id}" class="text-xs text-gray-400">-</span>`;
+            }
+        }
+        
         return `
             <tr class="hover:bg-gray-50 dark:hover:bg-dark-border transition-colors">
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text" title="${container.id}">${container.id}</td>
@@ -121,7 +135,7 @@ function renderContainersTable(data) {
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text wrap-cell" title="${container.image}">${container.image}</td>
                 <td class="px-4 py-3 text-sm ${statusClass}">${statusText}</td>
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text wrap-cell" title="${container.ports}">${container.ports || '-'}</td>
-                <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text" title="容器可写层文件系统大小">${container.memory || '-'}</td>
+                <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text">${resourcesCell}</td>
                 <td class="px-4 py-3 text-sm text-gray-900 dark:text-dark-text whitespace-nowrap">${container.created}</td>
                 <td class="px-4 py-3 text-sm">
                     <div class="flex gap-1 flex-wrap">
@@ -135,6 +149,11 @@ function renderContainersTable(data) {
             </tr>
         `;
     }).join('');
+    
+    // 异步加载运行中容器的资源统计
+    data.filter(c => c.state === 'running').forEach(container => {
+        loadContainerStats(container.id);
+    });
 }
 
 // 容器操作
@@ -433,3 +452,49 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+
+// ===== 容器资源统计 =====
+
+// 格式化字节大小
+function formatBytes(bytes) {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+// 加载单个容器的资源统计
+async function loadContainerStats(containerId) {
+    const el = document.getElementById(`stats-${containerId}`);
+    if (!el) return;
+    
+    try {
+        const response = await authFetch(`/api/containers/stats?id=${containerId}`);
+        if (!response.ok) {
+            el.textContent = '-';
+            delete containerStatsCache[containerId];
+            return;
+        }
+        
+        const stats = await response.json();
+        const cpuPercent = stats.cpu_percent.toFixed(1);
+        const cpuCores = stats.cpu_cores || '-';
+        const memUsage = formatBytes(stats.memory_usage);
+        const memLimit = formatBytes(stats.memory_limit);
+        
+        const html = `
+            <div class="text-xs leading-tight whitespace-nowrap">
+                <div title="CPU 使用率 / 核心数">CPU: ${cpuPercent}% / ${cpuCores}</div>
+                <div title="内存使用 / 限制">Mem: ${memUsage} / ${memLimit}</div>
+            </div>
+        `;
+        el.innerHTML = html;
+        // 缓存结果，避免刷新时闪烁
+        containerStatsCache[containerId] = html;
+    } catch (error) {
+        el.textContent = '-';
+        delete containerStatsCache[containerId];
+    }
+}

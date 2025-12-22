@@ -936,3 +936,93 @@ func handleContainerRecreate(w http.ResponseWriter, r *http.Request) {
 		"container_id": resp.ID,
 	})
 }
+
+// ========== 容器资源统计 ==========
+
+// 容器资源统计信息
+type ContainerStats struct {
+	CPUPercent    float64 `json:"cpu_percent"`
+	CPUCores      int     `json:"cpu_cores"`
+	MemoryUsage   int64   `json:"memory_usage"`
+	MemoryLimit   int64   `json:"memory_limit"`
+	MemoryPercent float64 `json:"memory_percent"`
+	NetworkRx     int64   `json:"network_rx"`
+	NetworkTx     int64   `json:"network_tx"`
+	BlockRead     int64   `json:"block_read"`
+	BlockWrite    int64   `json:"block_write"`
+	PIDs          uint64  `json:"pids"`
+}
+
+// 获取容器资源统计
+func handleContainerStats(w http.ResponseWriter, r *http.Request) {
+	containerID := r.URL.Query().Get("id")
+	if containerID == "" {
+		http.Error(w, "容器ID不能为空", http.StatusBadRequest)
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// 获取容器统计信息（非流式，只获取一次）
+	statsResp, err := dockerClient.ContainerStats(ctx, containerID, false)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("获取统计信息失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+	defer statsResp.Body.Close()
+
+	var stats types.StatsJSON
+	if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
+		http.Error(w, fmt.Sprintf("解析统计信息失败: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// 计算 CPU 使用率
+	cpuPercent := 0.0
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
+	if systemDelta > 0 && cpuDelta > 0 {
+		cpuPercent = (cpuDelta / systemDelta) * float64(stats.CPUStats.OnlineCPUs) * 100.0
+	}
+
+	// 计算内存使用率
+	memoryPercent := 0.0
+	if stats.MemoryStats.Limit > 0 {
+		memoryPercent = float64(stats.MemoryStats.Usage) / float64(stats.MemoryStats.Limit) * 100.0
+	}
+
+	// 计算网络 IO
+	var networkRx, networkTx int64
+	for _, netStats := range stats.Networks {
+		networkRx += int64(netStats.RxBytes)
+		networkTx += int64(netStats.TxBytes)
+	}
+
+	// 计算块设备 IO
+	var blockRead, blockWrite int64
+	for _, bioEntry := range stats.BlkioStats.IoServiceBytesRecursive {
+		switch bioEntry.Op {
+		case "read", "Read":
+			blockRead += int64(bioEntry.Value)
+		case "write", "Write":
+			blockWrite += int64(bioEntry.Value)
+		}
+	}
+
+	result := ContainerStats{
+		CPUPercent:    cpuPercent,
+		CPUCores:      int(stats.CPUStats.OnlineCPUs),
+		MemoryUsage:   int64(stats.MemoryStats.Usage),
+		MemoryLimit:   int64(stats.MemoryStats.Limit),
+		MemoryPercent: memoryPercent,
+		NetworkRx:     networkRx,
+		NetworkTx:     networkTx,
+		BlockRead:     blockRead,
+		BlockWrite:    blockWrite,
+		PIDs:          stats.PidsStats.Current,
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
