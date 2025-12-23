@@ -535,6 +535,202 @@ func handleContainerRun(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "success", "id": resp.ID})
 }
 
+// 创建并运行容器（流式输出）
+func handleContainerRunStream(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Image   string `json:"image"`
+		Name    string `json:"name"`
+		Restart string `json:"restart"`
+		Network string `json:"network"`
+		Ports   []struct {
+			Host      string `json:"host"`
+			Container string `json:"container"`
+		} `json:"ports"`
+		Envs []struct {
+			Key   string `json:"key"`
+			Value string `json:"value"`
+		} `json:"envs"`
+		Volumes []struct {
+			Host      string `json:"host"`
+			Container string `json:"container"`
+		} `json:"volumes"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	if req.Image == "" {
+		http.Error(w, "镜像名称不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 设置 SSE 响应头
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE 不支持", http.StatusInternalServerError)
+		return
+	}
+
+	// 发送日志的辅助函数
+	sendLog := func(msg string) {
+		fmt.Fprintf(w, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		flusher.Flush()
+	}
+
+	sendError := func(msg string) {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		flusher.Flush()
+	}
+
+	sendSuccess := func(id string) {
+		fmt.Fprintf(w, "data: {\"type\":\"success\",\"id\":\"%s\"}\n\n", id)
+		flusher.Flush()
+	}
+
+	log.Printf("[Container] Creating container (stream), image: %s, name: %s", req.Image, req.Name)
+	sendLog(fmt.Sprintf("开始创建容器，镜像: %s", req.Image))
+
+	ctx := context.Background()
+
+	// 检查镜像是否存在
+	sendLog("检查本地镜像...")
+	_, _, err := dockerClient.ImageInspectWithRaw(ctx, req.Image)
+	if err != nil {
+		// 镜像不存在，尝试拉取
+		sendLog(fmt.Sprintf("镜像 %s 不存在，开始拉取...", req.Image))
+		log.Printf("[Container] Image %s not found, pulling...", req.Image)
+		
+		reader, err := dockerClient.ImagePull(ctx, req.Image, types.ImagePullOptions{})
+		if err != nil {
+			log.Printf("[Container] Failed to pull image: %v", err)
+			sendError(fmt.Sprintf("拉取镜像失败: %v", err))
+			return
+		}
+		defer reader.Close()
+		
+		// 读取拉取进度并输出
+		decoder := json.NewDecoder(reader)
+		for {
+			var pullStatus struct {
+				Status   string `json:"status"`
+				Progress string `json:"progress"`
+				ID       string `json:"id"`
+			}
+			if err := decoder.Decode(&pullStatus); err != nil {
+				if err == io.EOF {
+					break
+				}
+				continue
+			}
+			if pullStatus.Progress != "" {
+				sendLog(fmt.Sprintf("%s: %s %s", pullStatus.ID, pullStatus.Status, pullStatus.Progress))
+			} else if pullStatus.Status != "" {
+				sendLog(pullStatus.Status)
+			}
+		}
+		sendLog("镜像拉取完成")
+		log.Printf("[Container] Image %s pulled successfully", req.Image)
+	} else {
+		sendLog("镜像已存在")
+	}
+
+	// 构建容器配置
+	sendLog("配置容器参数...")
+	config := &container.Config{
+		Image: req.Image,
+	}
+
+	// 环境变量
+	for _, env := range req.Envs {
+		if env.Key != "" {
+			config.Env = append(config.Env, fmt.Sprintf("%s=%s", env.Key, env.Value))
+		}
+	}
+
+	// 主机配置
+	hostConfig := &container.HostConfig{}
+
+	// 端口映射
+	if len(req.Ports) > 0 {
+		portBindings := make(map[nat.Port][]nat.PortBinding)
+		exposedPorts := make(map[nat.Port]struct{})
+		for _, p := range req.Ports {
+			if p.Host != "" && p.Container != "" {
+				containerPort := nat.Port(p.Container + "/tcp")
+				exposedPorts[containerPort] = struct{}{}
+				portBindings[containerPort] = []nat.PortBinding{
+					{HostIP: "0.0.0.0", HostPort: p.Host},
+				}
+				sendLog(fmt.Sprintf("端口映射: %s -> %s", p.Host, p.Container))
+			}
+		}
+		config.ExposedPorts = exposedPorts
+		hostConfig.PortBindings = portBindings
+	}
+
+	// 数据卷
+	for _, v := range req.Volumes {
+		if v.Host != "" && v.Container != "" {
+			hostConfig.Binds = append(hostConfig.Binds, fmt.Sprintf("%s:%s", v.Host, v.Container))
+			sendLog(fmt.Sprintf("数据卷: %s -> %s", v.Host, v.Container))
+		}
+	}
+
+	// 重启策略
+	if req.Restart != "" {
+		hostConfig.RestartPolicy = container.RestartPolicy{Name: container.RestartPolicyMode(req.Restart)}
+		sendLog(fmt.Sprintf("重启策略: %s", req.Restart))
+	}
+
+	// 网络模式
+	if req.Network != "" {
+		hostConfig.NetworkMode = container.NetworkMode(req.Network)
+		sendLog(fmt.Sprintf("网络模式: %s", req.Network))
+	}
+
+	// 创建容器
+	sendLog("创建容器...")
+	resp, err := dockerClient.ContainerCreate(ctx, config, hostConfig, nil, nil, req.Name)
+	if err != nil {
+		log.Printf("[Container] Failed to create, image: %s, name: %s, error: %v", req.Image, req.Name, err)
+		sendError(fmt.Sprintf("创建容器失败: %v", err))
+		return
+	}
+	sendLog(fmt.Sprintf("容器已创建，ID: %s", resp.ID[:12]))
+
+	// 启动容器
+	sendLog("启动容器...")
+	if err := dockerClient.ContainerStart(ctx, resp.ID, types.ContainerStartOptions{}); err != nil {
+		log.Printf("[Container] Failed to start, id: %s, error: %v", resp.ID, err)
+		// 启动失败，删除已创建的容器
+		dockerClient.ContainerRemove(ctx, resp.ID, types.ContainerRemoveOptions{Force: true})
+		sendError(fmt.Sprintf("启动容器失败: %v", err))
+		return
+	}
+
+	log.Printf("[Container] Created successfully, id: %s, name: %s, image: %s", resp.ID[:12], req.Name, req.Image)
+	sendLog("容器启动成功！")
+
+	// 清除容器列表缓存
+	containersCache.Lock()
+	containersCache.lastFetch = time.Time{}
+	containersCache.Unlock()
+
+	sendSuccess(resp.ID[:12])
+}
+
 // 容器操作：启动/停止/重启/删除
 func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1423,11 +1619,10 @@ func main() {
 	server := &http.Server{
 		Addr:           host + ":" + port,
 		ReadTimeout:    15 * time.Second,  // 读取超时
-		WriteTimeout:   30 * time.Second,  // 写入超时（日志流需要更长时间）
-		IdleTimeout:    60 * time.Second,  // 空闲连接超时
+		WriteTimeout:   0,                 // 禁用写入超时（SSE 流式响应需要长连接）
+		IdleTimeout:    120 * time.Second, // 空闲连接超时
 		MaxHeaderBytes: 1 << 20,           // 最大请求头 1MB
-		// 限制并发连接数（减少内存占用）
-		// 注意：对于日志流，需要较长的连接时间
+		// 注意：WriteTimeout 设为 0 以支持 SSE 长连接（日志流、镜像拉取等）
 	}
 
 	// 认证相关路由（不需要认证）
@@ -1444,6 +1639,7 @@ func main() {
 	http.HandleFunc("/api/containers", authOrNodeAuthMiddleware(handleContainers)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/containers/action", authMiddleware(handleContainerAction))
 	http.HandleFunc("/api/containers/run", authMiddleware(handleContainerRun))
+	http.HandleFunc("/api/containers/run/stream", authMiddleware(handleContainerRunStream))
 	http.HandleFunc("/api/containers/logs", authMiddleware(handleContainerLogs)) // 日志流不限制超时
 	http.HandleFunc("/api/images", authOrNodeAuthMiddleware(handleImages)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/images/remove", authMiddleware(handleImageRemove))

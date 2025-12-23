@@ -228,6 +228,291 @@ function openCreateContainerModal() {
 
 function closeCreateContainerModal() {
     DOM.get('create-container-modal').classList.remove('active');
+    // 隐藏日志区域
+    const logContainer = DOM.get('cc-log-container');
+    if (logContainer) logContainer.classList.add('hidden');
+}
+
+// 解析 docker run 命令并填充表单
+function parseDockerCommand() {
+    const cmdInput = DOM.get('cc-docker-cmd');
+    let cmd = cmdInput.value.trim();
+    
+    if (!cmd) {
+        showToast('请输入 docker run 命令', 'warning');
+        return;
+    }
+    
+    // 处理多行命令（合并反斜杠续行）
+    cmd = cmd.replace(/\\\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    
+    // 检查是否是 docker run 命令
+    if (!cmd.match(/^docker\s+run\b/i)) {
+        showToast('请输入有效的 docker run 命令', 'warning');
+        return;
+    }
+    
+    // 移除 docker run 前缀
+    cmd = cmd.replace(/^docker\s+run\s*/i, '');
+    
+    // 解析结果
+    const result = {
+        image: '',
+        name: '',
+        restart: '',
+        network: '',
+        ports: [],
+        envs: [],
+        volumes: []
+    };
+    
+    // 使用状态机解析参数（处理引号内的空格）
+    const tokens = [];
+    let current = '';
+    let inQuote = false;
+    let quoteChar = '';
+    
+    for (let i = 0; i < cmd.length; i++) {
+        const char = cmd[i];
+        
+        if ((char === '"' || char === "'") && (i === 0 || cmd[i-1] !== '\\')) {
+            if (!inQuote) {
+                inQuote = true;
+                quoteChar = char;
+            } else if (char === quoteChar) {
+                inQuote = false;
+                quoteChar = '';
+            } else {
+                current += char;
+            }
+        } else if (char === ' ' && !inQuote) {
+            if (current) {
+                tokens.push(current);
+                current = '';
+            }
+        } else {
+            current += char;
+        }
+    }
+    if (current) tokens.push(current);
+    
+    // 解析 tokens
+    let i = 0;
+    while (i < tokens.length) {
+        const token = tokens[i];
+        
+        // --name
+        if (token === '--name' || token === '-n') {
+            if (i + 1 < tokens.length) {
+                result.name = tokens[++i];
+            }
+        }
+        // --name=xxx
+        else if (token.startsWith('--name=')) {
+            result.name = token.substring(7);
+        }
+        // -p / --publish
+        else if (token === '-p' || token === '--publish') {
+            if (i + 1 < tokens.length) {
+                const port = tokens[++i];
+                const match = port.match(/^(?:(\d+\.\d+\.\d+\.\d+):)?(\d+):(\d+)(?:\/\w+)?$/);
+                if (match) {
+                    result.ports.push({ host: match[2], container: match[3] });
+                }
+            }
+        }
+        // -p8080:80 格式
+        else if (token.match(/^-p\d+:\d+/)) {
+            const port = token.substring(2);
+            const match = port.match(/^(\d+):(\d+)/);
+            if (match) {
+                result.ports.push({ host: match[1], container: match[2] });
+            }
+        }
+        // -e / --env
+        else if (token === '-e' || token === '--env') {
+            if (i + 1 < tokens.length) {
+                const env = tokens[++i];
+                const eqIdx = env.indexOf('=');
+                if (eqIdx > 0) {
+                    result.envs.push({ key: env.substring(0, eqIdx), value: env.substring(eqIdx + 1) });
+                } else {
+                    result.envs.push({ key: env, value: '' });
+                }
+            }
+        }
+        // -e KEY=VALUE 格式
+        else if (token.startsWith('-e') && token.length > 2) {
+            const env = token.substring(2);
+            const eqIdx = env.indexOf('=');
+            if (eqIdx > 0) {
+                result.envs.push({ key: env.substring(0, eqIdx), value: env.substring(eqIdx + 1) });
+            }
+        }
+        // --env=KEY=VALUE
+        else if (token.startsWith('--env=')) {
+            const env = token.substring(6);
+            const eqIdx = env.indexOf('=');
+            if (eqIdx > 0) {
+                result.envs.push({ key: env.substring(0, eqIdx), value: env.substring(eqIdx + 1) });
+            }
+        }
+        // -v / --volume
+        else if (token === '-v' || token === '--volume') {
+            if (i + 1 < tokens.length) {
+                const vol = tokens[++i];
+                const parts = vol.split(':');
+                if (parts.length >= 2) {
+                    result.volumes.push({ host: parts[0], container: parts[1] });
+                }
+            }
+        }
+        // --volume=xxx:yyy
+        else if (token.startsWith('--volume=')) {
+            const vol = token.substring(9);
+            const parts = vol.split(':');
+            if (parts.length >= 2) {
+                result.volumes.push({ host: parts[0], container: parts[1] });
+            }
+        }
+        // --restart
+        else if (token === '--restart') {
+            if (i + 1 < tokens.length) {
+                result.restart = tokens[++i];
+            }
+        }
+        else if (token.startsWith('--restart=')) {
+            result.restart = token.substring(10);
+        }
+        // --network / --net
+        else if (token === '--network' || token === '--net') {
+            if (i + 1 < tokens.length) {
+                result.network = tokens[++i];
+            }
+        }
+        else if (token.startsWith('--network=')) {
+            result.network = token.substring(10);
+        }
+        else if (token.startsWith('--net=')) {
+            result.network = token.substring(6);
+        }
+        // -d (detach) - 忽略
+        else if (token === '-d' || token === '--detach') {
+            // 忽略
+        }
+        // -it / -i / -t - 忽略
+        else if (token === '-it' || token === '-i' || token === '-t' || token === '--interactive' || token === '--tty') {
+            // 忽略
+        }
+        // --rm - 忽略
+        else if (token === '--rm') {
+            // 忽略
+        }
+        // 其他未知参数跳过，最后一个非参数 token 作为镜像名
+        else if (!token.startsWith('-')) {
+            result.image = token;
+        }
+        
+        i++;
+    }
+    
+    if (!result.image) {
+        showToast('未能解析出镜像名称', 'warning');
+        return;
+    }
+    
+    // 填充表单
+    DOM.get('cc-image').value = result.image;
+    DOM.get('cc-name').value = result.name;
+    
+    // 重启策略
+    const restartSelect = DOM.get('cc-restart');
+    if (result.restart) {
+        const restartMap = { 'always': 'always', 'unless-stopped': 'unless-stopped', 'on-failure': 'on-failure', 'no': '' };
+        restartSelect.value = restartMap[result.restart] || '';
+    } else {
+        restartSelect.value = '';
+    }
+    
+    // 网络模式
+    const networkSelect = DOM.get('cc-network');
+    if (result.network === 'host' || result.network === 'none') {
+        networkSelect.value = result.network;
+    } else {
+        networkSelect.value = '';
+    }
+    
+    // 端口映射
+    resetDynamicFields();
+    if (result.ports.length > 0) {
+        const portsContainer = DOM.get('cc-ports');
+        portsContainer.innerHTML = '';
+        result.ports.forEach((p, idx) => {
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" placeholder="主机端口" class="cc-port-host w-24 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${p.host}" oninput="updateCommandPreview()">
+                <span class="text-gray-500">:</span>
+                <input type="text" placeholder="容器端口" class="cc-port-container w-24 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${p.container}" oninput="updateCommandPreview()">
+                ${idx === 0 ? `<button type="button" onclick="addPortMapping()" class="text-green-500 hover:text-green-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>` : `<button type="button" onclick="this.parentElement.remove(); updateCommandPreview();" class="text-red-500 hover:text-red-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>`}
+            `;
+            portsContainer.appendChild(div);
+        });
+    }
+    
+    // 环境变量
+    if (result.envs.length > 0) {
+        const envsContainer = DOM.get('cc-envs');
+        envsContainer.innerHTML = '';
+        result.envs.forEach((e, idx) => {
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" placeholder="变量名" class="cc-env-key flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${e.key}" oninput="updateCommandPreview()">
+                <span class="text-gray-500">=</span>
+                <input type="text" placeholder="值" class="cc-env-value flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${e.value}" oninput="updateCommandPreview()">
+                ${idx === 0 ? `<button type="button" onclick="addEnvVar()" class="text-green-500 hover:text-green-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>` : `<button type="button" onclick="this.parentElement.remove(); updateCommandPreview();" class="text-red-500 hover:text-red-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>`}
+            `;
+            envsContainer.appendChild(div);
+        });
+    }
+    
+    // 数据卷
+    if (result.volumes.length > 0) {
+        const volsContainer = DOM.get('cc-volumes');
+        volsContainer.innerHTML = '';
+        result.volumes.forEach((v, idx) => {
+            const div = document.createElement('div');
+            div.className = 'flex gap-2 items-center';
+            div.innerHTML = `
+                <input type="text" placeholder="主机路径" class="cc-vol-host flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${v.host}" oninput="updateCommandPreview()">
+                <span class="text-gray-500">:</span>
+                <input type="text" placeholder="容器路径" class="cc-vol-container flex-1 px-2 py-1.5 border border-gray-300 dark:border-dark-border rounded text-sm" value="${v.container}" oninput="updateCommandPreview()">
+                ${idx === 0 ? `<button type="button" onclick="addVolumeMapping()" class="text-green-500 hover:text-green-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+                </button>` : `<button type="button" onclick="this.parentElement.remove(); updateCommandPreview();" class="text-red-500 hover:text-red-700 p-1">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>`}
+            `;
+            volsContainer.appendChild(div);
+        });
+    }
+    
+    // 更新命令预览
+    updateCommandPreview();
+    
+    // 清空输入框
+    cmdInput.value = '';
+    
+    showToast('命令解析成功', 'success');
 }
 
 function resetDynamicFields() {
@@ -392,7 +677,7 @@ function collectContainerConfig() {
     return config;
 }
 
-// 提交创建容器
+// 提交创建容器（使用流式 API）
 async function submitCreateContainer(e) {
     e.preventDefault();
     
@@ -403,26 +688,88 @@ async function submitCreateContainer(e) {
         return;
     }
     
-    const submitBtn = e.target.querySelector('button[type="submit"]');
+    const submitBtn = DOM.get('cc-submit-btn');
+    const logContainer = DOM.get('cc-log-container');
+    const logEl = DOM.get('cc-log');
+    
+    // 显示日志区域
+    logContainer.classList.remove('hidden');
+    logEl.textContent = '';
     submitBtn.disabled = true;
     submitBtn.textContent = '创建中...';
     
+    // 添加日志的辅助函数
+    const appendLog = (msg, type = 'info') => {
+        const color = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-gray-300';
+        const line = document.createElement('div');
+        line.className = color;
+        line.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+    };
+    
     try {
-        const res = await authFetch('/api/containers/run', {
+        // 使用 credentials: 'include' 发送 Cookie，和 authFetch 保持一致
+        const response = await fetch('/api/containers/run/stream', {
             method: 'POST',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            },
             body: JSON.stringify(config)
         });
         
-        if (res.ok) {
-            const data = await res.json();
-            showToast(`容器创建成功: ${data.id?.substring(0, 12) || ''}`, 'success');
-            closeCreateContainerModal();
-            loadContainers(true);
-        } else {
-            const text = await res.text();
-            showToast(text, 'error', { title: '创建失败' });
+        if (!response.ok) {
+            let errMsg = await response.text();
+            // 尝试解析 JSON 错误
+            try {
+                const errJson = JSON.parse(errMsg);
+                errMsg = errJson.error || errJson.message || errMsg;
+            } catch (e) {}
+            appendLog(errMsg, 'error');
+            showToast(errMsg, 'error', { title: '创建失败' });
+            return;
+        }
+        
+        // 读取 SSE 流
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'log') {
+                            appendLog(data.message);
+                        } else if (data.type === 'error') {
+                            appendLog(data.message, 'error');
+                            showToast(data.message, 'error', { title: '创建失败' });
+                        } else if (data.type === 'success') {
+                            appendLog(`容器创建成功！ID: ${data.id}`, 'success');
+                            showToast(`容器创建成功: ${data.id}`, 'success');
+                            // 延迟关闭，让用户看到成功消息
+                            setTimeout(() => {
+                                closeCreateContainerModal();
+                                loadContainers(true);
+                            }, 1500);
+                        }
+                    } catch (e) {
+                        // 忽略解析错误
+                    }
+                }
+            }
         }
     } catch (err) {
+        appendLog(err.message, 'error');
         showToast(err.message, 'error');
     } finally {
         submitBtn.disabled = false;

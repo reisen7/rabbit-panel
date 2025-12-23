@@ -469,6 +469,21 @@
                 </button>
             </div>
             <form id="create-container-form" class="space-y-4">
+                <!-- 命令解析输入框 -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                        快速导入
+                        <span class="text-xs text-gray-400 ml-1">粘贴 docker run 命令自动填充</span>
+                    </label>
+                    <div class="flex gap-2">
+                        <textarea id="cc-docker-cmd" rows="2" placeholder="粘贴 docker run 命令，支持多行（带 \ 续行）&#10;例如: docker run -d --name nginx -p 80:80 nginx:latest" 
+                            class="flex-1 px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm font-mono text-xs resize-none"></textarea>
+                        <button type="button" onclick="parseDockerCommand()" class="px-3 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 text-sm whitespace-nowrap">
+                            解析填充
+                        </button>
+                    </div>
+                </div>
+                <hr class="border-gray-200 dark:border-dark-border">
                 <!-- 基本信息 -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -547,10 +562,15 @@
                     <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">命令预览</label>
                     <div id="cc-preview" class="p-3 bg-gray-900 text-green-400 rounded text-xs font-mono overflow-x-auto whitespace-pre">docker run -d</div>
                 </div>
+                <!-- 运行日志（创建时显示） -->
+                <div id="cc-log-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">运行日志</label>
+                    <div id="cc-log" class="p-3 bg-gray-900 text-gray-300 rounded text-xs font-mono h-32 overflow-y-auto whitespace-pre-wrap"></div>
+                </div>
                 <!-- 按钮 -->
                 <div class="flex justify-end gap-2 pt-2">
                     <button type="button" onclick="closeCreateContainerModal()" class="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-md hover:bg-gray-50 dark:hover:bg-dark-border dark:text-dark-text">取消</button>
-                    <button type="submit" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">创建并运行</button>
+                    <button type="submit" id="cc-submit-btn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">创建并运行</button>
                 </div>
             </form>
         </div>
