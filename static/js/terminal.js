@@ -6,97 +6,154 @@
 let currentTerminalContainer = null;
 let currentFileContainer = null;
 let currentFilePath = '/';
-let commandHistory = [];
-let historyIndex = -1;
 
-// ========== 终端功能 ==========
+// xterm.js 相关
+let term = null;
+let termSocket = null;
+let fitAddon = null;
+
+// ========== 终端功能 (xterm.js + WebSocket) ==========
 
 // 打开终端模态框
 function openTerminalModal(containerId, containerName) {
     currentTerminalContainer = containerId;
-    commandHistory = [];
-    historyIndex = -1;
     
     const modal = document.getElementById('terminal-modal');
     document.getElementById('terminal-container-name').textContent = containerName;
-    document.getElementById('terminal-output').innerHTML = '<div class="text-green-400">' + t('terminal.connected') + ': ' + containerName + '</div><div class="text-gray-500">' + t('terminal.hint') + '</div>';
-    document.getElementById('terminal-input').value = '';
-    document.getElementById('terminal-input').placeholder = t('terminal.placeholder');
     modal.classList.add('active');
-    document.getElementById('terminal-input').focus();
+    
+    // 延迟初始化，等待 modal 显示
+    setTimeout(() => initXterm(containerId), 100);
+}
+
+// 初始化 xterm.js
+function initXterm(containerId) {
+    const container = document.getElementById('xterm-container');
+    container.innerHTML = ''; // 清空
+    
+    // 创建终端实例
+    term = new Terminal({
+        cursorBlink: true,
+        fontSize: 14,
+        fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+        theme: {
+            background: '#1e1e1e',
+            foreground: '#d4d4d4',
+            cursor: '#d4d4d4',
+            cursorAccent: '#1e1e1e',
+            selection: 'rgba(255, 255, 255, 0.3)',
+            black: '#000000',
+            red: '#cd3131',
+            green: '#0dbc79',
+            yellow: '#e5e510',
+            blue: '#2472c8',
+            magenta: '#bc3fbc',
+            cyan: '#11a8cd',
+            white: '#e5e5e5',
+            brightBlack: '#666666',
+            brightRed: '#f14c4c',
+            brightGreen: '#23d18b',
+            brightYellow: '#f5f543',
+            brightBlue: '#3b8eea',
+            brightMagenta: '#d670d6',
+            brightCyan: '#29b8db',
+            brightWhite: '#ffffff'
+        }
+    });
+    
+    // 创建 fit 插件
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    
+    // 打开终端
+    term.open(container);
+    fitAddon.fit();
+    
+    // 连接 WebSocket
+    connectTerminalWS(containerId);
+    
+    // 监听窗口大小变化
+    window.addEventListener('resize', handleTerminalResize);
+}
+
+// 连接 WebSocket
+function connectTerminalWS(containerId) {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/api/containers/terminal/ws?id=${containerId}`;
+    
+    term.writeln('\x1b[33mConnecting to container...\x1b[0m');
+    
+    termSocket = new WebSocket(wsUrl);
+    
+    termSocket.onopen = () => {
+        term.writeln('\x1b[32mConnected!\x1b[0m\r\n');
+        // 发送初始终端大小
+        sendTerminalSize();
+    };
+    
+    termSocket.onmessage = (event) => {
+        if (event.data instanceof Blob) {
+            event.data.text().then(text => term.write(text));
+        } else {
+            term.write(event.data);
+        }
+    };
+    
+    termSocket.onclose = () => {
+        term.writeln('\r\n\x1b[31mConnection closed.\x1b[0m');
+    };
+    
+    termSocket.onerror = (error) => {
+        term.writeln('\r\n\x1b[31mConnection error.\x1b[0m');
+        console.error('WebSocket error:', error);
+    };
+    
+    // 终端输入发送到 WebSocket
+    term.onData(data => {
+        if (termSocket && termSocket.readyState === WebSocket.OPEN) {
+            termSocket.send(data);
+        }
+    });
+}
+
+// 发送终端大小
+function sendTerminalSize() {
+    if (termSocket && termSocket.readyState === WebSocket.OPEN && term) {
+        termSocket.send(JSON.stringify({
+            type: 'resize',
+            cols: term.cols,
+            rows: term.rows
+        }));
+    }
+}
+
+// 处理终端大小变化
+function handleTerminalResize() {
+    if (fitAddon && term) {
+        fitAddon.fit();
+        sendTerminalSize();
+    }
 }
 
 // 关闭终端模态框
 function closeTerminalModal() {
+    // 关闭 WebSocket
+    if (termSocket) {
+        termSocket.close();
+        termSocket = null;
+    }
+    
+    // 销毁终端
+    if (term) {
+        term.dispose();
+        term = null;
+    }
+    
+    // 移除事件监听
+    window.removeEventListener('resize', handleTerminalResize);
+    
     document.getElementById('terminal-modal').classList.remove('active');
     currentTerminalContainer = null;
-}
-
-// 执行终端命令
-async function executeTerminalCommand() {
-    const input = document.getElementById('terminal-input');
-    const output = document.getElementById('terminal-output');
-    const command = input.value.trim();
-    
-    if (!command) return;
-    
-    // 添加到历史
-    commandHistory.push(command);
-    historyIndex = commandHistory.length;
-    
-    // 显示命令
-    output.innerHTML += '<div class="mt-2"><span class="text-blue-400">$ </span><span class="text-white">' + escapeHtml(command) + '</span></div>';
-    input.value = '';
-    
-    try {
-        const response = await authFetch('/api/containers/exec', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                container_id: currentTerminalContainer,
-                command: ['sh', '-c', command]
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (data.error) {
-            output.innerHTML += '<div class="text-red-400">' + escapeHtml(data.error) + '</div>';
-        } else if (data.output) {
-            output.innerHTML += '<pre class="text-gray-300 whitespace-pre-wrap">' + escapeHtml(data.output) + '</pre>';
-        }
-        
-        if (data.exit_code !== 0 && data.exit_code !== undefined) {
-            output.innerHTML += '<div class="text-yellow-500 text-xs">' + t('terminal.exitCode') + ': ' + data.exit_code + '</div>';
-        }
-    } catch (error) {
-        output.innerHTML += '<div class="text-red-400">' + t('terminal.execFailed') + ': ' + error.message + '</div>';
-    }
-    
-    // 滚动到底部
-    output.scrollTop = output.scrollHeight;
-}
-
-// 终端输入键盘事件
-function handleTerminalKeydown(e) {
-    if (e.key === 'Enter') {
-        executeTerminalCommand();
-    } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        if (historyIndex > 0) {
-            historyIndex--;
-            document.getElementById('terminal-input').value = commandHistory[historyIndex];
-        }
-    } else if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        if (historyIndex < commandHistory.length - 1) {
-            historyIndex++;
-            document.getElementById('terminal-input').value = commandHistory[historyIndex];
-        } else {
-            historyIndex = commandHistory.length;
-            document.getElementById('terminal-input').value = '';
-        }
-    }
 }
 
 // ========== 文件管理功能 ==========
@@ -147,7 +204,7 @@ async function loadFilesList(path) {
 function renderFilesList(files) {
     const tbody = document.getElementById('files-tbody');
     
-    if (files.length === 0) {
+    if (!files || files.length === 0) {
         tbody.innerHTML = '<tr><td colspan="5" class="px-4 py-8 text-center text-gray-500">' + t('files.empty') + '</td></tr>';
         return;
     }

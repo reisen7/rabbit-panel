@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"path"
 	"strings"
@@ -17,6 +18,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+	"github.com/gorilla/websocket"
 )
 
 // ========== 容器终端执行命令 ==========
@@ -144,11 +146,11 @@ func handleContainerFilesList(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
-	// 使用 ls 命令列出目录
+	// 使用 ls 命令列出目录（不使用 --time-style，兼容 BusyBox）
 	execConfig := types.ExecConfig{
 		AttachStdout: true,
 		AttachStderr: true,
-		Cmd:          []string{"ls", "-la", "--time-style=+%Y-%m-%d %H:%M:%S", dirPath},
+		Cmd:          []string{"ls", "-la", dirPath},
 	}
 
 	execID, err := dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
@@ -167,7 +169,9 @@ func handleContainerFilesList(w http.ResponseWriter, r *http.Request) {
 	var stdout, stderr bytes.Buffer
 	stdcopy.StdCopy(&stdout, &stderr, resp.Reader)
 
-	if stderr.Len() > 0 && strings.Contains(stderr.String(), "No such file") {
+	// 检查错误输出
+	stderrStr := stderr.String()
+	if stderrStr != "" && (strings.Contains(stderrStr, "No such file") || strings.Contains(stderrStr, "not found")) {
 		http.Error(w, "目录不存在", http.StatusNotFound)
 		return
 	}
@@ -179,9 +183,9 @@ func handleContainerFilesList(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(files)
 }
 
-// 解析 ls -la 输出
+// 解析 ls -la 输出（兼容 GNU ls 和 BusyBox ls）
 func parseLsOutput(output string, basePath string) []FileInfo {
-	var files []FileInfo
+	files := make([]FileInfo, 0)
 	lines := strings.Split(output, "\n")
 
 	for _, line := range lines {
@@ -190,20 +194,47 @@ func parseLsOutput(output string, basePath string) []FileInfo {
 			continue
 		}
 
-		// 解析 ls -la 格式: drwxr-xr-x 2 root root 4096 2024-01-01 12:00:00 dirname
+		// ls -la 输出格式：
+		// GNU:     drwxr-xr-x 2 root root 4096 Jan  1 12:00 dirname
+		// BusyBox: drwxr-xr-x    2 root     root          4096 Jan  1 12:00 dirname
 		fields := strings.Fields(line)
-		if len(fields) < 8 {
+		if len(fields) < 6 {
 			continue
 		}
 
 		mode := fields[0]
-		size := int64(0)
-		fmt.Sscanf(fields[4], "%d", &size)
-		modTime := fields[5] + " " + fields[6]
-		name := strings.Join(fields[7:], " ")
+		
+		// 找到文件名（最后一个或多个字段）
+		// 时间格式可能是 "Jan 1 12:00" 或 "2024-01-01 12:00"
+		var name string
+		var modTime string
+		var size int64
+		
+		// 尝试解析大小（通常在第4或第5个字段）
+		for i := 3; i < len(fields) && i < 6; i++ {
+			if n, err := fmt.Sscanf(fields[i], "%d", &size); n == 1 && err == nil {
+				// 找到大小字段，后面是时间和文件名
+				// 时间通常占 3 个字段（如 "Jan 1 12:00"）或 2 个字段（如 "2024-01-01 12:00"）
+				remaining := fields[i+1:]
+				if len(remaining) >= 4 {
+					// 可能是 "Jan 1 12:00 filename" 或 "Jan 1 2024 filename"
+					modTime = strings.Join(remaining[:3], " ")
+					name = strings.Join(remaining[3:], " ")
+				} else if len(remaining) >= 3 {
+					modTime = strings.Join(remaining[:2], " ")
+					name = strings.Join(remaining[2:], " ")
+				} else if len(remaining) >= 2 {
+					modTime = remaining[0]
+					name = strings.Join(remaining[1:], " ")
+				} else if len(remaining) == 1 {
+					name = remaining[0]
+				}
+				break
+			}
+		}
 
-		// 跳过 . 和 ..
-		if name == "." || name == ".." {
+		// 跳过无效行
+		if name == "" || name == "." || name == ".." {
 			continue
 		}
 
@@ -1025,4 +1056,168 @@ func handleContainerStats(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(result)
+}
+
+// ========== WebSocket 交互式终端 ==========
+
+var wsUpgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true // 允许所有来源（生产环境应该限制）
+	},
+}
+
+// WebSocket 终端处理
+func handleContainerTerminalWS(w http.ResponseWriter, r *http.Request) {
+	containerID := r.URL.Query().Get("id")
+	if containerID == "" {
+		http.Error(w, "容器ID不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 升级为 WebSocket 连接
+	conn, err := wsUpgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[Terminal] WebSocket upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	log.Printf("[Terminal] WebSocket connected, container: %s", containerID)
+
+	ctx := context.Background()
+
+	// 检测容器中可用的 shell
+	shell := detectShell(ctx, containerID)
+	log.Printf("[Terminal] Using shell: %s for container: %s", shell, containerID)
+
+	// 创建 exec 实例
+	execConfig := types.ExecConfig{
+		AttachStdin:  true,
+		AttachStdout: true,
+		AttachStderr: true,
+		Tty:          true,
+		Cmd:          []string{shell},
+	}
+
+	execID, err := dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+	if err != nil {
+		log.Printf("[Terminal] Exec create failed: %v", err)
+		conn.WriteMessage(websocket.TextMessage, []byte("\r\n\x1b[31mError: "+err.Error()+"\x1b[0m\r\n"))
+		return
+	}
+
+	// 附加到 exec 实例
+	execAttachConfig := types.ExecStartCheck{
+		Tty: true,
+	}
+
+	hijackedResp, err := dockerClient.ContainerExecAttach(ctx, execID.ID, execAttachConfig)
+	if err != nil {
+		log.Printf("[Terminal] Exec attach failed: %v", err)
+		conn.WriteMessage(websocket.TextMessage, []byte("\r\n\x1b[31mError: "+err.Error()+"\x1b[0m\r\n"))
+		return
+	}
+	defer hijackedResp.Close()
+
+	// 用于通知 goroutine 退出
+	done := make(chan struct{})
+
+	// 从容器读取输出，发送到 WebSocket
+	go func() {
+		defer close(done)
+		buf := make([]byte, 4096)
+		for {
+			n, err := hijackedResp.Reader.Read(buf)
+			if err != nil {
+				if err != io.EOF {
+					log.Printf("[Terminal] Read from container error: %v", err)
+				}
+				return
+			}
+			if n > 0 {
+				if err := conn.WriteMessage(websocket.BinaryMessage, buf[:n]); err != nil {
+					log.Printf("[Terminal] WebSocket write error: %v", err)
+					return
+				}
+			}
+		}
+	}()
+
+	// 从 WebSocket 读取输入，发送到容器
+	go func() {
+		for {
+			messageType, message, err := conn.ReadMessage()
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("[Terminal] WebSocket read error: %v", err)
+				}
+				return
+			}
+
+			// 处理终端大小调整消息
+			if messageType == websocket.TextMessage && len(message) > 0 && message[0] == '{' {
+				var resizeMsg struct {
+					Type string `json:"type"`
+					Cols int    `json:"cols"`
+					Rows int    `json:"rows"`
+				}
+				if err := json.Unmarshal(message, &resizeMsg); err == nil && resizeMsg.Type == "resize" {
+					// 调整终端大小
+					dockerClient.ContainerExecResize(ctx, execID.ID, container.ResizeOptions{
+						Height: uint(resizeMsg.Rows),
+						Width:  uint(resizeMsg.Cols),
+					})
+					continue
+				}
+			}
+
+			// 发送输入到容器
+			if _, err := hijackedResp.Conn.Write(message); err != nil {
+				log.Printf("[Terminal] Write to container error: %v", err)
+				return
+			}
+		}
+	}()
+
+	// 等待连接关闭
+	<-done
+	log.Printf("[Terminal] WebSocket disconnected, container: %s", containerID)
+}
+
+// 检测容器中可用的 shell
+func detectShell(ctx context.Context, containerID string) string {
+	// 按优先级尝试不同的 shell
+	shells := []string{"/bin/sh", "/bin/bash", "/bin/ash", "sh"}
+
+	for _, shell := range shells {
+		// 直接尝试运行 shell 并立即退出，检查是否可用
+		execConfig := types.ExecConfig{
+			AttachStdout: true,
+			AttachStderr: true,
+			Cmd:          []string{shell, "-c", "exit 0"},
+		}
+
+		execID, err := dockerClient.ContainerExecCreate(ctx, containerID, execConfig)
+		if err != nil {
+			continue
+		}
+
+		resp, err := dockerClient.ContainerExecAttach(ctx, execID.ID, types.ExecStartCheck{})
+		if err != nil {
+			continue
+		}
+		resp.Close()
+
+		// 检查退出码
+		inspectResp, err := dockerClient.ContainerExecInspect(ctx, execID.ID)
+		if err == nil && inspectResp.ExitCode == 0 {
+			log.Printf("[Terminal] Detected shell: %s", shell)
+			return shell
+		}
+	}
+
+	// 默认返回 /bin/sh
+	return "/bin/sh"
 }

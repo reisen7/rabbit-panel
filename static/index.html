@@ -24,6 +24,10 @@
         }
     </script>
     <link rel="stylesheet" href="css/style.css">
+    <!-- xterm.js for interactive terminal -->
+    <link rel="stylesheet" href="css/xterm.css">
+    <script src="js/xterm.min.js"></script>
+    <script src="js/xterm-addon-fit.min.js"></script>
 </head>
 <body class="bg-gray-100 dark:bg-dark-bg transition-colors duration-300">
     <!-- 登录页面 -->
@@ -468,6 +472,16 @@
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
+            <!-- 模式切换 -->
+            <div class="flex gap-2 mb-4">
+                <button type="button" id="cc-mode-form" onclick="switchCreateMode('form')" class="flex-1 py-2 px-3 text-sm font-medium rounded-md bg-blue-500 text-white">
+                    表单模式
+                </button>
+                <button type="button" id="cc-mode-cmd" onclick="switchCreateMode('cmd')" class="flex-1 py-2 px-3 text-sm font-medium rounded-md bg-gray-200 dark:bg-dark-border text-gray-700 dark:text-dark-text hover:bg-gray-300 dark:hover:bg-gray-600">
+                    命令模式
+                </button>
+            </div>
+            <!-- 表单模式 -->
             <form id="create-container-form" class="space-y-4">
                 <!-- 命令解析输入框 -->
                 <div>
@@ -573,6 +587,27 @@
                     <button type="submit" id="cc-submit-btn" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">创建并运行</button>
                 </div>
             </form>
+            <!-- 命令模式 -->
+            <div id="cc-cmd-mode" class="hidden space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">
+                        Docker 命令
+                        <span class="text-xs text-gray-400 ml-1">输入完整的 docker run 命令</span>
+                    </label>
+                    <textarea id="cc-raw-cmd" rows="6" placeholder="docker run -d \&#10;  --name my-nginx \&#10;  -p 80:80 \&#10;  -v /data:/usr/share/nginx/html \&#10;  -e TZ=Asia/Shanghai \&#10;  --restart unless-stopped \&#10;  nginx:latest" 
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-dark-border rounded-md text-sm font-mono resize-none"></textarea>
+                </div>
+                <!-- 运行日志 -->
+                <div id="cc-cmd-log-container" class="hidden">
+                    <label class="block text-sm font-medium text-gray-700 dark:text-dark-muted mb-1">运行日志</label>
+                    <div id="cc-cmd-log" class="p-3 bg-gray-900 text-gray-300 rounded text-xs font-mono h-40 overflow-y-auto whitespace-pre-wrap"></div>
+                </div>
+                <!-- 按钮 -->
+                <div class="flex justify-end gap-2 pt-2">
+                    <button type="button" onclick="closeCreateContainerModal()" class="px-4 py-2 border border-gray-300 dark:border-dark-border rounded-md hover:bg-gray-50 dark:hover:bg-dark-border dark:text-dark-text">取消</button>
+                    <button type="button" id="cc-cmd-submit-btn" onclick="submitRawDockerCommand()" class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">执行命令</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -625,21 +660,16 @@
         </div>
     </div>
 
-    <!-- 终端模态框 -->
+    <!-- 终端模态框 (xterm.js) -->
     <div id="terminal-modal" class="modal">
-        <div class="modal-content" style="max-width: 800px;">
-            <div class="flex justify-between items-center mb-4">
+        <div class="modal-content" style="max-width: 900px; padding: 0;">
+            <div class="flex justify-between items-center p-4 border-b border-gray-200 dark:border-dark-border">
                 <h3 class="text-lg font-semibold dark:text-dark-text">终端 - <span id="terminal-container-name"></span></h3>
                 <button onclick="closeTerminalModal()" class="text-gray-500 hover:text-gray-700 dark:text-dark-muted">
                     <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
                 </button>
             </div>
-            <div id="terminal-output" class="bg-gray-900 text-gray-300 p-4 rounded font-mono text-sm h-80 overflow-y-auto mb-3"></div>
-            <div class="flex gap-2">
-                <span class="text-green-400 font-mono py-2">$</span>
-                <input type="text" id="terminal-input" class="flex-1 bg-gray-800 text-white px-3 py-2 rounded font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="输入命令..." onkeydown="handleTerminalKeydown(event)">
-                <button onclick="executeTerminalCommand()" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">执行</button>
-            </div>
+            <div id="xterm-container" style="height: 450px; background: #1e1e1e;"></div>
         </div>
     </div>
 

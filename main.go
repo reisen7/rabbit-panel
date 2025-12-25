@@ -731,6 +731,143 @@ func handleContainerRunStream(w http.ResponseWriter, r *http.Request) {
 	sendSuccess(resp.ID[:12])
 }
 
+// 执行原始 docker 命令（流式输出）
+func handleContainerRunRaw(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "方法不允许", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Command string `json:"command"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "请求参数错误", http.StatusBadRequest)
+		return
+	}
+
+	cmd := strings.TrimSpace(req.Command)
+	if cmd == "" {
+		http.Error(w, "命令不能为空", http.StatusBadRequest)
+		return
+	}
+
+	// 处理多行命令（合并反斜杠续行）
+	cmd = strings.ReplaceAll(cmd, "\\\n", " ")
+	cmd = strings.ReplaceAll(cmd, "\\\r\n", " ")
+	cmd = strings.Join(strings.Fields(cmd), " ")
+
+	// 安全检查：只允许 docker run 命令
+	if !strings.HasPrefix(cmd, "docker run ") && !strings.HasPrefix(cmd, "docker run\t") {
+		http.Error(w, "只支持 docker run 命令", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[Container] Executing raw command: %s", cmd)
+
+	// 设置 SSE 响应头
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+	w.Header().Set("X-Accel-Buffering", "no")
+
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		http.Error(w, "SSE 不支持", http.StatusInternalServerError)
+		return
+	}
+
+	sendLog := func(msg string) {
+		fmt.Fprintf(w, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		flusher.Flush()
+	}
+
+	sendError := func(msg string) {
+		fmt.Fprintf(w, "data: {\"type\":\"error\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		flusher.Flush()
+	}
+
+	sendSuccess := func(id string) {
+		fmt.Fprintf(w, "data: {\"type\":\"success\",\"id\":\"%s\"}\n\n", id)
+		flusher.Flush()
+	}
+
+	sendLog(fmt.Sprintf("执行命令: %s", cmd))
+
+	// 使用 shell 执行命令
+	var execCmd *exec.Cmd
+	if runtime.GOOS == "windows" {
+		execCmd = exec.Command("cmd", "/C", cmd)
+	} else {
+		execCmd = exec.Command("sh", "-c", cmd)
+	}
+
+	// 获取输出管道
+	stdout, err := execCmd.StdoutPipe()
+	if err != nil {
+		sendError(fmt.Sprintf("获取输出失败: %v", err))
+		return
+	}
+	stderr, err := execCmd.StderrPipe()
+	if err != nil {
+		sendError(fmt.Sprintf("获取错误输出失败: %v", err))
+		return
+	}
+
+	// 启动命令
+	if err := execCmd.Start(); err != nil {
+		sendError(fmt.Sprintf("启动命令失败: %v", err))
+		return
+	}
+
+	// 读取 stdout
+	var containerID string
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text()
+			// docker run 成功时会输出容器 ID
+			if len(line) == 64 || len(line) == 12 {
+				containerID = line
+				if len(containerID) > 12 {
+					containerID = containerID[:12]
+				}
+			}
+			sendLog(line)
+		}
+	}()
+
+	// 读取 stderr
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			line := scanner.Text()
+			sendLog(line)
+		}
+	}()
+
+	// 等待命令完成
+	if err := execCmd.Wait(); err != nil {
+		log.Printf("[Container] Raw command failed: %v", err)
+		sendError(fmt.Sprintf("命令执行失败: %v", err))
+		return
+	}
+
+	log.Printf("[Container] Raw command success, container ID: %s", containerID)
+
+	// 清除容器列表缓存
+	containersCache.Lock()
+	containersCache.lastFetch = time.Time{}
+	containersCache.Unlock()
+
+	if containerID != "" {
+		sendSuccess(containerID)
+	} else {
+		sendSuccess("completed")
+	}
+}
+
 // 容器操作：启动/停止/重启/删除
 func handleContainerAction(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -1640,6 +1777,7 @@ func main() {
 	http.HandleFunc("/api/containers/action", authMiddleware(handleContainerAction))
 	http.HandleFunc("/api/containers/run", authMiddleware(handleContainerRun))
 	http.HandleFunc("/api/containers/run/stream", authMiddleware(handleContainerRunStream))
+	http.HandleFunc("/api/containers/run/raw", authMiddleware(handleContainerRunRaw))
 	http.HandleFunc("/api/containers/logs", authMiddleware(handleContainerLogs)) // 日志流不限制超时
 	http.HandleFunc("/api/images", authOrNodeAuthMiddleware(handleImages)) // 支持用户认证或节点认证
 	http.HandleFunc("/api/images/remove", authMiddleware(handleImageRemove))
@@ -1655,6 +1793,7 @@ func main() {
 	
 	// 容器终端和文件管理 API
 	http.HandleFunc("/api/containers/exec", authMiddleware(handleContainerExec))
+	http.HandleFunc("/api/containers/terminal/ws", handleContainerTerminalWS) // WebSocket 不用 authMiddleware，在连接时验证
 	http.HandleFunc("/api/containers/files", authMiddleware(handleContainerFilesList))
 	http.HandleFunc("/api/containers/files/mkdir", authMiddleware(handleContainerFileMkdir))
 	http.HandleFunc("/api/containers/files/delete", authMiddleware(handleContainerFileDelete))

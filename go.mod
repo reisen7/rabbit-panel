@@ -5,11 +5,12 @@ go 1.24.0
 toolchain go1.24.10
 
 require (
-github.com/docker/docker v25.0.6+incompatible
-github.com/docker/go-connections v0.4.0
-github.com/golang-jwt/jwt/v5 v5.3.0
-golang.org/x/crypto v0.44.0
-modernc.org/sqlite v1.40.1
+	github.com/docker/docker v25.0.6+incompatible
+	github.com/docker/go-connections v0.4.0
+	github.com/golang-jwt/jwt/v5 v5.3.0
+	github.com/gorilla/websocket v1.5.3
+	golang.org/x/crypto v0.44.0
+	modernc.org/sqlite v1.40.1
 )
 
 require (

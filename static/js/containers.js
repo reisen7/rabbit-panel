@@ -215,6 +215,30 @@ async function refreshContainers() {
 
 // ===== 创建容器功能 =====
 
+// 当前创建模式
+let createContainerMode = 'form';
+
+// 切换创建模式
+function switchCreateMode(mode) {
+    createContainerMode = mode;
+    const formMode = DOM.get('create-container-form');
+    const cmdMode = DOM.get('cc-cmd-mode');
+    const btnForm = DOM.get('cc-mode-form');
+    const btnCmd = DOM.get('cc-mode-cmd');
+    
+    if (mode === 'form') {
+        formMode.classList.remove('hidden');
+        cmdMode.classList.add('hidden');
+        btnForm.className = 'flex-1 py-2 px-3 text-sm font-medium rounded-md bg-blue-500 text-white';
+        btnCmd.className = 'flex-1 py-2 px-3 text-sm font-medium rounded-md bg-gray-200 dark:bg-dark-border text-gray-700 dark:text-dark-text hover:bg-gray-300 dark:hover:bg-gray-600';
+    } else {
+        formMode.classList.add('hidden');
+        cmdMode.classList.remove('hidden');
+        btnCmd.className = 'flex-1 py-2 px-3 text-sm font-medium rounded-md bg-blue-500 text-white';
+        btnForm.className = 'flex-1 py-2 px-3 text-sm font-medium rounded-md bg-gray-200 dark:bg-dark-border text-gray-700 dark:text-dark-text hover:bg-gray-300 dark:hover:bg-gray-600';
+    }
+}
+
 function openCreateContainerModal() {
     // 重置表单
     DOM.get('create-container-form').reset();
@@ -222,6 +246,11 @@ function openCreateContainerModal() {
     resetDynamicFields();
     // 更新预览
     updateCommandPreview();
+    // 重置命令模式
+    DOM.get('cc-raw-cmd').value = '';
+    DOM.get('cc-cmd-log-container').classList.add('hidden');
+    // 默认表单模式
+    switchCreateMode('form');
     // 显示模态框
     DOM.get('create-container-modal').classList.add('active');
 }
@@ -231,6 +260,8 @@ function closeCreateContainerModal() {
     // 隐藏日志区域
     const logContainer = DOM.get('cc-log-container');
     if (logContainer) logContainer.classList.add('hidden');
+    const cmdLogContainer = DOM.get('cc-cmd-log-container');
+    if (cmdLogContainer) cmdLogContainer.classList.add('hidden');
 }
 
 // 解析 docker run 命令并填充表单
@@ -843,5 +874,103 @@ async function loadContainerStats(containerId) {
     } catch (error) {
         el.textContent = '-';
         delete containerStatsCache[containerId];
+    }
+}
+
+// 执行原始 docker 命令
+async function submitRawDockerCommand() {
+    const cmdInput = DOM.get('cc-raw-cmd');
+    const cmd = cmdInput.value.trim();
+    
+    if (!cmd) {
+        showToast('请输入 docker 命令', 'warning');
+        return;
+    }
+    
+    // 检查是否是 docker run 命令
+    const normalizedCmd = cmd.replace(/\\\s*\n\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!normalizedCmd.match(/^docker\s+run\b/i)) {
+        showToast('只支持 docker run 命令', 'warning');
+        return;
+    }
+    
+    const submitBtn = DOM.get('cc-cmd-submit-btn');
+    const logContainer = DOM.get('cc-cmd-log-container');
+    const logEl = DOM.get('cc-cmd-log');
+    
+    // 显示日志区域
+    logContainer.classList.remove('hidden');
+    logEl.textContent = '';
+    submitBtn.disabled = true;
+    submitBtn.textContent = '执行中...';
+    
+    const appendLog = (msg, type = 'info') => {
+        const color = type === 'error' ? 'text-red-400' : type === 'success' ? 'text-green-400' : 'text-gray-300';
+        const line = document.createElement('div');
+        line.className = color;
+        line.textContent = msg;
+        logEl.appendChild(line);
+        logEl.scrollTop = logEl.scrollHeight;
+    };
+    
+    try {
+        const response = await fetch('/api/containers/run/raw', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ command: cmd })
+        });
+        
+        if (!response.ok) {
+            let errMsg = await response.text();
+            try {
+                const errJson = JSON.parse(errMsg);
+                errMsg = errJson.error || errJson.message || errMsg;
+            } catch (e) {}
+            appendLog(errMsg, 'error');
+            showToast(errMsg, 'error', { title: '执行失败' });
+            return;
+        }
+        
+        // 读取 SSE 流
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop() || '';
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'log') {
+                            appendLog(data.message);
+                        } else if (data.type === 'error') {
+                            appendLog(data.message, 'error');
+                            showToast(data.message, 'error', { title: '执行失败' });
+                        } else if (data.type === 'success') {
+                            appendLog(`命令执行成功！容器 ID: ${data.id}`, 'success');
+                            showToast(`容器创建成功: ${data.id}`, 'success');
+                            setTimeout(() => {
+                                closeCreateContainerModal();
+                                loadContainers(true);
+                            }, 1500);
+                        }
+                    } catch (e) {}
+                }
+            }
+        }
+    } catch (err) {
+        appendLog(err.message, 'error');
+        showToast(err.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '执行命令';
     }
 }
