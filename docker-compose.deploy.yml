@@ -21,6 +21,7 @@ services:
       - RABBIT_IMAGE_TAG=latest
       - RABBIT_HOST_PROJECT_DIR=/root/rabbit-panel
       - RABBIT_COMPOSE_FILE=docker-compose.deploy.yml
+      # - RABBIT_UPDATE_CHECK_DISABLED=true  # set to true to skip the update check (no manifest fetch)
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:3958/api/health"]
       interval: 30s

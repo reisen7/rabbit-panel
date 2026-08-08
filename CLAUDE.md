@@ -109,4 +109,5 @@ Environment variables `MODE` (master/worker), `JWT_SECRET`, `NODE_SECRET`, `MAST
 - Docker socket must be mounted into the container/binary for container management
 - Time sync between Master and Worker nodes must be within 1 hour (node auth uses JWT with 1-hour tolerance)
 - The backend's WebSocket terminal handler lives in `router/router.go` — any changes to the exec/session protocol should be tested against the xterm.js frontend client
+- Set `RABBIT_UPDATE_CHECK_DISABLED=true` to skip the update check (no outbound `MANIFEST_URL` fetch) — see `backend/service/update.go`
 

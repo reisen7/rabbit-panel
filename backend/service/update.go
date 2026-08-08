@@ -29,6 +29,9 @@ const (
 	updateBinaryDir           = "/tmp/rabbit-panel-update"
 	updateStatePath           = "/tmp/rabbit-panel-update.state"
 	updateResultPath          = "/tmp/rabbit-panel-update.result"
+
+	// When set to true, the update check (manifest fetch) is skipped entirely.
+	updateCheckDisabledEnv = "RABBIT_UPDATE_CHECK_DISABLED"
 )
 
 type BuildInfo struct {
@@ -177,6 +180,26 @@ func (s *UpdateService) Check(ctx context.Context) (*UpdateCheckResult, error) {
 	settings, err := s.loadSettings()
 	if err != nil {
 		return nil, err
+	}
+
+	if updateCheckDisabled() {
+		deploy := s.DetectDeployConfig()
+		return &UpdateCheckResult{
+			CurrentVersion:   s.buildInfo.Version,
+			CurrentCommit:    s.buildInfo.Commit,
+			CurrentBuildTime: s.buildInfo.BuildTime,
+			LatestVersion:    "",
+			HasUpdate:        false,
+			DeployMode:       deploy.Mode,
+			Image:            deploy.Image,
+			ImageTag:         deploy.ImageTag,
+			CanUpdate:        false,
+			Message:          "update check is disabled",
+			LastCheckTime:    settings.LastCheckTime,
+			LastUpdateTime:   settings.LastUpdateTime,
+			LastUpdateStatus: settings.LastUpdateStatus,
+			LastUpdateError:  settings.LastUpdateError,
+		}, nil
 	}
 
 	manifest, err := s.fetchManifest(ctx)
@@ -1006,6 +1029,11 @@ func getEnv(key, fallback string) string {
 		return value
 	}
 	return fallback
+}
+
+func updateCheckDisabled() bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(updateCheckDisabledEnv)))
+	return value == "true" || value == "1" || value == "yes" || value == "on"
 }
 
 func ensureSystemctlAvailable() error {
