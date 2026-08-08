@@ -83,6 +83,7 @@ docker compose -f docker-compose.worker.yml up -d
 - `PORT=3958`
 - `JWT_SECRET=...`
 - `NODE_SECRET=...`
+- `RABBIT_UPDATE_CHECK_DISABLED=true` 跳过更新检查（不再请求 `MANIFEST_URL`，界面不显示更新提示）
 
 默认账户：
 
