@@ -1,0 +1,1 @@
+const o=[10,20,50,100],u=10;function i(t){return o.includes(t)}function d(t,e=u){if(typeof window=="undefined")return e;try{const n=window.localStorage.getItem(t);if(!n)return e;const r=Number(n);return i(r)?r:e}catch(n){return e}}function s(t,e){if(typeof window!="undefined"&&i(e))try{window.localStorage.setItem(t,String(e))}catch(n){}}export{d as g,s};

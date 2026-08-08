@@ -1,0 +1,3 @@
+5c9cfed4d404ad33b17b22301844018b2894c8885f47dbf69ee7bb6cf01b77e1  rabbit-panel-linux-amd64-v2.2.5-release/rabbit-panel-linux-amd64-v2.2.5
+369e8890aeacf7424c18f545d37b1b2e6da782aa8eea3a8670514aea9d604c26  rabbit-panel-linux-arm64-v2.2.5-release/rabbit-panel-linux-arm64-v2.2.5
+584c9e8702137e0b96ea9c7932d2305661420cad5d016f7e7b58be65fca7b7a3  rabbit-panel-linux-armv7-v2.2.5-release/rabbit-panel-linux-armv7-v2.2.5

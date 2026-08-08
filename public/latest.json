@@ -1,0 +1,26 @@
+{
+  "version": "v2.2.5",
+  "version_number": "2.2.5",
+  "release_url": "https://github.com/reisen7/rabbit-panel/releases/tag/v2.2.5",
+  "release_name": "v2.2.5",
+  "release_notes": "设置 RABBIT_UPDATE_CHECK_DISABLED=true 时，Check() 直接返回， 不再向外请求 MANIFEST_URL，前端不会显示更新提示。",
+  "published_at": "2026-08-08T03:23:44Z",
+  "docker_image": "reisen7/rabbit-panel",
+  "docker_tag": "latest",
+  "docker_tags": [
+    "v2.2.5",
+    "2.2.5",
+    "latest"
+  ],
+  "assets": {
+    "linux-amd64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.2.5/rabbit-panel-linux-amd64-v2.2.5",
+    "linux-arm64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.2.5/rabbit-panel-linux-arm64-v2.2.5",
+    "linux-armv7": "https://github.com/reisen7/rabbit-panel/releases/download/v2.2.5/rabbit-panel-linux-armv7-v2.2.5",
+    "sha256sums": "https://github.com/reisen7/rabbit-panel/releases/download/v2.2.5/sha256sums.txt"
+  },
+  "sha256": {
+    "linux-amd64": "5c9cfed4d404ad33b17b22301844018b2894c8885f47dbf69ee7bb6cf01b77e1",
+    "linux-arm64": "369e8890aeacf7424c18f545d37b1b2e6da782aa8eea3a8670514aea9d604c26",
+    "linux-armv7": "584c9e8702137e0b96ea9c7932d2305661420cad5d016f7e7b58be65fca7b7a3"
+  }
+}
