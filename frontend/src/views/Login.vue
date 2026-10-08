@@ -254,7 +254,8 @@ onMounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.3);
   transition: border-color 0.2s;
   object-fit: contain;
-  background: rgba(255, 255, 255, 0.9);
+  object-position: center;
+  background: rgba(255, 255, 255, 0.95);
 }
 
 .captcha-image:hover {

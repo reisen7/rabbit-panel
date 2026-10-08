@@ -141,8 +141,20 @@ func (m *CaptchaManager) Verify(captchaID, userInput string) bool {
 
 // renderImage 渲染验证码图片
 func (m *CaptchaManager) renderImage(code string) (*image.RGBA, error) {
-	width := m.length*52 + 32
-	height := 96
+	const (
+		dotSize = 7
+		charW   = 5 * dotSize
+		charH   = 7 * dotSize
+		gap     = 12
+		padX    = 18
+		padY    = 16
+	)
+	chars := []rune(code)
+	width := padX*2 + len(chars)*charW
+	if len(chars) > 1 {
+		width += (len(chars) - 1) * gap
+	}
+	height := padY*2 + charH
 
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
@@ -182,23 +194,23 @@ func (m *CaptchaManager) renderImage(code string) (*image.RGBA, error) {
 		img.Set(x, y, color)
 	}
 
-	// 绘制字符
-	for i, ch := range code {
-		// 随机颜色
+	// 绘制字符，整体放在图片中间
+	contentW := len(chars)*charW
+	if len(chars) > 1 {
+		contentW += (len(chars) - 1) * gap
+	}
+	originX := (width - contentW) / 2
+	originY := (height - charH) / 2
+	for i, ch := range chars {
 		charColor := color.RGBA{
 			R: uint8(randInt(30, 100)),
 			G: uint8(randInt(80, 160)),
 			B: uint8(randInt(150, 220)),
 			A: 255,
 		}
-
-		// 随机位置
-		x := 18 + i*44 + randInt(-4, 6)
-		y := 18 + randInt(0, 14)
-
-		// 随机旋转角度（简化处理，不实际旋转）
-		fontSize := float64(randInt(36, 44))
-		m.drawChar(img, x, y, ch, charColor, fontSize)
+		x := originX + i*(charW+gap) + randInt(-2, 3)
+		y := originY + randInt(-2, 3)
+		m.drawChar(img, x, y, ch, charColor, float64(dotSize*12))
 	}
 
 	return img, nil
