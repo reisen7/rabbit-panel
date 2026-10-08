@@ -1,13 +1,15 @@
 package service
 
 import (
-	"bufio"
-	"bytes"
-	"encoding/json"
+	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
+
+	"github.com/docker/docker/api/types"
 
 	"rabbit-panel/model"
 	"rabbit-panel/repository"
@@ -47,79 +49,7 @@ func (s *ComposeService) ListProjects() ([]model.ComposeProject, error) {
 
 // FetchProjectStatus 获取单个 Compose 项目状态
 func (s *ComposeService) FetchProjectStatus(name string) (*model.ComposeProject, error) {
-	dir := s.fileRepo.GetComposeProjectDir(name)
-	cmd := exec.Command("docker", "compose", "-f", "docker-compose.yml", "ps", "--format", "json")
-	cmd.Dir = dir
-
-	output, err := cmd.Output()
-	if err != nil {
-		return &model.ComposeProject{
-			Name:   name,
-			Status: "unknown",
-		}, nil
-	}
-
-	project := &model.ComposeProject{
-		Name:   name,
-		Status: "stopped",
-	}
-
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	running := 0
-	total := 0
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
-		}
-		total++
-		var item struct {
-			ID      string `json:"ID"`
-			Name    string `json:"Name"`
-			Service string `json:"Service"`
-			State   string `json:"State"`
-			Status  string `json:"Status"`
-			Publishers []struct {
-				URL           string `json:"URL"`
-				TargetPort    int    `json:"TargetPort"`
-				PublishedPort int    `json:"PublishedPort"`
-				Protocol      string `json:"Protocol"`
-			} `json:"Publishers"`
-		}
-		if err := json.Unmarshal([]byte(line), &item); err != nil {
-			continue
-		}
-		if item.State == "running" {
-			running++
-		}
-		ports := make([]string, 0, len(item.Publishers))
-		for _, publisher := range item.Publishers {
-			if publisher.PublishedPort > 0 && publisher.TargetPort > 0 {
-				ports = append(ports, fmt.Sprintf("%d:%d", publisher.PublishedPort, publisher.TargetPort))
-			}
-		}
-		project.Containers = append(project.Containers, model.ComposeContainer{
-			ID:      item.ID,
-			Name:    item.Name,
-			Service: item.Service,
-			State:   item.State,
-			Status:  item.Status,
-			Ports:   strings.Join(ports, ", "),
-		})
-	}
-
-	switch {
-	case total == 0:
-		project.Status = "stopped"
-	case running == total:
-		project.Status = "running"
-	case running > 0:
-		project.Status = "partial"
-	default:
-		project.Status = "stopped"
-	}
-
-	return project, nil
+	return s.projectFromContainers(name), nil
 }
 
 // CreateProject 创建 Compose 项目
@@ -145,19 +75,20 @@ func (s *ComposeService) DeleteProject(name string) error {
 // ExecuteAction 执行 Compose 操作（up, down, restart, pull, logs）
 func (s *ComposeService) ExecuteAction(name, action string, writer io.Writer) error {
 	dir := s.fileRepo.GetComposeProjectDir(name)
+	composeFile := filepath.Base(resolveComposeFile(dir))
 	var cmd *exec.Cmd
 
 	switch action {
 	case "up":
-		cmd = exec.Command("docker", "compose", "-f", "docker-compose.yml", "up", "-d")
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
 	case "down":
-		cmd = exec.Command("docker", "compose", "-f", "docker-compose.yml", "down")
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "down")
 	case "restart":
-		cmd = exec.Command("docker", "compose", "-f", "docker-compose.yml", "restart")
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "restart")
 	case "pull":
-		cmd = exec.Command("docker", "compose", "-f", "docker-compose.yml", "pull")
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "pull")
 	case "logs":
-		cmd = exec.Command("docker", "compose", "-f", "docker-compose.yml", "logs", "--tail=50")
+		cmd = exec.Command("docker", "compose", "-f", composeFile, "logs", "--tail=50")
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -168,40 +99,76 @@ func (s *ComposeService) ExecuteAction(name, action string, writer io.Writer) er
 	return cmd.Run()
 }
 
-// getProjectStatus 获取项目状态
+// getProjectStatus 获取项目状态。新建项目还没有容器时记为已停止。
 func (s *ComposeService) getProjectStatus(name string) string {
-	dir := s.fileRepo.GetComposeProjectDir(name)
-	cmd := exec.Command("docker", "compose", "-f", "docker-compose.yml", "ps", "--format", "json")
-	cmd.Dir = dir
+	return s.projectFromContainers(name).Status
+}
 
-	output, err := cmd.Output()
+func (s *ComposeService) projectFromContainers(name string) *model.ComposeProject {
+	project := &model.ComposeProject{
+		Name:   name,
+		Status: "stopped",
+	}
+	containers, err := s.dockerRepo.ContainerList(context.Background(), types.ContainerListOptions{All: true})
 	if err != nil {
-		return "unknown"
+		project.Status = "unknown"
+		return project
 	}
 
-	// Parse output to determine overall status
-	scanner := bufio.NewScanner(bytes.NewReader(output))
-	var running, total int
-	for scanner.Scan() {
-		total++
-		var container struct {
-			State string `json:"State"`
+	running := 0
+	for _, container := range containers {
+		if container.Labels["com.docker.compose.project"] != name {
+			continue
 		}
-		if json.Unmarshal(scanner.Bytes(), &container) == nil {
-			if container.State == "running" {
-				running++
+		if container.State == "running" {
+			running++
+		}
+		containerName := ""
+		if len(container.Names) > 0 {
+			containerName = strings.TrimPrefix(container.Names[0], "/")
+		}
+		ports := make([]string, 0, len(container.Ports))
+		for _, port := range container.Ports {
+			if port.PublicPort != 0 {
+				ports = append(ports, fmt.Sprintf("%d:%d", port.PublicPort, port.PrivatePort))
 			}
 		}
+		id := container.ID
+		if len(id) > 12 {
+			id = id[:12]
+		}
+		project.Containers = append(project.Containers, model.ComposeContainer{
+			ID:      id,
+			Name:    containerName,
+			Service: container.Labels["com.docker.compose.service"],
+			State:   container.State,
+			Status:  container.Status,
+			Ports:   strings.Join(ports, ", "),
+		})
 	}
 
-	if total == 0 {
-		return "stopped"
+	total := len(project.Containers)
+	switch {
+	case total == 0:
+		project.Status = "stopped"
+	case running == total:
+		project.Status = "running"
+	case running > 0:
+		project.Status = "partial"
+	default:
+		project.Status = "stopped"
 	}
-	if running == total {
-		return "running"
+	return project
+}
+
+func resolveComposeFile(dir string) string {
+	yml := filepath.Join(dir, "docker-compose.yml")
+	if _, err := os.Stat(yml); err == nil {
+		return yml
 	}
-	if running > 0 {
-		return "partial"
+	yaml := filepath.Join(dir, "docker-compose.yaml")
+	if _, err := os.Stat(yaml); err == nil {
+		return yaml
 	}
-	return "stopped"
+	return yml
 }

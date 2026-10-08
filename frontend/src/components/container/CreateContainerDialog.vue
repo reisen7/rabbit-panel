@@ -16,44 +16,6 @@
           label-width="120px"
           label-position="right"
         >
-          <!-- Node Selection (only shown in Master mode) -->
-          <el-form-item v-if="nodesStore.isMasterMode" :label="t('node.selectNode')" prop="nodeId">
-            <el-select
-              v-model="form.nodeId"
-              :placeholder="t('node.autoSelect')"
-              clearable
-              style="width: 100%"
-            >
-              <el-option value="" :label="t('node.autoSelect')">
-                <div class="node-option">
-                  <span>{{ t('node.autoSelect') }}</span>
-                  <el-tag size="small" type="info">{{ t('node.autoSelect') }}</el-tag>
-                </div>
-              </el-option>
-              <el-option
-                v-for="node in nodesStore.onlineNodes"
-                :key="node.id"
-                :value="node.id"
-                :label="node.name"
-              >
-                <div class="node-option">
-                  <span>{{ node.name }}</span>
-                  <span class="node-info">
-                    <el-tag size="small" type="success">{{ t('node.online') }}</el-tag>
-                    <span class="node-stats">
-                      CPU: {{ node.cpu.toFixed(1) }}% |
-                      {{ t('node.memory') }}: {{ node.memory.toFixed(1) }}%
-                    </span>
-                  </span>
-                </div>
-              </el-option>
-            </el-select>
-            <div class="node-hint">
-              <el-icon><InfoFilled /></el-icon>
-              <span>{{ nodesStore.onlineNodes.length }} {{ t('node.onlineNodes') }}</span>
-            </div>
-          </el-form-item>
-
           <!-- Image -->
           <el-form-item :label="t('container.image')" prop="image">
             <el-input v-model="form.image" placeholder="nginx:latest" />
@@ -219,13 +181,11 @@
 import { ref, reactive, computed, watch, nextTick } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import { useI18n } from '@/composables/useI18n'
 import { containerApi } from '@/api/containers'
-import { useNodesStore } from '@/stores/nodes'
 
 const { t } = useI18n()
-const nodesStore = useNodesStore()
 
 const props = defineProps<{
   visible: boolean
@@ -273,7 +233,6 @@ interface FormData {
   ports: PortMapping[]
   volumes: VolumeMapping[]
   envs: EnvVar[]
-  nodeId: string
 }
 
 const initialForm = (): FormData => ({
@@ -284,7 +243,6 @@ const initialForm = (): FormData => ({
   ports: [],
   volumes: [],
   envs: [],
-  nodeId: '',
 })
 
 const form = reactive<FormData>(initialForm())
@@ -313,8 +271,6 @@ watch(() => props.visible, (val) => {
     streamLogs.value = []
     isStreaming.value = false
     minimized.value = false
-    // Fetch nodes when dialog opens (to check if in master mode)
-    nodesStore.fetchNodes()
   }
 })
 
@@ -406,60 +362,21 @@ async function handleSubmit() {
     const ports = form.ports.filter((p) => p.host && p.container)
     const volumes = form.volumes.filter((v) => v.host && v.container)
     const envs = form.envs.filter((e) => e.key)
-    const selectedNode = form.nodeId ? nodesStore.getNodeById(form.nodeId) : null
 
-    // Check if we should schedule to a node (Master mode)
-    if (nodesStore.isMasterMode) {
-      if (selectedNode && selectedNode.mode === 'worker') {
-        const result = await nodesStore.scheduleContainer({
-          image: form.image,
-          name: form.name,
-          ports: ports.reduce<Record<string, string>>((acc, p) => {
-            acc[p.host] = `${p.host}:${p.container}`
-            return acc
-          }, {}),
-          env: envs.reduce<Record<string, string>>((acc, e) => {
-            acc[e.key] = e.value
-            return acc
-          }, {}),
-          node_id: form.nodeId,
-        })
-        streamLogs.value.push({ type: 'success', message: `${t('node.scheduleSuccess')} - ${result.node_name}` })
-        ElMessage.success(`${t('node.scheduleSuccess')} - ${result.node_name}`)
-        minimized.value = false
-      } else {
-        abortController.value = new AbortController()
-        await containerApi.createStream({
-          image: form.image,
-          name: form.name,
-          restart: form.restart,
-          network: form.network,
-          ports,
-          volumes,
-          env: envs,
-        }, (entry) => {
-          streamLogs.value.push(entry)
-        }, abortController.value.signal)
-        ElMessage.success(t('container.createSuccess'))
-        minimized.value = false
-      }
-    } else {
-      abortController.value = new AbortController()
-      await containerApi.createStream({
-        image: form.image,
-        name: form.name,
-        restart: form.restart,
-        network: form.network,
-        ports,
-        volumes,
-        env: envs,
-      }, (entry) => {
-        streamLogs.value.push(entry)
-      }, abortController.value.signal)
-
-      ElMessage.success(t('container.createSuccess'))
-      minimized.value = false
-    }
+    abortController.value = new AbortController()
+    await containerApi.createStream({
+      image: form.image,
+      name: form.name,
+      restart: form.restart,
+      network: form.network,
+      ports,
+      volumes,
+      env: envs,
+    }, (entry) => {
+      streamLogs.value.push(entry)
+    }, abortController.value.signal)
+    ElMessage.success(t('container.createSuccess'))
+    minimized.value = false
 
     emit('created')
     handleClose()
@@ -557,33 +474,6 @@ async function handleSubmit() {
 .separator {
   color: var(--el-text-color-secondary);
   font-weight: bold;
-}
-
-.node-option {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
-
-.node-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.node-stats {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.node-hint {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
 }
 
 .mini-create-task {

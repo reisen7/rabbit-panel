@@ -41,7 +41,7 @@
         <el-input
           v-model="form.password"
           type="password"
-          placeholder="Optional"
+          :placeholder="isEdit ? t('registry.passwordKeep') : 'Optional'"
           show-password
           clearable
         />

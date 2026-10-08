@@ -1,5 +1,6 @@
 import request from '@/utils/request'
 import { getToken } from '@/utils/request'
+import { targetNodeHeaders, withTargetNode } from '@/utils/targetNode'
 import type {
   ContainerInfo,
   ContainerConfig,
@@ -60,6 +61,7 @@ export const containerApi = {
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...targetNodeHeaders(),
       },
       body: JSON.stringify(data),
       signal,
@@ -137,6 +139,7 @@ export const containerApi = {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          ...targetNodeHeaders(),
         },
         body: JSON.stringify({ command }),
       })
@@ -191,13 +194,13 @@ export const containerApi = {
    */
   logs(containerId: string, tail: number | string = 100, follow: boolean = true): EventSource {
     const token = getToken()
-    return new EventSource(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=${follow}&token=${encodeURIComponent(token || '')}`)
+    return new EventSource(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=${follow}&token=${encodeURIComponent(token || '')}`))
   },
 
   async logsOnce(containerId: string, tail: number | string = 'all'): Promise<string[]> {
     const token = getToken()
-    const response = await fetch(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=false&token=${encodeURIComponent(token || '')}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    const response = await fetch(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=false&token=${encodeURIComponent(token || '')}`), {
+      headers: token ? { Authorization: `Bearer ${token}`, ...targetNodeHeaders() } : targetNodeHeaders(),
     })
     if (!response.ok) {
       throw new Error(await response.text() || `HTTP ${response.status}`)
@@ -352,7 +355,7 @@ export const containerApi = {
    */
   fileDownload(containerId: string, path: string): string {
     const token = getToken()
-    return `/api/containers/files/download?id=${encodeURIComponent(containerId)}&path=${encodeURIComponent(path)}&token=${encodeURIComponent(token || '')}`
+    return withTargetNode(`/api/containers/files/download?id=${encodeURIComponent(containerId)}&path=${encodeURIComponent(path)}&token=${encodeURIComponent(token || '')}`)
   },
 
   /**
@@ -363,7 +366,7 @@ export const containerApi = {
   getTerminalWsUrl(containerId: string): string {
     const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/api/containers/terminal?id=${encodeURIComponent(containerId)}&token=${encodeURIComponent(token || '')}`
+    return withTargetNode(`${protocol}//${window.location.host}/api/containers/terminal?id=${encodeURIComponent(containerId)}&token=${encodeURIComponent(token || '')}`)
   },
 }
 

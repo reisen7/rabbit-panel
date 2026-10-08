@@ -350,6 +350,8 @@ export default {
     noNodes: 'No nodes',
     notMasterMode: 'Current node is not in Master mode, cannot manage other nodes',
     selectNode: 'Select Node',
+    switchNode: 'Current node',
+    nodeOfflineSwitched: 'Selected node is offline. Switched back to Master.',
     autoSelect: 'Auto-select best node',
     scheduleSuccess: 'Container scheduled successfully',
     scheduleFailed: 'Failed to schedule container',
@@ -405,12 +407,14 @@ export default {
   // Registry
   registry: {
     title: 'Registry Management',
+    usage: 'Saved credentials are used automatically when pulling images from this registry, including pulls while creating a container. Leave the password blank when editing to keep the current one.',
     add: 'Add Registry',
     edit: 'Edit Registry',
     name: 'Name',
     url: 'URL',
     username: 'Username',
     password: 'Password',
+    passwordKeep: 'Leave blank to keep the current password',
     testConnection: 'Test Connection',
     testing: 'Testing...',
     testSuccess: 'Connection successful',
@@ -444,10 +448,11 @@ export default {
     addMirror: 'Add Mirror',
     mirrorPlaceholder: 'e.g., https://mirror.example.com',
 
-    insecureRegistries: 'Insecure Registries',
-    insecureRegistriesHelp: 'Allow HTTP registries',
-    addRegistry: 'Add Registry',
+    insecureRegistries: 'HTTP registries',
+    insecureRegistriesHelp: 'Choose addresses from Registry Management that must be allowed over HTTP. HTTPS registries do not need to be listed.',
+    addRegistry: 'Add address',
     registryPlaceholder: 'e.g., 192.168.1.100:5000',
+    registrySelectPlaceholder: 'Select a registry address',
 
     ipv6: 'IPv6 Support',
     ipv6Help: 'Enable IPv6 networking for Docker',

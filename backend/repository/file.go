@@ -116,18 +116,16 @@ func (r *FileRepository) CreateComposeProject(name, content string) error {
 		return err
 	}
 
-	// 尝试 .yml 或 .yaml 扩展名
-	filePath := filepath.Join(dir, "docker-compose.yml")
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		filePath = filepath.Join(dir, "docker-compose.yaml")
+	ymlPath := filepath.Join(dir, "docker-compose.yml")
+	yamlPath := filepath.Join(dir, "docker-compose.yaml")
+	if _, err := os.Stat(ymlPath); err == nil {
+		return nil
 	}
-
-	// 如果已存在 docker-compose 文件，直接返回成功
-	if _, err := os.Stat(filePath); err == nil {
+	if _, err := os.Stat(yamlPath); err == nil {
 		return nil
 	}
 
-	return os.WriteFile(filePath, []byte(content), 0644)
+	return os.WriteFile(ymlPath, []byte(content), 0644)
 }
 
 // GetComposeFile 获取 Compose 文件内容

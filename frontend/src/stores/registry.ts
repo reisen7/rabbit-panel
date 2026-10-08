@@ -18,6 +18,11 @@ export const useRegistryStore = defineStore('registry', () => {
   /**
    * Fetch registries from API
    */
+  function prepareNodeSwitch(): void {
+    registries.value = []
+    error.value = null
+  }
+
   async function fetchRegistries(): Promise<void> {
     try {
       loading.value = true
@@ -73,6 +78,7 @@ export const useRegistryStore = defineStore('registry', () => {
     loading,
     error,
     // Actions
+    prepareNodeSwitch,
     fetchRegistries,
     createRegistry,
     updateRegistry,

@@ -111,6 +111,12 @@ export const useVolumeStore = defineStore('volumes', () => {
   /**
    * Fetch volumes from API
    */
+  function prepareNodeSwitch(): void {
+    volumes.value = []
+    currentPage.value = 1
+    error.value = null
+  }
+
   async function fetchVolumes(): Promise<void> {
     try {
       loading.value = true
@@ -210,6 +216,7 @@ export const useVolumeStore = defineStore('volumes', () => {
     totalVolumes,
     unusedCount,
     // Actions
+    prepareNodeSwitch,
     fetchVolumes,
     createVolume,
     removeVolume,

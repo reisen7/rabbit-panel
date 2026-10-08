@@ -29,6 +29,7 @@ import (
 type AgentService struct {
 	sqliteRepo  *repository.SQLiteRepository
 	dockerRepo  repository.IDockerRepository
+	registry    *RegistryService
 
 	config      AgentConfig
 	configMutex sync.RWMutex
@@ -54,6 +55,11 @@ func NewAgentService(sr *repository.SQLiteRepository, dr repository.IDockerRepos
 		log.Printf("[Agent] load config failed: %v", err)
 	}
 	return service
+}
+
+// UseRegistry 让拉镜像时使用已保存的仓库账号。
+func (s *AgentService) UseRegistry(registry *RegistryService) {
+	s.registry = registry
 }
 
 // GetConfig 获取配置
@@ -488,7 +494,11 @@ func (s *AgentService) executeTool(ctx context.Context, command string) string {
 		if arg1 == "" {
 			return "Missing image name"
 		}
-		out, err := s.dockerRepo.ImagePull(ctx, arg1, types.ImagePullOptions{})
+		opts := types.ImagePullOptions{}
+		if s.registry != nil {
+			opts = s.registry.PullOptions(arg1)
+		}
+		out, err := s.dockerRepo.ImagePull(ctx, arg1, opts)
 		if err != nil {
 			return fmt.Sprintf("❌ Error pulling: %v", err)
 		}

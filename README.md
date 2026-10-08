@@ -83,6 +83,8 @@ docker compose -f docker-compose.worker.yml up -d
 - `PORT=3958`
 - `JWT_SECRET=...`
 - `NODE_SECRET=...`
+- `NODE_NAME=worker-1` Worker 显示名称；Master 不填时显示为 `master`
+- `NODE_ADDRESS=192.168.1.20:10001` Master 能访问到的 Worker 地址
 - `RABBIT_UPDATE_CHECK_DISABLED=true` 跳过更新检查（不再请求 `MANIFEST_URL`，界面不显示更新提示）
 
 默认账户：

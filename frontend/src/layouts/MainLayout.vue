@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Bell,
@@ -23,6 +23,12 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
+import { useNodesStore } from '@/stores/nodes'
+import { useContainerStore } from '@/stores/containers'
+import { useNetworkStore } from '@/stores/networks'
+import { useVolumeStore } from '@/stores/volumes'
+import { useComposeStore } from '@/stores/compose'
+import { useRegistryStore } from '@/stores/registry'
 import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import { useUpdateStore } from '@/stores/update'
@@ -36,6 +42,12 @@ import mikuDark from '@/assets/miku-dark.svg'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const nodesStore = useNodesStore()
+const containerStore = useContainerStore()
+const networkStore = useNetworkStore()
+const volumeStore = useVolumeStore()
+const composeStore = useComposeStore()
+const registryStore = useRegistryStore()
 const updateStore = useUpdateStore()
 const { theme, toggleTheme } = useTheme()
 const { language, t, setLanguage } = useI18n()
@@ -137,12 +149,43 @@ function toggleDrawer() {
   drawerVisible.value = !drawerVisible.value
 }
 
+const selectedNodeId = computed({
+  get: () => nodesStore.currentNodeId,
+  set: (id: string) => nodesStore.setCurrentNode(id),
+})
+
+const currentNodeName = computed(() => {
+  return nodesStore.nodes.find(node => node.id === nodesStore.currentNodeId)?.name || t('node.master')
+})
+
+watch(() => nodesStore.currentNodeId, (id, prev) => {
+  if (id === prev) return
+  containerStore.prepareNodeSwitch()
+  networkStore.prepareNodeSwitch()
+  volumeStore.prepareNodeSwitch()
+  composeStore.prepareNodeSwitch()
+  registryStore.prepareNodeSwitch()
+  containerStore.fetchContainers()
+  networkStore.fetchNetworks()
+  volumeStore.fetchVolumes()
+  composeStore.fetchProjects()
+  registryStore.fetchRegistries()
+})
+
+watch(() => nodesStore.fellBackToMaster, (fellBack) => {
+  if (!fellBack) return
+  ElMessage.warning(t('node.nodeOfflineSwitched'))
+  nodesStore.acknowledgeFallback()
+})
+
 onMounted(() => {
   window.addEventListener('resize', handleResize)
+  nodesStore.startPolling()
 })
 
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+  nodesStore.stopPolling()
 })
 </script>
 
@@ -161,6 +204,24 @@ onUnmounted(() => {
         </el-menu-item>
       </el-menu>
 
+      <div v-if="nodesStore.isMasterMode" class="node-switcher" :class="{ collapsed: isCollapse }">
+        <template v-if="!isCollapse">
+          <div class="node-switcher-label">{{ t('node.switchNode') }}</div>
+          <el-select v-model="selectedNodeId" size="small">
+            <el-option
+              v-for="node in nodesStore.nodes"
+              :key="node.id"
+              :label="node.name"
+              :value="node.id"
+              :disabled="node.status !== 'online'"
+            />
+          </el-select>
+        </template>
+        <el-tooltip v-else :content="currentNodeName" placement="right">
+          <el-icon :size="20" @click="isCollapse = false"><Cpu /></el-icon>
+        </el-tooltip>
+      </div>
+
       <div class="collapse-btn" @click="isCollapse = !isCollapse">
         <el-icon :size="20"><component :is="isCollapse ? Expand : Fold" /></el-icon>
       </div>
@@ -178,6 +239,19 @@ onUnmounted(() => {
           <span>{{ item.title }}</span>
         </el-menu-item>
       </el-menu>
+
+      <div v-if="nodesStore.isMasterMode" class="drawer-node-switcher">
+        <div class="node-switcher-label">{{ t('node.switchNode') }}</div>
+        <el-select v-model="selectedNodeId" size="small">
+          <el-option
+            v-for="node in nodesStore.nodes"
+            :key="node.id"
+            :label="node.name"
+            :value="node.id"
+            :disabled="node.status !== 'online'"
+          />
+        </el-select>
+      </div>
 
       <div class="drawer-footer">
         <div class="drawer-user-info">
@@ -207,6 +281,20 @@ onUnmounted(() => {
         <div class="header-left">
           <el-button v-if="isMobile" :icon="Menu" class="mobile-menu-btn" @click="toggleDrawer" />
           <SystemMonitor />
+          <el-select
+            v-if="nodesStore.isMasterMode"
+            v-model="selectedNodeId"
+            class="header-node-select"
+            size="small"
+          >
+            <el-option
+              v-for="node in nodesStore.nodes"
+              :key="node.id"
+              :label="node.name"
+              :value="node.id"
+              :disabled="node.status !== 'online'"
+            />
+          </el-select>
           <el-tag size="small" effect="plain" class="version-tag">
             {{ updateStore.info?.current_version || 'dev' }}
           </el-tag>
@@ -331,6 +419,35 @@ onUnmounted(() => {
   width: 100%;
 }
 
+.node-switcher {
+  padding: 10px 12px 6px;
+  border-top: 1px solid var(--rp-border-color);
+}
+
+.node-switcher.collapsed {
+  display: flex;
+  justify-content: center;
+  padding: 10px 0;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+}
+
+.node-switcher-label {
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+
+.node-switcher :deep(.el-select),
+.drawer-node-switcher :deep(.el-select) {
+  width: 100%;
+}
+
+.drawer-node-switcher {
+  padding: 12px 16px;
+  border-top: 1px solid var(--rp-border-color);
+}
+
 .collapse-btn {
   height: 48px;
   display: flex;
@@ -361,6 +478,10 @@ onUnmounted(() => {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+.header-node-select {
+  width: 180px;
 }
 
 .version-tag {

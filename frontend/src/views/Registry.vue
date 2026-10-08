@@ -2,7 +2,10 @@
   <div class="registry-page">
     <!-- Header with title and actions -->
     <div class="page-header">
-      <h2>{{ t('registry.title') }}</h2>
+      <div>
+        <h2>{{ t('registry.title') }}</h2>
+        <p class="page-desc">{{ t('registry.usage') }}</p>
+      </div>
       <div class="header-actions">
         <el-button type="primary" @click="handleAdd">
           <el-icon><Plus /></el-icon>
@@ -201,6 +204,13 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
+}
+
+.page-desc {
+  margin: 6px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .header-actions {

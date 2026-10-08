@@ -35,6 +35,7 @@ export const registryApi = {
     const response = await request.post<RegistryInfo>('/registries/create', {
       ...data,
       url: data.url || id,
+      previous_url: id,
     })
     return response.data
   },

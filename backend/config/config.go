@@ -124,11 +124,19 @@ func (app *App) initServices() {
 	app.RegistryService = service.NewRegistryService(app.FileRepo)
 	app.DockerConfigService = service.NewDockerConfigService()
 	app.AgentService = service.NewAgentService(app.SQLiteRepo, app.DockerRepo)
+	app.AgentService.UseRegistry(app.RegistryService)
 	app.UpdateService = service.NewUpdateService(app.FileRepo, app.BuildInfo)
 
 	// Master-only services
 	if app.Mode == "master" {
-		app.Scheduler = service.NewScheduler(app.NodeService, app.DockerRepo, app.NodeSecret)
+		app.Scheduler = service.NewScheduler(app.NodeService, app.DockerRepo, app.NodeSecret, app.RegistryService)
+	}
+	if app.Mode == "worker" {
+		app.NodeService.StartWorker(
+			getEnv("MASTER_URL", ""),
+			getEnv("NODE_NAME", ""),
+			getEnv("NODE_ADDRESS", ""),
+		)
 	}
 
 	// Terminal service

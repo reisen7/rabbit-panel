@@ -1,31 +1,112 @@
-﻿# Repository Guidelines
+﻿# CLAUDE.md
 
-## Project Structure & Module Organization
-`backend/` contains the Go application. Entry starts at `backend/main.go`; dependency wiring lives in `backend/config/config.go`; HTTP routes and handlers are in `backend/router/`; business logic is in `backend/service/`; storage adapters are in `backend/repository/`.  
-`frontend/` contains the Vue 3 app. Views live in `frontend/src/views/`, shared UI in `frontend/src/components/`, API wrappers in `frontend/src/api/`, and Pinia stores in `frontend/src/stores/`.  
-Frontend build output is written to `backend/.dist/` and served by the backend. Do not hand-edit `frontend/src/auto-imports.d.ts` or `frontend/src/components.d.ts`.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Build, Test, and Development Commands
-- `cd backend && go run main.go` runs the backend locally on `:3958`.
-- `cd frontend && npm install && npm run dev` starts the Vite dev server on `:3000` with API proxying.
-- `./rabbit.sh build` builds frontend and backend release artifacts.
-- `./rabbit.sh build --skip-frontend` rebuilds backend only.
-- `cd frontend && npm run build` produces the frontend bundle in `backend/.dist`.
-- `cd frontend && npm run test` runs Vitest once.
+## Project Overview
 
-## Coding Style & Naming Conventions
-Use Go defaults: tabs for indentation, exported names in `PascalCase`, internal helpers in `camelCase`. Keep handlers thin and put logic in `service/`.  
-In Vue/TypeScript, use 2-space indentation, `PascalCase.vue` for components, and `camelCase` for composables, stores, and utilities. Follow existing API naming such as `/api/system/*` and keep state management in Pinia stores rather than components.
+Rabbit Panel is an AI-powered, lightweight Docker container management panel built with Go (backend) and Vue 3 (frontend). It supports multi-node management (Master/Worker architecture), runs as a single static binary with no external database, and targets resource-constrained devices (4GB+ RAM, ARM64/armv7/x86_64).
 
-## Testing Guidelines
-Frontend tests use Vitest with `jsdom`. Test files must be placed under `frontend/tests/` and match `*.test.ts` or `*.spec.ts`; files outside that tree are ignored.  
-Backend currently has no established test suite, so at minimum verify changes with `go build ./...` and a targeted manual smoke test. For UI changes, include a successful `npm run build`.
+## Build & Run Commands
 
-## Commit & Pull Request Guidelines
-Recent history favors short, direct subjects in Chinese, for example `新增功能: AI 运维助手` or `重构后端模块边界`. Keep commit messages imperative and specific.  
-PRs should include: purpose, scope, affected backend/frontend areas, test/build results, and screenshots for visible UI changes. Link related issues when applicable.
+### Development
 
-## Security & Configuration Tips
-Production settings come from environment variables such as `PORT`, `JWT_SECRET`, `NODE_SECRET`, and update-related `RABBIT_*` variables. Never commit secrets.  
-For Docker deployments, prefer `docker-compose.deploy.yml`; for binary deployments, remember frontend changes require rebuilding `backend/.dist` before rebuilding the backend binary.
+**Frontend (hot-reload dev server):**
+```bash
+cd frontend && npm install && npm run dev
+# Runs on http://localhost:3000, proxies API to backend at localhost:3958
+```
 
+**Backend (local):**
+```bash
+cd backend && go run main.go
+# Listens on 0.0.0.0:3958 by default
+```
+
+### Production Build
+
+```bash
+./rabbit.sh build                  # Builds frontend + backend for current host architecture
+./rabbit.sh build all              # Cross-compile all architectures (amd64, arm64, armv7)
+./rabbit.sh build arm64            # Cross-compile for ARM64
+./rabbit.sh build --skip-frontend  # Skip frontend build (use existing .dist/)
+```
+
+### Runtime Management
+
+```bash
+./rabbit.sh start    # Start the panel
+./rabbit.sh stop     # Stop the panel
+./rabbit.sh restart  # Restart
+./rabbit.sh status   # Check running status
+./rabbit.sh log      # Tail log file
+```
+
+### Frontend Tests
+
+```bash
+cd frontend && npm run test          # Run tests once
+npm run test:watch                   # Watch mode
+npm run test:coverage                # With coverage report
+```
+
+## Architecture
+
+### Backend (Go, `/backend`)
+
+Multi-package Go application using **Gin Web Framework**. Entry point is `main.go` which wires up the `App` struct (dependency injection container) and starts the Gin engine. Key packages:
+
+| Package | Responsibility |
+|---------|---------------|
+| `config/` | App struct, env var loading, all service/repository injection |
+| `router/` | All HTTP/WebSocket handlers (Gin), route registration |
+| `service/` | Business logic layer (ContainerService, ImageService, etc.) |
+| `repository/` | Data access layer — Docker API, SQLite, files |
+| `middleware/` | JWT auth middleware, node auth middleware |
+| `exec/` | Container terminal (WebSocket ↔ docker exec) |
+| `agent/` | AI agent prompt templates |
+| `tool/` | System stats utilities (CPU, memory, disk — Linux only) |
+| `model/` | Data models |
+
+**Architecture:**
+- All services injected via `App` struct — no globals
+- `IDockerRepository` interface wraps `*docker/client.Client` (testable)
+- `ICacheRepository` for in-memory caches
+- `ISQLiteRepository` for auth/sessions
+- Frontend assets embedded via `//go:embed .dist`
+
+**Data storage:** SQLite at `backend/data/auth.db` (modernc.org/sqlite, CGO-free) + JSON config at `backend/data/agent.json`. No external database required.
+
+**Frontend assets** are embedded at compile time via `//go:embed .dist`.
+
+### Frontend (Vue 3 + TypeScript, `/frontend/src`)
+
+- **Views** (`views/`): Page-level components — Dashboard, Containers, Images, Networks, Volumes, Registry, DockerConfig, Compose, Nodes, Login, AgentChat, AgentSettings
+- **API clients** (`api/`): One file per backend resource (auth.ts, containers.ts, images.ts, etc.)
+- **Pinia stores** (`stores/`): State management per feature domain
+- **Locales** (`locales/`): i18n translations (Chinese/English)
+- **Types** (`types/`): Shared TypeScript interfaces
+
+The frontend is built by Vite into `backend/.dist/` and embedded into the Go binary.
+
+### Multi-Node Architecture
+
+- **Master**: Runs the full web UI + API, orchestrates workers
+- **Worker**: Registers with master via `MASTER_URL`, receives container exec/scheduler commands, exposes only internal API endpoints
+- **Communication**: Workers poll master heartbeat; master dispatches container operations to workers via HTTP; auth uses HMAC-SHA256 via shared `NODE_SECRET`
+
+Environment variables `MODE` (master/worker), `JWT_SECRET`, `NODE_SECRET`, `MASTER_URL`, `PORT`, `HOST` control runtime behavior.
+
+## Key Frameworks & Dependencies
+
+**Backend:** Go 1.25, gin-gonic/gin v1.12, docker/docker v25, gorilla/websocket, golang-jwt/jwt/v5, modernc.org/sqlite
+
+**Frontend:** Vue 3.5, Vite 7, Element Plus 2, Pinia 3, Vue Router 4, Vue i18n 11, ECharts + vue-echarts, Xterm.js 6, Axios, Marked
+
+## Important Notes
+
+- Default credentials: `admin` / `admin` (password must be changed on first login)
+- Default port: `3958`
+- Docker socket must be mounted into the container/binary for container management
+- Time sync between Master and Worker nodes must be within 1 hour (node auth uses JWT with 1-hour tolerance)
+- The backend's WebSocket terminal handler lives in `router/router.go` — any changes to the exec/session protocol should be tested against the xterm.js frontend client
+- Set `RABBIT_UPDATE_CHECK_DISABLED=true` to skip the update check (no outbound `MANIFEST_URL` fetch) — see `backend/service/update.go`

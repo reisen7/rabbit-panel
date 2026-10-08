@@ -39,7 +39,7 @@ export const nodesApi = {
    * @returns Array of node information
    */
   async list(): Promise<NodeInfo[]> {
-    const response = await request.get<NodeInfo[]>('/nodes')
+    const response = await request.get<NodeInfo[]>('/nodes', { suppressErrorMessage: true })
     return response.data
   },
 

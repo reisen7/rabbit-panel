@@ -350,6 +350,8 @@ export default {
     noNodes: '暂无节点',
     notMasterMode: '当前节点不是 Master 模式，无法管理其他节点',
     selectNode: '选择节点',
+    switchNode: '当前节点',
+    nodeOfflineSwitched: '所选节点已离线，已切回 Master',
     autoSelect: '自动选择最佳节点',
     scheduleSuccess: '容器调度成功',
     scheduleFailed: '容器调度失败',
@@ -405,12 +407,14 @@ export default {
   // Registry
   registry: {
     title: '仓库管理',
+    usage: '保存的账号会在拉取这个仓库的镜像时自动使用，包括创建容器时的拉镜像。编辑时密码留空则保持原密码。',
     add: '添加仓库',
     edit: '编辑仓库',
     name: '仓库名称',
     url: '仓库地址',
     username: '用户名',
     password: '密码',
+    passwordKeep: '留空则保持原密码',
     testConnection: '测试连接',
     testing: '测试中...',
     testSuccess: '连接成功',
@@ -444,10 +448,11 @@ export default {
     addMirror: '添加加速器',
     mirrorPlaceholder: '例如：https://mirror.example.com',
 
-    insecureRegistries: '私有仓库',
-    insecureRegistriesHelp: '允许使用 HTTP 协议的私有仓库',
-    addRegistry: '添加私有仓库',
+    insecureRegistries: '允许 HTTP 的仓库',
+    insecureRegistriesHelp: '从仓库管理里选择需要允许 HTTP 访问的地址。使用 HTTPS 的仓库不用选。',
+    addRegistry: '添加地址',
     registryPlaceholder: '例如：192.168.1.100:5000',
+    registrySelectPlaceholder: '选择仓库地址',
 
     ipv6: 'IPv6 支持',
     ipv6Help: '启用 Docker 的 IPv6 网络支持',

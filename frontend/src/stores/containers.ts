@@ -120,6 +120,12 @@ export const useContainerStore = defineStore('containers', () => {
   /**
    * Fetch containers from API
    */
+  function prepareNodeSwitch(): void {
+    containers.value = []
+    currentPage.value = 1
+    error.value = null
+  }
+
   async function fetchContainers(): Promise<void> {
     try {
       loading.value = true
@@ -240,6 +246,7 @@ export const useContainerStore = defineStore('containers', () => {
     totalPages,
     totalContainers,
     // Actions
+    prepareNodeSwitch,
     fetchContainers,
     containerAction,
     setSearch,

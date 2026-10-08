@@ -16,7 +16,7 @@ import (
 
 // JWTClaims JWT Claims
 type JWTClaims struct {
-	Username            string `json:"username"`
+	Username           string `json:"username"`
 	NeedChangePassword bool   `json:"need_change_password"`
 	jwt.RegisteredClaims
 }
@@ -59,7 +59,7 @@ func AuthMiddleware(jwtSecret []byte, publicPaths ...string) gin.HandlerFunc {
 		// Check if password change required
 		if claims.NeedChangePassword && path != "/api/auth/change-password" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error":                 "需要修改密码",
+				"error":                "需要修改密码",
 				"need_change_password": true,
 			})
 			return
@@ -95,7 +95,7 @@ func validateToken(tokenString string, jwtSecret []byte) (*JWTClaims, error) {
 // GenerateToken generates a JWT token for the given user
 func GenerateToken(username string, needChangePassword bool, jwtSecret []byte) (string, error) {
 	claims := &JWTClaims{
-		Username:            username,
+		Username:           username,
 		NeedChangePassword: needChangePassword,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
@@ -173,7 +173,7 @@ func AuthOrNodeMiddleware(jwtSecret []byte, nodeSecret string, publicPaths ...st
 
 		if claims.NeedChangePassword && path != "/api/auth/change-password" {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"error":                 "需要修改密码",
+				"error":                "需要修改密码",
 				"need_change_password": true,
 			})
 			return
@@ -207,6 +207,23 @@ func ValidateNodeToken(nodeID, token, secret string) bool {
 func ValidateToken(tokenString string, jwtSecret []byte) bool {
 	_, err := validateToken(tokenString, jwtSecret)
 	return err == nil
+}
+
+// TokenFromRequest 从 Authorization、Cookie 或 token 查询参数中取出用户令牌。
+func TokenFromRequest(r *http.Request) string {
+	token := r.Header.Get("Authorization")
+	if token != "" {
+		return strings.TrimPrefix(token, "Bearer ")
+	}
+	if cookie, err := r.Cookie("token"); err == nil && cookie.Value != "" {
+		return cookie.Value
+	}
+	return r.URL.Query().Get("token")
+}
+
+// ParseUserToken 解析用户 JWT，供需要在转发前确认登录态的逻辑使用。
+func ParseUserToken(tokenString string, jwtSecret []byte) (*JWTClaims, error) {
+	return validateToken(tokenString, jwtSecret)
 }
 
 // RateLimitMiddleware creates a rate limiting middleware.

@@ -210,7 +210,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { Refresh, Search, Monitor, CircleCheck, CircleClose } from '@element-plus/icons-vue'
 import { useNodesStore } from '@/stores/nodes'
 import { useI18n } from '@/composables/useI18n'
@@ -283,14 +283,8 @@ function formatLastSeen(lastSeen: string): string {
   }
 }
 
-// Start polling on mount
 onMounted(() => {
   nodesStore.startPolling()
-})
-
-// Stop polling on unmount
-onUnmounted(() => {
-  nodesStore.stopPolling()
 })
 </script>
 

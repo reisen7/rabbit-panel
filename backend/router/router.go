@@ -13,6 +13,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"os/exec"
 	"path"
 	"runtime"
@@ -49,6 +50,9 @@ func NewRouter(app *config2.App) *Router {
 func (r *Router) Register() {
 	app := r.app
 	engine := app.Engine
+	if app.Mode == "master" {
+		engine.Use(r.containerNodeProxy())
+	}
 
 	// Middleware
 	authMW := middleware.AuthMiddleware(app.JWTSecret, "/api/auth/login", "/api/health")
@@ -174,12 +178,16 @@ func (r *Router) Register() {
 		apiAuth.GET("/containers/all", r.handleAllContainers)
 	}
 
-	// SPA fallback - serve static files
+	// SPA fallback - serve static files. Worker 只提供接口，不提供面板页面。
 	engine.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
 		// Skip API routes
 		if strings.HasPrefix(path, "/api/") {
 			c.Status(http.StatusNotFound)
+			return
+		}
+		if app.Mode != "master" {
+			c.Data(http.StatusOK, "text/html; charset=utf-8", []byte(workerOnlyPage()))
 			return
 		}
 		// Handle static asset prefixes
@@ -191,6 +199,29 @@ func (r *Router) Register() {
 		}
 		serveEmbeddedFile(c, r.app.StaticFS, path)
 	})
+}
+
+func workerOnlyPage() string {
+	masterURL := strings.TrimSpace(os.Getenv("MASTER_URL"))
+	hint := "请通过 Master 面板查看和操作。"
+	if masterURL != "" {
+		hint = "请打开 Master 面板：" + masterURL
+	}
+	return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rabbit Panel Worker</title>
+</head>
+<body style="margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:#111;color:#eee;font-family:sans-serif">
+  <div style="max-width:520px;padding:32px">
+    <h1 style="margin:0 0 12px;font-size:28px">这是 Worker 节点</h1>
+    <p style="margin:0;line-height:1.6;color:#bbb">此节点不提供管理界面。容器、日志和终端都在 Master 上查看和操作。</p>
+    <p style="margin:16px 0 0;line-height:1.6">` + hint + `</p>
+  </div>
+</body>
+</html>`
 }
 
 func serveEmbeddedFile(c *gin.Context, embeddedFS fs.FS, path string) {
@@ -417,7 +448,7 @@ func (r *Router) handleContainerRun(c *gin.Context) {
 	// Pull image if needed
 	_, _, err := r.app.DockerRepo.ImageInspectWithRaw(ctx, reqBody.Image)
 	if err != nil {
-		reader, err := r.app.DockerRepo.ImagePull(ctx, reqBody.Image, types.ImagePullOptions{})
+		reader, err := r.app.DockerRepo.ImagePull(ctx, reqBody.Image, r.app.RegistryService.PullOptions(reqBody.Image))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("拉取镜像失败: %v", err)})
 			return
@@ -536,7 +567,7 @@ func (r *Router) handleContainerRunStream(c *gin.Context) {
 	_, _, err := r.app.DockerRepo.ImageInspectWithRaw(ctx, reqBody.Image)
 	if err != nil {
 		sendLog(fmt.Sprintf("镜像 %s 不存在，开始拉取...", reqBody.Image))
-		reader, err := r.app.DockerRepo.ImagePull(ctx, reqBody.Image, types.ImagePullOptions{})
+		reader, err := r.app.DockerRepo.ImagePull(ctx, reqBody.Image, r.app.RegistryService.PullOptions(reqBody.Image))
 		if err != nil {
 			sendError(fmt.Sprintf("拉取镜像失败: %v", err))
 			return
@@ -1843,21 +1874,22 @@ func (r *Router) handleRegistriesList(c *gin.Context) {
 func (r *Router) handleRegistriesCreate(c *gin.Context) {
 	var reqBody struct {
 		Name     string `json:"name"`
-		URL      string `json:"url"`
-		Username string `json:"username"`
-		Password string `json:"password"`
+		URL         string `json:"url"`
+		Username    string `json:"username"`
+		Password    string `json:"password"`
+		PreviousURL string `json:"previous_url"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
 		return
 	}
 
-	err := r.app.RegistryService.CreateRegistry(&repository.RegistryRecord{
+	err := r.app.RegistryService.SaveRegistry(&repository.RegistryRecord{
 		Name:     reqBody.Name,
 		URL:      reqBody.URL,
 		Username: reqBody.Username,
 		Password: reqBody.Password,
-	})
+	}, reqBody.PreviousURL)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -2139,7 +2171,7 @@ func (r *Router) handleNodeHeartbeat(c *gin.Context) {
 		CPU:    reqBody.CPU,
 		Memory: reqBody.Memory,
 		Disk:   reqBody.Disk,
-	})
+	}, reqBody.Containers)
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 

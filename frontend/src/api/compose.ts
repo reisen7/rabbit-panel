@@ -1,6 +1,7 @@
 import request from '@/utils/request'
 import type { ComposeProject } from '@/types'
 import { getToken } from '@/utils/request'
+import { targetNodeHeaders } from '@/utils/targetNode'
 
 /**
  * Compose action SSE callback
@@ -94,7 +95,8 @@ export const composeApi = {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        ...targetNodeHeaders(),
       },
       body: JSON.stringify({ project, action }),
       signal: controller.signal

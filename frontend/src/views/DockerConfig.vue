@@ -114,10 +114,20 @@
               :key="index"
               class="list-item"
             >
-              <el-input
+              <el-select
                 v-model="formData.insecureRegistries[index]"
-                :placeholder="t('dockerConfig.registryPlaceholder')"
-              />
+                filterable
+                class="registry-select"
+                :placeholder="t('dockerConfig.registrySelectPlaceholder')"
+              >
+                <el-option
+                  v-for="option in registryOptions"
+                  :key="option.value"
+                  :label="option.label"
+                  :value="option.value"
+                  :disabled="isRegistrySelected(option.value, index)"
+                />
+              </el-select>
               <el-button
                 type="danger"
                 :icon="Delete"
@@ -274,11 +284,13 @@ import {
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { useDockerConfigStore } from '@/stores/dockerConfig'
+import { useRegistryStore } from '@/stores/registry'
 import { useI18n } from '@/composables/useI18n'
 import type { DockerConfig } from '@/types'
 
 const { t } = useI18n()
 const dockerConfigStore = useDockerConfigStore()
+const registryStore = useRegistryStore()
 
 // Form data
 const formData = reactive<DockerConfig>({
@@ -312,7 +324,7 @@ watch(
   (config) => {
     if (config) {
       formData.registryMirrors = [...(config.registryMirrors || [])]
-      formData.insecureRegistries = [...(config.insecureRegistries || [])]
+      formData.insecureRegistries = (config.insecureRegistries || []).map(registryHost).filter(Boolean)
       formData.ipv6 = config.ipv6 ?? false
       formData.logDriver = config.logDriver || 'json-file'
       formData.logOpts = config.logOpts ? { ...config.logOpts } : { 'max-size': '10m', 'max-file': '3' }
@@ -331,6 +343,36 @@ function addMirror() {
 
 function removeMirror(index: number) {
   formData.registryMirrors.splice(index, 1)
+}
+
+function registryHost(url: string): string {
+  let value = url.trim()
+  value = value.replace(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//, '')
+  const slash = value.indexOf('/')
+  if (slash >= 0) {
+    value = value.slice(0, slash)
+  }
+  return value
+}
+
+const registryOptions = computed(() => {
+  const options = new Map<string, string>()
+  for (const registry of registryStore.registries) {
+    const host = registryHost(registry.url || '')
+    if (!host || options.has(host)) continue
+    options.set(host, registry.name ? `${registry.name}（${host}）` : host)
+  }
+  for (const current of formData.insecureRegistries) {
+    const host = registryHost(current)
+    if (host && !options.has(host)) {
+      options.set(host, host)
+    }
+  }
+  return Array.from(options, ([value, label]) => ({ value, label }))
+})
+
+function isRegistrySelected(host: string, currentIndex: number): boolean {
+  return formData.insecureRegistries.some((item, index) => index !== currentIndex && registryHost(item) === host)
 }
 
 // Insecure registry list handlers
@@ -388,6 +430,7 @@ async function handleRestart() {
 // Fetch config on mount
 onMounted(() => {
   dockerConfigStore.fetchConfig()
+  registryStore.fetchRegistries()
 })
 </script>
 
@@ -462,7 +505,8 @@ onMounted(() => {
   align-items: center;
 }
 
-.list-item .el-input {
+.list-item .el-input,
+.list-item .registry-select {
   flex: 1;
 }
 

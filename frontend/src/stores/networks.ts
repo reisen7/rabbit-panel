@@ -115,6 +115,12 @@ export const useNetworkStore = defineStore('networks', () => {
   /**
    * Fetch networks from API
    */
+  function prepareNodeSwitch(): void {
+    networks.value = []
+    currentPage.value = 1
+    error.value = null
+  }
+
   async function fetchNetworks(): Promise<void> {
     try {
       loading.value = true
@@ -243,6 +249,7 @@ export const useNetworkStore = defineStore('networks', () => {
     totalPages,
     totalNetworks,
     // Actions
+    prepareNodeSwitch,
     fetchNetworks,
     createNetwork,
     removeNetwork,

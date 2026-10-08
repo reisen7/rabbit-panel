@@ -47,6 +47,14 @@ export const useComposeStore = defineStore('compose', () => {
   /**
    * Fetch all Compose projects
    */
+  function prepareNodeSwitch(): void {
+    projects.value = []
+    selectedProject.value = null
+    fileContent.value = ''
+    actionOutput.value = ''
+    error.value = null
+  }
+
   async function fetchProjects(): Promise<void> {
     try {
       loading.value = true
@@ -200,6 +208,7 @@ export const useComposeStore = defineStore('compose', () => {
     filteredProjects,
     currentProject,
     // Actions
+    prepareNodeSwitch,
     fetchProjects,
     createProject,
     deleteProject,

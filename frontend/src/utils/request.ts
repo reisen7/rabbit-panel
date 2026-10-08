@@ -1,6 +1,7 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
 import router from '@/router'
+import { getTargetNodeId } from '@/utils/targetNode'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -44,6 +45,11 @@ request.interceptors.request.use(
     const token = getToken()
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`
+    }
+    const targetNodeId = getTargetNodeId()
+    const url = (config.url || '').split('?')[0] || ''
+    if (targetNodeId && config.headers && isNodeScopedPath(url)) {
+      config.headers['X-Target-Node'] = targetNodeId
     }
     return config
   },
@@ -105,6 +111,12 @@ request.interceptors.response.use(
  * 从响应数据中提取错误信息
  * 支持纯文本和 JSON 格式
  */
+function isNodeScopedPath(url: string): boolean {
+  return ['/containers', '/networks', '/volumes', '/compose', '/registries'].some(
+    (prefix) => url === prefix || url.startsWith(`${prefix}/`)
+  )
+}
+
 function getErrorMessage(data: unknown): string | null {
   if (!data) return null
   

@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -15,7 +17,7 @@ import (
 
 // NodeService 节点服务
 type NodeService struct {
-	dockerRepo  repository.IDockerRepository
+	dockerRepo repository.IDockerRepository
 	cacheRepo  repository.ICacheRepository
 	mode       string
 	nodeSecret string
@@ -30,14 +32,14 @@ type NodeService struct {
 // NewNodeService 创建节点服务
 func NewNodeService(dr repository.IDockerRepository, cr repository.ICacheRepository, mode, nodeSecret, nodeID, host, port string) *NodeService {
 	service := &NodeService{
-		dockerRepo:  dr,
-		cacheRepo:   cr,
-		mode:        mode,
-		nodeSecret:  nodeSecret,
-		nodeID:      nodeID,
-		host:        host,
-		port:        port,
-		nodes:       make(map[string]*model.NodeInfo),
+		dockerRepo: dr,
+		cacheRepo:  cr,
+		mode:       mode,
+		nodeSecret: nodeSecret,
+		nodeID:     nodeID,
+		host:       host,
+		port:       port,
+		nodes:      make(map[string]*model.NodeInfo),
 	}
 	service.ensureLocalNode()
 	return service
@@ -52,22 +54,26 @@ func (s *NodeService) RegisterNode(node *model.NodeInfo) {
 	s.nodes[node.ID] = node
 }
 
-// UpdateHeartbeat 更新节点心跳
-func (s *NodeService) UpdateHeartbeat(nodeID string, resources model.SystemStats) {
+// UpdateHeartbeat 更新节点心跳。节点尚未注册时忽略，等待下一次注册。
+func (s *NodeService) UpdateHeartbeat(nodeID string, resources model.SystemStats, containers int) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if node, ok := s.nodes[nodeID]; ok {
-		node.CPU = resources.CPU
-		node.Memory = resources.Memory
-		node.Disk = resources.Disk
-		node.LastSeen = time.Now()
-		node.Status = model.NodeStatusOnline
+	node, ok := s.nodes[nodeID]
+	if !ok {
+		return
 	}
+	node.CPU = resources.CPU
+	node.Memory = resources.Memory
+	node.Disk = resources.Disk
+	node.Containers = containers
+	node.LastSeen = time.Now()
+	node.Status = model.NodeStatusOnline
 }
 
 // GetAllNodes 获取所有节点
 func (s *NodeService) GetAllNodes() []*model.NodeInfo {
 	s.ensureLocalNode()
+	s.refreshNodeStatus()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	result := make([]*model.NodeInfo, 0, len(s.nodes))
@@ -76,6 +82,30 @@ func (s *NodeService) GetAllNodes() []*model.NodeInfo {
 		result = append(result, n)
 	}
 	return result
+}
+
+// ProxyTarget 返回需要转发到的 Worker 地址。本机节点返回空地址。
+func (s *NodeService) ProxyTarget(nodeID string) (string, error) {
+	if nodeID == "" || nodeID == s.nodeID {
+		return "", nil
+	}
+	s.refreshNodeStatus()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	node, ok := s.nodes[nodeID]
+	if !ok {
+		return "", fmt.Errorf("节点不存在")
+	}
+	if node.ID == s.nodeID || node.Mode == model.ModeMaster {
+		return "", nil
+	}
+	if node.Status != model.NodeStatusOnline {
+		return "", fmt.Errorf("节点离线")
+	}
+	if strings.TrimSpace(node.Address) == "" {
+		return "", fmt.Errorf("节点地址为空")
+	}
+	return node.Address, nil
 }
 
 // GetNode 获取单个节点
@@ -99,6 +129,7 @@ func (s *NodeService) RemoveNode(nodeID string) {
 // SelectBestNode 选择最佳节点（CPU 和内存负载最低）
 func (s *NodeService) SelectBestNode() (*model.NodeInfo, error) {
 	s.ensureLocalNode()
+	s.refreshNodeStatus()
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var best *model.NodeInfo
@@ -124,12 +155,20 @@ func (s *NodeService) GetMode() string {
 	return s.mode
 }
 
+// localMasterName 是主节点在界面上的名称。容器里主机名通常是容器 ID，不适合展示。
+func localMasterName() string {
+	name := strings.TrimSpace(os.Getenv("NODE_NAME"))
+	if name == "" {
+		return "master"
+	}
+	return name
+}
+
 func (s *NodeService) ensureLocalNode() {
 	if s.mode != "master" {
 		return
 	}
 
-	hostname, _ := os.Hostname()
 	address := s.host
 	if address == "" || address == "0.0.0.0" {
 		address = "127.0.0.1"
@@ -150,13 +189,13 @@ func (s *NodeService) ensureLocalNode() {
 	if !ok {
 		node = &model.NodeInfo{
 			ID:      s.nodeID,
-			Name:    hostname,
 			Address: address,
 			Mode:    model.ModeMaster,
 			Labels:  map[string]string{},
 		}
 		s.nodes[s.nodeID] = node
 	}
+	node.Name = localMasterName()
 
 	node.CPU = cpu
 	node.Memory = mem.Usage
@@ -164,6 +203,23 @@ func (s *NodeService) ensureLocalNode() {
 	node.Containers = len(containers)
 	node.LastSeen = time.Now()
 	node.Status = model.NodeStatusOnline
+}
+
+const nodeOfflineAfter = 30 * time.Second
+
+// refreshNodeStatus 将长时间没有心跳的远程节点标为离线。
+func (s *NodeService) refreshNodeStatus() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	now := time.Now()
+	for _, n := range s.nodes {
+		if n.ID == s.nodeID {
+			continue
+		}
+		if now.Sub(n.LastSeen) > nodeOfflineAfter {
+			n.Status = model.NodeStatusOffline
+		}
+	}
 }
 
 var ErrNoAvailableNodes = &NodeError{"no available nodes"}

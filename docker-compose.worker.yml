@@ -24,6 +24,9 @@ services:
       - MASTER_URL=http://master-ip:3958
       # 必须修改: 当前节点名称（每个 Worker 必须唯一）
       - NODE_NAME=worker-1
+      # 必须修改: Master 能访问到的本机地址（宿主机 IP:映射端口）
+      # 桥接网络里自动探测到的是容器内网 IP，跨机器不可达
+      - NODE_ADDRESS=192.168.1.20:10001
       # 生产环境请修改以下密钥（Master 和 Worker 必须使用相同的密钥）
       - JWT_SECRET=change-me-in-production
       - NODE_SECRET=change-me-in-production

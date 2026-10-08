@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { nodesApi, type ScheduleRequest, type ScheduleResponse } from '@/api/nodes'
 import type { NodeInfo } from '@/types'
+import { getTargetNodeId, setTargetNodeId } from '@/utils/targetNode'
 
 // Polling interval in milliseconds (5 seconds)
 const POLLING_INTERVAL = 5000
@@ -17,6 +18,8 @@ export const useNodesStore = defineStore('nodes', () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
   const isMasterMode = ref(false)
+  const currentNodeId = ref(getTargetNodeId())
+  const fellBackToMaster = ref(false)
   
   // Search and filter state
   const searchQuery = ref('')
@@ -72,13 +75,17 @@ export const useNodesStore = defineStore('nodes', () => {
       const data = await nodesApi.list()
       nodes.value = data
       isMasterMode.value = true
+      reconcileCurrentNode()
     } catch (e: any) {
-      // Check if error is because we're not in master mode
-      if (e.response?.status === 400 && 
-          e.response?.data?.includes?.('Master')) {
+      // Worker 没有节点管理接口，404/400 表示当前不是 Master
+      const status = e.response?.status
+      if (status === 404 || status === 400) {
         isMasterMode.value = false
         error.value = null
         nodes.value = []
+        currentNodeId.value = ''
+        setTargetNodeId('')
+        stopPolling()
       } else {
         error.value = e instanceof Error ? e.message : 'Failed to fetch nodes'
       }
@@ -152,12 +159,57 @@ export const useNodesStore = defineStore('nodes', () => {
     return nodes.value.find(node => node.id === nodeId)
   }
 
+  function useLocalNode(masterId: string) {
+    currentNodeId.value = masterId
+    setTargetNodeId('')
+  }
+
+  function reconcileCurrentNode() {
+    const master = nodes.value.find(node => node.mode === 'master')
+    const masterId = master?.id || ''
+    if (!currentNodeId.value) {
+      useLocalNode(masterId)
+      return
+    }
+    const current = nodes.value.find(node => node.id === currentNodeId.value)
+    if (!current || current.status !== 'online') {
+      if (currentNodeId.value !== masterId) {
+        fellBackToMaster.value = true
+      }
+      useLocalNode(masterId)
+      return
+    }
+    if (current.mode === 'worker') {
+      currentNodeId.value = current.id
+      setTargetNodeId(current.id)
+      return
+    }
+    useLocalNode(masterId || current.id)
+  }
+
+  function setCurrentNode(nodeId: string) {
+    const node = nodes.value.find(item => item.id === nodeId)
+    if (!node || node.status !== 'online') return
+    if (node.mode === 'worker') {
+      currentNodeId.value = node.id
+      setTargetNodeId(node.id)
+      return
+    }
+    useLocalNode(node.id)
+  }
+
+  function acknowledgeFallback() {
+    fellBackToMaster.value = false
+  }
+
   return {
     // State
     nodes,
     loading,
     error,
     isMasterMode,
+    currentNodeId,
+    fellBackToMaster,
     searchQuery,
     statusFilter,
     // Getters
@@ -176,5 +228,7 @@ export const useNodesStore = defineStore('nodes', () => {
     setSearch,
     setStatusFilter,
     getNodeById,
+    setCurrentNode,
+    acknowledgeFallback,
   }
 })

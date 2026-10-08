@@ -23,14 +23,16 @@ import (
 type Scheduler struct {
 	nodeService *NodeService
 	dockerRepo  repository.IDockerRepository
+	registry    *RegistryService
 	nodeSecret  string
 }
 
 // NewScheduler 创建调度器
-func NewScheduler(ns *NodeService, dr repository.IDockerRepository, nodeSecret string) *Scheduler {
+func NewScheduler(ns *NodeService, dr repository.IDockerRepository, nodeSecret string, registry *RegistryService) *Scheduler {
 	return &Scheduler{
 		nodeService: ns,
 		dockerRepo:  dr,
+		registry:    registry,
 		nodeSecret:  nodeSecret,
 	}
 }
@@ -66,7 +68,11 @@ func (s *Scheduler) ScheduleContainer(ctx context.Context, req *model.ScheduleRe
 func (s *Scheduler) createLocalContainer(ctx context.Context, req *model.ScheduleRequest, node *model.NodeInfo) (*model.ScheduleResponse, error) {
 	_, _, err := s.dockerRepo.ImageInspectWithRaw(ctx, req.Image)
 	if err != nil {
-		reader, pullErr := s.dockerRepo.ImagePull(ctx, req.Image, types.ImagePullOptions{})
+		opts := types.ImagePullOptions{}
+		if s.registry != nil {
+			opts = s.registry.PullOptions(req.Image)
+		}
+		reader, pullErr := s.dockerRepo.ImagePull(ctx, req.Image, opts)
 		if pullErr != nil {
 			return nil, pullErr
 		}
