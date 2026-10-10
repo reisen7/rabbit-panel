@@ -221,12 +221,15 @@ jobs:
         env:
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          git fetch origin gh-pages || true
-          git checkout --orphan gh-pages-tmp
+          set -euo pipefail
+          tmp=$(mktemp -d)
+          cp -a public/. "$tmp/"
+          touch "$tmp/.nojekyll"
+          git switch --orphan gh-pages-tmp
           git rm -rf . >/dev/null 2>&1 || true
-          cp -r public/. .
-          touch .nojekyll
-          git add .
+          git clean -ffdx
+          cp -a "$tmp"/. .
+          git add latest.json index.html .nojekyll
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "publish update manifest for ${TAG}"
