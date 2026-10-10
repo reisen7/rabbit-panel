@@ -86,6 +86,7 @@ declare module 'vue' {
     SystemMonitor: typeof import('./components/common/SystemMonitor.vue')['default']
     UpdateBanner: typeof import('./components/common/UpdateBanner.vue')['default']
     UpdateDialog: typeof import('./components/common/UpdateDialog.vue')['default']
+    WeChatQRPanel: typeof import('./components/common/WeChatQRPanel.vue')['default']
   }
   export interface GlobalDirectives {
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']

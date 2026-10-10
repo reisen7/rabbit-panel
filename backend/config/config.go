@@ -39,17 +39,18 @@ type App struct {
 	CacheRepo  repository.ICacheRepository
 
 	// Services
-	ContainerService     *service.ContainerService
+	ContainerService    *service.ContainerService
 	ImageService        *service.ImageService
 	NetworkService      *service.NetworkService
 	VolumeService       *service.VolumeService
 	ComposeService      *service.ComposeService
 	RegistryService     *service.RegistryService
 	DockerConfigService *service.DockerConfigService
-	AgentService       *service.AgentService
-	NodeService        *service.NodeService
-	Scheduler          *service.Scheduler
-	UpdateService      *service.UpdateService
+	AgentService        *service.AgentService
+	WeChatService       *service.WeChatService
+	NodeService         *service.NodeService
+	Scheduler           *service.Scheduler
+	UpdateService       *service.UpdateService
 
 	// Terminal service
 	TerminalService *exec.TerminalService
@@ -125,6 +126,10 @@ func (app *App) initServices() {
 	app.DockerConfigService = service.NewDockerConfigService()
 	app.AgentService = service.NewAgentService(app.SQLiteRepo, app.DockerRepo)
 	app.AgentService.UseRegistry(app.RegistryService)
+	app.AgentService.UseNodes(app.NodeService, app.JWTSecret)
+	if app.Mode != "worker" {
+		app.WeChatService = service.NewWeChatService(app.AgentService)
+	}
 	app.UpdateService = service.NewUpdateService(app.FileRepo, app.BuildInfo)
 
 	// Master-only services

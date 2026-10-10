@@ -93,6 +93,7 @@ import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { ChatDotRound, Close, Delete, UserFilled, Monitor, Loading, Promotion, FullScreen } from '@element-plus/icons-vue'
 import { getToken } from '@/utils/request'
+import { getTargetNodeId } from '@/utils/targetNode'
 
 const { t } = useI18n()
 
@@ -209,6 +210,7 @@ const sendMessage = async () => {
       },
       body: JSON.stringify({
         message: userMsg,
+        node_id: getTargetNodeId(),
         history: messages.value.slice(0, -1).map(m => ({ role: m.role, content: m.content }))
       })
     })

@@ -8,17 +8,27 @@
 - 容器 / 镜像 / 网络 / 存储卷 / Compose 管理
 - Docker 配置、仓库配置、系统监控
 - 多节点 Master / Worker 管理
+- AI 助手支持多种模型接口，并可扫码连接微信
+- 智能体可以操作已登记的其他节点
 - 在线更新、版本检测、进度反馈
 - 中文 / English 界面
 
-![首页](.doc/images/image.png)
-![容器管理](.doc/images/image-1.png)
-![镜像管理](.doc/images/image-2.png)
-![Compose 管理](.doc/images/image-3.png)
-![网络管理](.doc/images/image-4.png)
-![配置管理](.doc/images/image-5.png)
-![LLM](.doc/images/image-6.png)
-![LLM](.doc/images/image-7.png)
+|                     首页                      |                    容器管理                     |
+| :-------------------------------------------: | :---------------------------------------------: |
+| <img src=".doc/images/image.png" width="500"> | <img src=".doc/images/image-1.png" width="500"> |
+
+|                    镜像管理                     |                  Compose 管理                   |
+| :---------------------------------------------: | :---------------------------------------------: |
+| <img src=".doc/images/image-2.png" width="500"> | <img src=".doc/images/image-3.png" width="500"> |
+
+|                    网络管理                     |                    配置管理                     |
+| :---------------------------------------------: | :---------------------------------------------: |
+| <img src=".doc/images/image-4.png" width="500"> | <img src=".doc/images/image-5.png" width="500"> |
+
+|                      LLM 1                      |                      LLM 2                      |
+| :---------------------------------------------: | :---------------------------------------------: |
+| <img src=".doc/images/image-6.png" width="500"> | <img src=".doc/images/image-7.png" width="500"> |
+
 ## 环境要求
 
 - Linux

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -106,6 +107,49 @@ func (s *NodeService) ProxyTarget(nodeID string) (string, error) {
 		return "", fmt.Errorf("节点地址为空")
 	}
 	return node.Address, nil
+}
+
+// FindNode 按 ID、名称或地址查找节点。
+func (s *NodeService) FindNode(hint string) (*model.NodeInfo, error) {
+	hint = strings.TrimSpace(hint)
+	if hint == "" {
+		return nil, fmt.Errorf("节点名称为空")
+	}
+	s.ensureLocalNode()
+	s.refreshNodeStatus()
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if n, ok := s.nodes[hint]; ok {
+		cp := *n
+		return &cp, nil
+	}
+	var matches []*model.NodeInfo
+	for _, n := range s.nodes {
+		if strings.EqualFold(n.Name, hint) || strings.EqualFold(n.ID, hint) || strings.EqualFold(n.Address, hint) {
+			cp := *n
+			matches = append(matches, &cp)
+		}
+	}
+	if len(matches) == 1 {
+		return matches[0], nil
+	}
+	if len(matches) > 1 {
+		return nil, fmt.Errorf("节点名称不唯一: %s", hint)
+	}
+	names := make([]string, 0, len(s.nodes))
+	for _, n := range s.nodes {
+		if strings.TrimSpace(n.Name) != "" {
+			names = append(names, n.Name)
+			continue
+		}
+		names = append(names, n.ID)
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return nil, fmt.Errorf("节点不存在: %s", hint)
+	}
+	return nil, fmt.Errorf("节点不存在: %s。可用节点: %s", hint, strings.Join(names, "、"))
 }
 
 // GetNode 获取单个节点

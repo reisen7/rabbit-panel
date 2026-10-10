@@ -5,12 +5,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/binary"
 	"encoding/base64"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"io/fs"
 	"io"
+	"io/fs"
 	"log"
 	"net/http"
 	"os"
@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	ws "github.com/gorilla/websocket"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/docker/go-connections/nat"
+	"github.com/gin-gonic/gin"
+	ws "github.com/gorilla/websocket"
 	config2 "rabbit-panel/config"
 	execlib "rabbit-panel/exec"
 	"rabbit-panel/middleware"
@@ -102,6 +102,7 @@ func (r *Router) Register() {
 
 		// Image routes (user-only)
 		apiAuth.POST("/images/build", r.handleImagesBuild)
+		apiAuth.POST("/images/pull", r.handleImagesPull)
 		apiAuth.POST("/images/remove", r.handleImagesRemove)
 
 		// Network routes
@@ -152,6 +153,13 @@ func (r *Router) Register() {
 		apiAuth.DELETE("/agent/history", r.handleAgentHistory)
 		apiAuth.GET("/settings/agent", r.handleAgentConfig)
 		apiAuth.POST("/settings/agent", r.handleAgentConfig)
+		apiAuth.POST("/settings/agent/models", r.handleAgentModels)
+		apiAuth.POST("/settings/agent/test", r.handleAgentTest)
+		apiAuth.GET("/channels/wechat", r.handleWeChatStatus)
+		apiAuth.POST("/channels/wechat/qrcode", r.handleWeChatQRCode)
+		apiAuth.GET("/channels/wechat/qrcode/status", r.handleWeChatQRStatus)
+		apiAuth.POST("/channels/wechat/verify", r.handleWeChatVerify)
+		apiAuth.DELETE("/channels/wechat", r.handleWeChatUnbind)
 
 		apiAuth.GET("/system/update/check", r.handleUpdateCheck)
 		apiAuth.GET("/system/update/status", r.handleUpdateStatus)
@@ -283,8 +291,8 @@ func (r *Router) handleCaptcha(c *gin.Context) {
 
 func (r *Router) handleLogin(c *gin.Context) {
 	var reqBody struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
+		Username  string `json:"username"`
+		Password  string `json:"password"`
 		CaptchaID string `json:"captcha_id"`
 		Captcha   string `json:"captcha"`
 	}
@@ -382,7 +390,7 @@ func (r *Router) handleContainersList(c *gin.Context) {
 func (r *Router) handleContainerAction(c *gin.Context) {
 	var reqBody struct {
 		ContainerID string `json:"container_id"`
-		Action     string `json:"action"`
+		Action      string `json:"action"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
@@ -577,7 +585,7 @@ func (r *Router) handleContainerRunStream(c *gin.Context) {
 			var status struct {
 				Status   string `json:"status"`
 				Progress string `json:"progress"`
-				ID      string `json:"id"`
+				ID       string `json:"id"`
 			}
 			if err := decoder.Decode(&status); err != nil {
 				if err == io.EOF {
@@ -884,59 +892,59 @@ func (r *Router) handleContainerInspect(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":            inspect.ID[:12],
-		"fullId":        inspect.ID,
-		"name":          strings.TrimPrefix(inspect.Name, "/"),
-		"image":         inspect.Config.Image,
-		"imageId":       inspect.Image,
-		"created":       inspect.Created,
-		"started":       inspect.State.StartedAt,
-		"finished":      inspect.State.FinishedAt,
-		"state":         inspect.State.Status,
-		"running":       inspect.State.Running,
-		"paused":        inspect.State.Paused,
-		"pid":           inspect.State.Pid,
-		"exitCode":      inspect.State.ExitCode,
-		"platform":      inspect.Platform,
-		"hostname":      inspect.Config.Hostname,
-		"domainname":    inspect.Config.Domainname,
-		"networkMode":   string(inspect.HostConfig.NetworkMode),
-		"ports":         ports,
-		"dns":           inspect.HostConfig.DNS,
-		"dnsSearch":     inspect.HostConfig.DNSSearch,
-		"extraHosts":    inspect.HostConfig.ExtraHosts,
-		"macAddress":    inspect.NetworkSettings.MacAddress,
-		"ipAddress":     inspect.NetworkSettings.IPAddress,
-		"gateway":       inspect.NetworkSettings.Gateway,
-		"volumes":       volumes,
-		"workingDir":    inspect.Config.WorkingDir,
-		"readOnly":      inspect.HostConfig.ReadonlyRootfs,
-		"env":           envs,
-		"cmd":           inspect.Config.Cmd,
-		"entrypoint":    inspect.Config.Entrypoint,
-		"user":          inspect.Config.User,
-		"tty":           inspect.Config.Tty,
-		"stdin":         inspect.Config.OpenStdin,
-		"restart":       string(inspect.HostConfig.RestartPolicy.Name),
+		"id":              inspect.ID[:12],
+		"fullId":          inspect.ID,
+		"name":            strings.TrimPrefix(inspect.Name, "/"),
+		"image":           inspect.Config.Image,
+		"imageId":         inspect.Image,
+		"created":         inspect.Created,
+		"started":         inspect.State.StartedAt,
+		"finished":        inspect.State.FinishedAt,
+		"state":           inspect.State.Status,
+		"running":         inspect.State.Running,
+		"paused":          inspect.State.Paused,
+		"pid":             inspect.State.Pid,
+		"exitCode":        inspect.State.ExitCode,
+		"platform":        inspect.Platform,
+		"hostname":        inspect.Config.Hostname,
+		"domainname":      inspect.Config.Domainname,
+		"networkMode":     string(inspect.HostConfig.NetworkMode),
+		"ports":           ports,
+		"dns":             inspect.HostConfig.DNS,
+		"dnsSearch":       inspect.HostConfig.DNSSearch,
+		"extraHosts":      inspect.HostConfig.ExtraHosts,
+		"macAddress":      inspect.NetworkSettings.MacAddress,
+		"ipAddress":       inspect.NetworkSettings.IPAddress,
+		"gateway":         inspect.NetworkSettings.Gateway,
+		"volumes":         volumes,
+		"workingDir":      inspect.Config.WorkingDir,
+		"readOnly":        inspect.HostConfig.ReadonlyRootfs,
+		"env":             envs,
+		"cmd":             inspect.Config.Cmd,
+		"entrypoint":      inspect.Config.Entrypoint,
+		"user":            inspect.Config.User,
+		"tty":             inspect.Config.Tty,
+		"stdin":           inspect.Config.OpenStdin,
+		"restart":         string(inspect.HostConfig.RestartPolicy.Name),
 		"restartMaxRetry": inspect.HostConfig.RestartPolicy.MaximumRetryCount,
-		"memory":        inspect.HostConfig.Memory / 1024 / 1024,
-		"memorySwap":    inspect.HostConfig.MemorySwap / 1024 / 1024,
-		"memoryRes":     inspect.HostConfig.MemoryReservation / 1024 / 1024,
-		"cpus":          float64(inspect.HostConfig.NanoCPUs) / 1e9,
-		"cpuShares":     inspect.HostConfig.CPUShares,
-		"cpusetCpus":    inspect.HostConfig.CpusetCpus,
-		"cpusetMems":    inspect.HostConfig.CpusetMems,
-		"cpuPeriod":     inspect.HostConfig.CPUPeriod,
-		"cpuQuota":      inspect.HostConfig.CPUQuota,
-		"pidsLimit":     inspect.HostConfig.PidsLimit,
-		"oomKillDisable": inspect.HostConfig.OomKillDisable,
-		"privileged":    inspect.HostConfig.Privileged,
-		"capAdd":        inspect.HostConfig.CapAdd,
-		"capDrop":       inspect.HostConfig.CapDrop,
-		"securityOpt":   inspect.HostConfig.SecurityOpt,
-		"labels":        inspect.Config.Labels,
-		"logDriver":     inspect.HostConfig.LogConfig.Type,
-		"logOptions":    inspect.HostConfig.LogConfig.Config,
+		"memory":          inspect.HostConfig.Memory / 1024 / 1024,
+		"memorySwap":      inspect.HostConfig.MemorySwap / 1024 / 1024,
+		"memoryRes":       inspect.HostConfig.MemoryReservation / 1024 / 1024,
+		"cpus":            float64(inspect.HostConfig.NanoCPUs) / 1e9,
+		"cpuShares":       inspect.HostConfig.CPUShares,
+		"cpusetCpus":      inspect.HostConfig.CpusetCpus,
+		"cpusetMems":      inspect.HostConfig.CpusetMems,
+		"cpuPeriod":       inspect.HostConfig.CPUPeriod,
+		"cpuQuota":        inspect.HostConfig.CPUQuota,
+		"pidsLimit":       inspect.HostConfig.PidsLimit,
+		"oomKillDisable":  inspect.HostConfig.OomKillDisable,
+		"privileged":      inspect.HostConfig.Privileged,
+		"capAdd":          inspect.HostConfig.CapAdd,
+		"capDrop":         inspect.HostConfig.CapDrop,
+		"securityOpt":     inspect.HostConfig.SecurityOpt,
+		"labels":          inspect.Config.Labels,
+		"logDriver":       inspect.HostConfig.LogConfig.Type,
+		"logOptions":      inspect.HostConfig.LogConfig.Config,
 	})
 }
 
@@ -1469,7 +1477,7 @@ func (r *Router) handleImagesList(c *gin.Context) {
 func (r *Router) handleImagesBuild(c *gin.Context) {
 	var reqBody struct {
 		ImageName  string `json:"image_name"`
-		Tag       string `json:"tag"`
+		Tag        string `json:"tag"`
 		Dockerfile string `json:"dockerfile"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
@@ -1522,6 +1530,22 @@ func (r *Router) handleImagesBuild(c *gin.Context) {
 	flusher.Flush()
 }
 
+func (r *Router) handleImagesPull(c *gin.Context) {
+	var reqBody struct {
+		Name string `json:"name"`
+	}
+	if err := c.ShouldBindJSON(&reqBody); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	err := r.app.ImageService.PullImage(c.Request.Context(), reqBody.Name, r.app.RegistryService.PullOptions(reqBody.Name))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
+}
+
 func (r *Router) handleImagesRemove(c *gin.Context) {
 	var reqBody struct {
 		ID string `json:"id"`
@@ -1552,10 +1576,10 @@ func (r *Router) handleNetworksList(c *gin.Context) {
 
 func (r *Router) handleNetworksCreate(c *gin.Context) {
 	var reqBody struct {
-		Name    string `json:"name"`
-		Driver  string `json:"driver"`
-		Subnet  string `json:"subnet"`
-		Gateway string `json:"gateway"`
+		Name     string `json:"name"`
+		Driver   string `json:"driver"`
+		Subnet   string `json:"subnet"`
+		Gateway  string `json:"gateway"`
 		Internal bool   `json:"internal"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
@@ -1670,10 +1694,10 @@ func (r *Router) handleVolumesList(c *gin.Context) {
 
 func (r *Router) handleVolumesCreate(c *gin.Context) {
 	var reqBody struct {
-		Name   string `json:"name"`
-		Driver string `json:"driver"`
+		Name       string            `json:"name"`
+		Driver     string            `json:"driver"`
 		DriverOpts map[string]string `json:"driverOpts"`
-		Labels map[string]string `json:"labels"`
+		Labels     map[string]string `json:"labels"`
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
@@ -1685,10 +1709,10 @@ func (r *Router) handleVolumesCreate(c *gin.Context) {
 		driver = "local"
 	}
 	err := r.app.VolumeService.CreateVolume(context.Background(), &model.CreateVolumeRequest{
-		Name:   reqBody.Name,
-		Driver: driver,
+		Name:       reqBody.Name,
+		Driver:     driver,
 		DriverOpts: reqBody.DriverOpts,
-		Labels: reqBody.Labels,
+		Labels:     reqBody.Labels,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1873,7 +1897,7 @@ func (r *Router) handleRegistriesList(c *gin.Context) {
 
 func (r *Router) handleRegistriesCreate(c *gin.Context) {
 	var reqBody struct {
-		Name     string `json:"name"`
+		Name        string `json:"name"`
 		URL         string `json:"url"`
 		Username    string `json:"username"`
 		Password    string `json:"password"`
@@ -2098,22 +2122,12 @@ func (r *Router) handleAgentConfig(c *gin.Context) {
 		cfg := r.app.AgentService.MaskedConfig()
 		c.JSON(http.StatusOK, cfg)
 	} else if c.Request.Method == http.MethodPost {
-		var reqBody struct {
-			APIURL  string `json:"api_url"`
-			APIKey  string `json:"api_key"`
-			Model   string `json:"model"`
-			Enabled bool   `json:"enabled"`
-		}
+		var reqBody service.AgentConfig
 		if err := c.ShouldBindJSON(&reqBody); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
 			return
 		}
-		err := r.app.AgentService.SaveConfig(service.AgentConfig{
-			APIURL:  reqBody.APIURL,
-			APIKey:  reqBody.APIKey,
-			Model:   reqBody.Model,
-			Enabled: reqBody.Enabled,
-		})
+		err := r.app.AgentService.SaveConfig(reqBody)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
@@ -2122,6 +2136,38 @@ func (r *Router) handleAgentConfig(c *gin.Context) {
 	} else {
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
+}
+
+func (r *Router) handleAgentModels(c *gin.Context) {
+	var req struct {
+		APIURL    string `json:"api_url"`
+		APIFormat string `json:"api_format"`
+		APIKey    string `json:"api_key"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	models, err := r.app.AgentService.ListModels(c.Request.Context(), req.APIURL, req.APIFormat, req.APIKey)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"models": models})
+}
+
+func (r *Router) handleAgentTest(c *gin.Context) {
+	var req service.AgentConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	reply, err := r.app.AgentService.TestConnection(c.Request.Context(), req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"reply": reply})
 }
 
 // === System Stats Handler ===

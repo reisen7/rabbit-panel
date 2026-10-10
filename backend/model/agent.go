@@ -2,10 +2,13 @@ package model
 
 // AgentConfig 智能体配置
 type AgentConfig struct {
-	APIURL  string `json:"api_url"`
-	APIKey  string `json:"api_key"`
-	Model   string `json:"model"`
-	Enabled bool   `json:"enabled"`
+	APIURL         string `json:"api_url"`
+	APIKey         string `json:"api_key"`
+	APIFormat      string `json:"api_format"`
+	Model          string `json:"model"`
+	Enabled        bool   `json:"enabled"`
+	Thinking       bool   `json:"thinking"`
+	ThinkingEffort string `json:"thinking_effort"`
 }
 
 // ChatMessage 聊天消息
@@ -36,6 +39,7 @@ type ChatCompletionChunk struct {
 type AgentChatRequest struct {
 	Message string        `json:"message"`
 	History []ChatMessage `json:"history"`
+	NodeID  string        `json:"node_id"`
 }
 
 // ChatHistoryMessage 聊天历史记录

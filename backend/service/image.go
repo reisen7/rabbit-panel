@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -17,14 +18,14 @@ import (
 // ImageService 镜像服务
 type ImageService struct {
 	dockerRepo repository.IDockerRepository
-	cacheRepo repository.ICacheRepository
+	cacheRepo  repository.ICacheRepository
 }
 
 // NewImageService 创建镜像服务
 func NewImageService(dr repository.IDockerRepository, cr repository.ICacheRepository) *ImageService {
 	return &ImageService{
 		dockerRepo: dr,
-		cacheRepo: cr,
+		cacheRepo:  cr,
 	}
 }
 
@@ -48,6 +49,21 @@ func (s *ImageService) ListImages(ctx context.Context) ([]model.ImageInfo, error
 	result := s.convertImages(images, usageMap)
 	s.cacheRepo.SetImages(result)
 	return result, nil
+}
+
+// PullImage 拉取镜像并等待完成。
+func (s *ImageService) PullImage(ctx context.Context, name string, opts types.ImagePullOptions) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("镜像名称不能为空")
+	}
+	reader, err := s.dockerRepo.ImagePull(ctx, name, opts)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	_, err = io.Copy(io.Discard, reader)
+	s.cacheRepo.InvalidateImages()
+	return err
 }
 
 // RemoveImage 删除镜像
