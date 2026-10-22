@@ -225,6 +225,11 @@ jobs:
           tmp=$(mktemp -d)
           cp -a public/. "$tmp/"
           touch "$tmp/.nojekyll"
+          # 构建过程会留下本地改动（chmod +x 改 rabbit.sh 权限位、npm install 改
+          # package-lock.json 等）。git switch --orphan 要求工作区干净，否则报
+          # "local changes would be overwritten" 直接失败，所以先复位工作区。
+          git reset --hard HEAD
+          git clean -ffdx
           git switch --orphan gh-pages-tmp
           git rm -rf . >/dev/null 2>&1 || true
           git clean -ffdx
