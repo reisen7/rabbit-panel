@@ -40,17 +40,24 @@ func main() {
 
 	logStartup(app)
 
-	addr := app.Host + ":" + app.Port
-	if err := app.Engine.Run(addr); err != nil {
+	if err := app.Run(); err != nil {
 		log.Fatalf("服务启动失败: %v", err)
 	}
 }
 
 func logStartup(app *config.App) {
-	log.Printf("Rabbit Panel started")
-	log.Printf("Listen: %s:%s", app.Host, app.Port)
-	log.Printf("Local URL: http://localhost:%s", app.Port)
+	scheme := app.Scheme()
 
+	log.Printf("Rabbit Panel started")
+	if app.TLS.Enabled {
+		log.Printf("Listen: %s:%s (HTTPS)", app.Host, app.Port)
+	} else {
+		log.Printf("Listen: %s:%s (HTTP)", app.Host, app.Port)
+	}
+	log.Printf("Local URL: %s://localhost:%s", scheme, app.Port)
+	if app.TLS.Enabled && app.HTTPPort != "" && app.HTTPPort != app.Port {
+		log.Printf("HTTP redirect: %s:%s -> https", app.Host, app.HTTPPort)
+	}
 	if app.Mode == "master" {
 		log.Printf("Mode: master")
 	} else {

@@ -126,7 +126,8 @@ func (s *NodeService) FindNode(hint string) (*model.NodeInfo, error) {
 	}
 	var matches []*model.NodeInfo
 	for _, n := range s.nodes {
-		if strings.EqualFold(n.Name, hint) || strings.EqualFold(n.ID, hint) || strings.EqualFold(n.Address, hint) {
+		if strings.EqualFold(n.Name, hint) || strings.EqualFold(n.ID, hint) ||
+			strings.EqualFold(n.Address, hint) || strings.EqualFold(stripNodeScheme(n.Address), hint) {
 			cp := *n
 			matches = append(matches, &cp)
 		}

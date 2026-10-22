@@ -321,7 +321,7 @@ func (r *Router) handleLogin(c *gin.Context) {
 
 	token, _ := middleware.GenerateToken(user.Username, user.NeedChangePassword, r.app.JWTSecret)
 
-	c.SetCookie("token", token, 86400, "/", "", false, true)
+	r.setAuthCookie(c, token, 86400)
 	c.JSON(http.StatusOK, gin.H{
 		"token":                token,
 		"need_change_password": user.NeedChangePassword,
@@ -362,12 +362,23 @@ func (r *Router) handleChangePassword(c *gin.Context) {
 	}
 
 	token, _ := middleware.GenerateToken(usernameStr, false, r.app.JWTSecret)
-	c.SetCookie("token", token, 86400, "/", "", false, true)
+	r.setAuthCookie(c, token, 86400)
 	c.JSON(http.StatusOK, gin.H{"message": "密码修改成功", "token": token})
 }
 
+// setAuthCookie 写入登录态 Cookie。
+//
+// Secure 标志随实际连接协议自动决定：原生 HTTPS、TLS 终止于反向代理
+// （X-Forwarded-Proto: https）或请求本身是 TLS 时置为 true，避免明文链路携带 token。
+func (r *Router) setAuthCookie(c *gin.Context, value string, maxAge int) {
+	secure := r.app.TLS.Enabled ||
+		c.Request.TLS != nil ||
+		strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	c.SetCookie("token", value, maxAge, "/", "", secure, true)
+}
+
 func (r *Router) handleLogout(c *gin.Context) {
-	c.SetCookie("token", "", -1, "/", "", false, true)
+	r.setAuthCookie(c, "", -1)
 	c.JSON(http.StatusOK, gin.H{"message": "登出成功"})
 }
 

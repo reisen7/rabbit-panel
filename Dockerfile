@@ -21,6 +21,8 @@ WORKDIR /app
 
 COPY backend/go.mod backend/go.sum ./
 
+ENV GOPROXY=https://goproxy.cn,direct
+
 RUN go mod download
 
 COPY backend/ ./
@@ -38,12 +40,13 @@ RUN apk add --no-cache \
     docker-cli-compose \
     tzdata \
     ca-certificates && \
-    mkdir -p /app/compose_projects
+    mkdir -p /app/compose_projects /app/data/certs
 
 ENV TZ=Asia/Shanghai
 
 COPY --from=backend-builder /app/rabbit-panel .
 
-EXPOSE 3958
+# 3958: panel port (HTTPS when TLS_ENABLED=true); 3959: optional HTTP -> HTTPS redirect port
+EXPOSE 3958 3959
 
 CMD ["./rabbit-panel"]

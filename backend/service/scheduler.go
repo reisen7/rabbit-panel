@@ -142,14 +142,15 @@ func (s *Scheduler) forwardToWorker(ctx context.Context, workerAddr string, req 
 	}
 
 	jsonData, _ := json.Marshal(containerConfig)
-	workerURL := fmt.Sprintf("http://%s/api/containers/create", workerAddr)
+	scheme, host := ParseNodeAddress(workerAddr)
+	workerURL := fmt.Sprintf("%s://%s/api/containers/create", scheme, host)
 
 	httpReq, _ := http.NewRequest("POST", workerURL, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("X-Node-ID", "master")
 	httpReq.Header.Set("X-Node-Token", s.generateNodeToken("master"))
 
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := NewNodeHTTPClient(30 * time.Second)
 	resp, err := client.Do(httpReq)
 	if err != nil {
 		return nil, err

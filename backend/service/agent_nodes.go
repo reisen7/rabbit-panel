@@ -410,10 +410,11 @@ func (s *AgentService) callNode(ctx context.Context, address, method, path strin
 	if err != nil {
 		return nil, err
 	}
-	endpoint := "http://" + address + path
-	if len(query) > 0 {
-		endpoint += "?" + query.Encode()
+	scheme, host := ParseNodeAddress(address)
+	if host == "" {
+		return nil, fmt.Errorf("节点地址为空")
 	}
+	endpoint := nodeEndpoint(scheme, host, path, query)
 	var reader io.Reader
 	if body != nil {
 		raw, err := json.Marshal(body)
@@ -435,7 +436,7 @@ func (s *AgentService) callNode(ctx context.Context, address, method, path strin
 	case "/api/images/pull", "/api/containers/run", "/api/compose/action":
 		timeout = 3 * time.Minute
 	}
-	client := &http.Client{Timeout: timeout}
+	client := NewNodeHTTPClient(timeout)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("节点不可达: %s", err.Error())

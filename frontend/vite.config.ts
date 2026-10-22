@@ -1,4 +1,4 @@
-﻿import { defineConfig } from 'vite'
+import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
@@ -6,6 +6,11 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
+// 后端默认以 HTTPS（自签证书）启动，开发代理默认走 https 并跳过证书校验。
+// 若后端用 TLS_ENABLED=false 启动，可用 RABBIT_DEV_BACKEND=http://localhost:3958 覆盖。
+const backendTarget = process.env.RABBIT_DEV_BACKEND ?? 'https://localhost:3958'
+const wsTarget = backendTarget.replace(/^http/, 'ws')
+
 export default defineConfig({
   plugins: [
     vue(),
@@ -28,12 +33,14 @@ export default defineConfig({
     port: 3000,
     proxy: {
       '/api': {
-        target: 'http://localhost:3958',
+        target: backendTarget,
         changeOrigin: true,
+        secure: false,
       },
       '/ws': {
-        target: 'ws://localhost:3958',
+        target: wsTarget,
         ws: true,
+        secure: false,
       },
     },
   },

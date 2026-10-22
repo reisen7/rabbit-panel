@@ -10,6 +10,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"rabbit-panel/middleware"
+	"rabbit-panel/service"
 )
 
 // containerNodeProxy 在 Master 上把带目标节点的容器、网络、存储卷和 Compose 请求转发到对应 Worker。
@@ -51,10 +52,19 @@ func (r *Router) containerNodeProxy() gin.HandlerFunc {
 			c.Next()
 			return
 		}
+		scheme, host := service.ParseNodeAddress(address)
+		if host == "" {
+			c.Next()
+			return
+		}
 
-		target := &url.URL{Scheme: "http", Host: address}
+		target := &url.URL{Scheme: scheme, Host: host}
 		proxy := httputil.NewSingleHostReverseProxy(target)
 		proxy.FlushInterval = -1
+		// 节点间调用使用统一 TLS 配置（支持自签证书：NODE_TLS_INSECURE / NODE_CA_FILE）
+		transport := service.NodeTransport()
+		transport.ForceAttemptHTTP2 = false
+		proxy.Transport = transport
 		originalDirector := proxy.Director
 		proxy.Director = func(req *http.Request) {
 			originalDirector(req)

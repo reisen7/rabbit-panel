@@ -11,6 +11,8 @@ services:
     user: root
     ports:
       - "3958:3958"
+      # 启用 TLS 且需要 HTTP 跳转时取消注释：
+      # - "3959:3959"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - /root/rabbit-panel/compose_projects:/app/compose_projects
@@ -22,8 +24,23 @@ services:
       # 生产环境请修改以下密钥（Master 和 Worker 必须使用相同的密钥）
       - JWT_SECRET=change-me-in-production
       - NODE_SECRET=change-me-in-production
+      # ===== 原生 HTTPS =====
+      # 默认已启用（自签证书，首次启动自动生成到 ./data/certs）
+      # - TLS_ENABLED=true
+      # - TLS_SELF_SIGNED=true            # 证书缺失时自动生成自签证书（保存到 ./data/certs）
+      # - TLS_CERT_FILE=/app/data/certs/server.crt
+      # - TLS_KEY_FILE=/app/data/certs/server.key
+      # - TLS_HOSTS=panel.example.com,192.168.1.10   # 自签证书需要覆盖的域名/IP
+      # - HTTP_PORT=3959                  # 可选：HTTP 自动跳转到 HTTPS 的端口
+      # - TLS_REDIRECT_PORT=3958          # 跳转目标端口；容器端口被映射成别的对外端口时必填（如 -p 8443:3958 则填 8443）
+      # 关闭 HTTPS（例如前面有 Nginx / Cloudflare 做 TLS 终止）：
+      # - TLS_ENABLED=false
+      # 集群内使用自签证书时，Master 访问 Worker 也需要放开校验，二选一（不设则跨节点调用会报证书错误）：
+      # - NODE_TLS_INSECURE=true
+      # - NODE_CA_FILE=/app/data/certs/ca.crt      # 更安全：指定受信任的 CA
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3958/api/health"]
+      # HTTPS / HTTP 两种模式都能通过
+      test: ["CMD-SHELL", "wget -q --no-check-certificate --spider https://localhost:3958/api/health || wget -q --spider http://localhost:3958/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3

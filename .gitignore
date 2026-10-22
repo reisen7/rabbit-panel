@@ -20,6 +20,11 @@ go.work
 .DS_Store
 Thumbs.db
 
+# TLS 证书 / 私钥（自签证书由面板自动生成，不要提交）
+# 只忽略运行期证书目录，避免误伤测试用的证书夹具
+data/certs/
+backend/data/certs/
+
 # 临时文件
 *.db
 *.log

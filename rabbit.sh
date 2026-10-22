@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 
 set -e
 
@@ -156,6 +156,23 @@ set_env() {
     export HOST="${HOST:-0.0.0.0}"
     export JWT_SECRET="${JWT_SECRET:-rabbit-panel-secret-key-change-in-production}"
     export NODE_SECRET="${NODE_SECRET:-rabbit-panel-node-secret-change-in-production}"
+    # 原生 HTTPS 默认开启，证书缺失时自动生成自签证书（保存在 ./data/certs）
+    # 想用 HTTP 启动：TLS_ENABLED=false ./rabbit.sh start
+    export TLS_ENABLED="${TLS_ENABLED:-true}"
+    export TLS_SELF_SIGNED="${TLS_SELF_SIGNED:-true}"
+    export TLS_CERT_FILE="${TLS_CERT_FILE:-./data/certs/server.crt}"
+    export TLS_KEY_FILE="${TLS_KEY_FILE:-./data/certs/server.key}"
+    export TLS_HOSTS="${TLS_HOSTS:-}"
+    export HTTP_PORT="${HTTP_PORT:-}"
+    export TLS_REDIRECT_PORT="${TLS_REDIRECT_PORT:-$PORT}"
+}
+
+scheme() {
+    if [ "${TLS_ENABLED:-true}" = "false" ] || [ "${TLS_ENABLED}" = "0" ]; then
+        echo "http"
+    else
+        echo "https"
+    fi
 }
 
 start() {
@@ -173,6 +190,11 @@ start() {
 
     echo -e "${GREEN}Starting Rabbit Panel...${NC}"
     echo "Mode: $MODE | Port: $PORT | Arch: $(uname -m)"
+    if [ "$(scheme)" = "https" ]; then
+        echo "Access URL: https://<ip>:$PORT  (自签证书，浏览器首次会提示不受信任)"
+    else
+        echo "Access URL: http://<ip>:$PORT"
+    fi
 
     nohup "$BINARY" > "$LOG_FILE" 2>&1 &
     PID=$!

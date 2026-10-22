@@ -26,7 +26,8 @@ const workerReportInterval = 10 * time.Second
 
 // StartWorker 在 Worker 模式下向 Master 注册并持续发送心跳。
 // MASTER_URL 为空时无法加入集群。NODE_ADDRESS 是 Master 能访问到的地址（宿主机 IP:端口）。
-func (s *NodeService) StartWorker(masterURL, nodeName, advertiseAddr string) {
+// scheme 为本节点协议（https 时注册地址会带上协议前缀，便于 Master 转发）。
+func (s *NodeService) StartWorker(masterURL, nodeName, advertiseAddr, scheme string) {
 	if s.mode != model.ModeWorker {
 		return
 	}
@@ -36,14 +37,22 @@ func (s *NodeService) StartWorker(masterURL, nodeName, advertiseAddr string) {
 		return
 	}
 	if !strings.Contains(masterURL, "://") {
-		masterURL = "http://" + masterURL
+		// 未写协议时按本节点协议推断（面板默认 HTTPS），避免把 https 地址误当成 http
+		if scheme == "https" {
+			masterURL = "https://" + masterURL
+		} else {
+			masterURL = "http://" + masterURL
+		}
 	}
-	go s.workerLoop(masterURL, strings.TrimSpace(nodeName), strings.TrimSpace(advertiseAddr))
+	go s.workerLoop(masterURL, strings.TrimSpace(nodeName), strings.TrimSpace(advertiseAddr), scheme)
 }
 
-func (s *NodeService) workerLoop(masterURL, nodeName, advertiseAddr string) {
+func (s *NodeService) workerLoop(masterURL, nodeName, advertiseAddr, scheme string) {
 	log.Printf("Worker 开始连接 Master: %s", masterURL)
-	client := &http.Client{Timeout: 8 * time.Second}
+	if strings.HasPrefix(masterURL, "https://") {
+		log.Printf("Worker 使用 HTTPS 连接 Master（如为自签证书，请设置 NODE_TLS_INSECURE=true 或 NODE_CA_FILE）")
+	}
+	client := NewNodeHTTPClient(8 * time.Second)
 	registered := false
 
 	report := func() {
@@ -53,6 +62,7 @@ func (s *NodeService) workerLoop(masterURL, nodeName, advertiseAddr string) {
 			registered = false
 			return
 		}
+		addr = WithNodeScheme(addr, scheme)
 		if err := s.registerWithMaster(client, masterURL, nodeName, addr); err != nil {
 			log.Printf("Worker 注册失败: %v", err)
 			registered = false
@@ -89,6 +99,8 @@ func (s *NodeService) displayName(nodeName string) string {
 }
 
 func (s *NodeService) resolveAdvertiseAddr(masterURL, advertiseAddr string) (string, error) {
+	// 允许 NODE_ADDRESS 直接带协议前缀（如 https://192.168.1.20:10001）
+	advertiseAddr = hostPortOnly(advertiseAddr, s.port)
 	if advertiseAddr != "" {
 		if !strings.Contains(advertiseAddr, ":") && s.port != "" {
 			return advertiseAddr + ":" + s.port, nil

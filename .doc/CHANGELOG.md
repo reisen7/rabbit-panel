@@ -1,5 +1,33 @@
 # 更新日志
 
+## v2.3.2 (2026-10-22)
+
+### 安全：默认启用 HTTPS
+
+面板现在**默认以 HTTPS 启动**，首次启动时若找不到证书会自动生成一张 10 年有效的自签证书（ECDSA P-256）保存到 `./data/certs/`，无需额外反向代理。
+
+- 新增 `TLS_ENABLED`（默认 `true`）、`TLS_CERT_FILE`、`TLS_KEY_FILE`、`TLS_SELF_SIGNED`（默认 `true`）、`TLS_HOSTS`
+- 新增 `HTTP_PORT`：额外监听一个 HTTP 端口并 301 跳转到 HTTPS，`/api/health` 直接返回 `OK` 便于负载均衡探测
+- 新增 `TLS_REDIRECT_PORT`：容器端口与对外端口不一致时（如 `-p 8443:3958`）指定跳转目标端口
+- 服务端固定 HTTP/1.1（ALPN 只协商 `http/1.1`），保证容器终端 WebSocket 正常升级
+- 修改 `TLS_HOSTS` 后自签证书会自动重新签发，不再需要手动删除证书目录
+- 自签证书旁新增 `<cert>.hosts` 标记文件（记录证书 SHA-256 指纹与域名/IP 列表）：指纹对不上说明证书已被用户替换，此时按用户证书处理、绝不覆盖
+- 登录 Cookie 在 HTTPS 下自动带 `Secure` 标志（反向代理 `X-Forwarded-Proto: https` 时同样生效）
+- 前端容器终端在 HTTPS 页面下自动使用 `wss://`
+
+### 多节点
+
+- 新增 `NODE_TLS_INSECURE`、`NODE_CA_FILE`：节点间 HTTPS 互信配置
+- 节点地址支持 `https://` 前缀；Worker 的 `MASTER_URL` 未写协议时按自身 TLS 状态推断
+- 修复 AI 助手跨节点操作固定使用 `http://` 的问题（HTTPS 集群下会全部失败）
+
+### 升级注意
+
+- **从旧版本升级后默认就是 HTTPS**。如果面板前面有 Nginx / Cloudflare 等做 TLS 终止，或你只想用 HTTP，请显式设置 `TLS_ENABLED=false`。
+- 默认使用自签证书，浏览器首次访问会提示证书不受信任，属正常现象。生产环境建议换成受信任证书（`TLS_SELF_SIGNED=false` + `TLS_CERT_FILE` / `TLS_KEY_FILE`）。
+- 多节点集群使用自签证书时，各节点需设置 `NODE_TLS_INSECURE=true`，或通过 `NODE_CA_FILE` 分发 CA，否则跨节点调用会因证书校验失败。
+- Docker 部署的 healthcheck 已同时兼容 HTTP / HTTPS，无需手动改。
+
 ## v2.3.1 (2026-10-10)
 
 ### AI 助手

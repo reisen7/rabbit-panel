@@ -1,4 +1,4 @@
-﻿# CLAUDE.md
+# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
@@ -13,13 +13,16 @@ Rabbit Panel is an AI-powered, lightweight Docker container management panel bui
 **Frontend (hot-reload dev server):**
 ```bash
 cd frontend && npm install && npm run dev
-# Runs on http://localhost:3000, proxies API to backend at localhost:3958
+# Runs on http://localhost:3000, proxies API/WS to the backend (https://localhost:3958 by default,
+# since the panel now serves HTTPS with a self-signed cert; proxy sets secure:false).
+# Override with RABBIT_DEV_BACKEND=http://localhost:3958 when the backend runs with TLS_ENABLED=false.
 ```
 
 **Backend (local):**
 ```bash
 cd backend && go run main.go
-# Listens on 0.0.0.0:3958 by default
+# Listens on 0.0.0.0:3958 over HTTPS by default (self-signed cert auto-generated into ./data/certs)
+# Use TLS_ENABLED=false go run main.go for plain HTTP
 ```
 
 ### Production Build
@@ -95,6 +98,8 @@ The frontend is built by Vite into `backend/.dist/` and embedded into the Go bin
 - **Communication**: Workers poll master heartbeat; master dispatches container operations to workers via HTTP; auth uses HMAC-SHA256 via shared `NODE_SECRET`
 
 Environment variables `MODE` (master/worker), `JWT_SECRET`, `NODE_SECRET`, `MASTER_URL`, `PORT`, `HOST` control runtime behavior.
+
+**Native HTTPS** (`config/tls.go`, `config/server.go`): HTTPS is the **default** — `TLS_ENABLED` defaults to `true` and `TLS_SELF_SIGNED` defaults to `true`, so a first run with no certs auto-generates a 10-year ECDSA self-signed cert (SANs from `TLS_HOSTS`, hostname, loopback and local interface IPs) under `./data/certs`. Set `TLS_ENABLED=false` for plain HTTP (e.g. behind a TLS-terminating reverse proxy). `TLS_CERT_FILE`/`TLS_KEY_FILE` point at an external cert. Self-signed certs are reissued when they expire **or when the host list changes** (tracked via a `<cert>.hosts` sidecar marker recording the cert's SHA-256 fingerprint plus the host list; a cert whose fingerprint no longer matches the marker — i.e. the user dropped in their own cert at the same path — is treated as user-provided and never overwritten). `HTTP_PORT` adds an optional HTTP→HTTPS redirect listener whose `/api/health` answers `OK` directly, and `TLS_REDIRECT_PORT` sets the public port used in the redirect target. The server is pinned to **HTTP/1.1** (`http.Server.Protocols` with only HTTP1) because `gorilla/websocket` cannot upgrade over HTTP/2 — do not re-enable h2 or the container terminal breaks (`config/tls_test.go` covers this). Node-to-node calls honour `NODE_TLS_INSECURE` / `NODE_CA_FILE`, and node addresses may carry an `https://` prefix (`service/node_tls.go`: `ParseNodeAddress`, `WithNodeScheme`, `nodeEndpoint`, `NewNodeHTTPClient`) — **every** cross-node HTTP call must go through `NewNodeHTTPClient`, never a bare `&http.Client{}`.
 
 ## Key Frameworks & Dependencies
 

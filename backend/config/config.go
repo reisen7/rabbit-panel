@@ -2,10 +2,8 @@ package config
 
 import (
 	"embed"
-	"log"
 	"os"
-	"os/signal"
-	"syscall"
+	"strings"
 
 	"github.com/docker/docker/client"
 	"github.com/gin-gonic/gin"
@@ -22,15 +20,19 @@ type App struct {
 	Docker *client.Client
 
 	// Configuration
-	Mode       string
-	Port       string
-	Host       string
-	JWTSecret  []byte
-	NodeSecret string
-	NodeID     string
-	ServerIP   string
-	BuildInfo  service.BuildInfo
-	StaticFS   embed.FS
+	Mode     string
+	Port     string
+	Host     string
+	HTTPPort string // TLS 启用时可选：HTTP → HTTPS 跳转端口
+	// RedirectPort 是跳转目标使用的对外 HTTPS 端口（容器映射端口与内部不一致时设置 TLS_REDIRECT_PORT）
+	RedirectPort string
+	JWTSecret    []byte
+	NodeSecret   string
+	NodeID       string
+	ServerIP     string
+	BuildInfo    service.BuildInfo
+	StaticFS     embed.FS
+	TLS          TLSConfig
 
 	// Repositories
 	DockerRepo repository.IDockerRepository
@@ -61,14 +63,30 @@ type App struct {
 
 // NewApp 创建并初始化 App 实例
 func NewApp(buildInfo service.BuildInfo) (*App, error) {
+	// 默认开启 HTTPS：面板承载容器终端与 Docker 管理接口，明文监听风险较高。
+	// 需要 HTTP 时显式设置 TLS_ENABLED=false（例如前面已有反向代理做 TLS 终止）。
+	tlsConf := TLSConfig{
+		Enabled:    getBoolEnv("TLS_ENABLED", true),
+		CertFile:   getEnv("TLS_CERT_FILE", defaultTLSCertFile),
+		KeyFile:    getEnv("TLS_KEY_FILE", defaultTLSKeyFile),
+		SelfSigned: getBoolEnv("TLS_SELF_SIGNED", true),
+		Hosts:      splitEnvList(getEnv("TLS_HOSTS", "")),
+	}
+	if err := tlsConf.Prepare(); err != nil {
+		return nil, err
+	}
+
 	app := &App{
 		Mode:       getEnv("MODE", "master"),
 		Port:       getEnv("PORT", "3958"),
 		Host:       getEnv("HOST", "0.0.0.0"),
+		HTTPPort:   getEnv("HTTP_PORT", ""),
 		JWTSecret:  []byte(getEnv("JWT_SECRET", "change-me")),
 		NodeSecret: getEnv("NODE_SECRET", "node-secret"),
 		BuildInfo:  buildInfo,
+		TLS:        tlsConf,
 	}
+	app.RedirectPort = getEnv("TLS_REDIRECT_PORT", app.Port)
 
 	// Get hostname for node ID
 	hostname, _ := os.Hostname()
@@ -141,6 +159,7 @@ func (app *App) initServices() {
 			getEnv("MASTER_URL", ""),
 			getEnv("NODE_NAME", ""),
 			getEnv("NODE_ADDRESS", ""),
+			app.NodeScheme(),
 		)
 	}
 
@@ -148,20 +167,20 @@ func (app *App) initServices() {
 	app.TerminalService = exec.NewTerminalService(app.DockerRepo)
 }
 
-// Run 启动应用
-func (app *App) Run() error {
-	// Graceful shutdown
-	go func() {
-		sig := make(chan os.Signal, 1)
-		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
-		<-sig
-		log.Println("收到关闭信号，正在关闭...")
-		os.Exit(0)
-	}()
+// NodeScheme 返回本节点对外提供服务的协议；HTTP 模式下返回空串以保持地址简洁。
+func (app *App) NodeScheme() string {
+	if app.TLS.Enabled {
+		return "https"
+	}
+	return ""
+}
 
-	addr := app.Host + ":" + app.Port
-	log.Printf("服务器启动: %s", addr)
-	return app.Engine.Run(addr)
+// Scheme 返回本节点对外提供服务的协议，用于日志与健康检查。
+func (app *App) Scheme() string {
+	if app.TLS.Enabled {
+		return "https"
+	}
+	return "http"
 }
 
 // getEnv 获取环境变量，带默认值
@@ -170,4 +189,32 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+// getBoolEnv 解析布尔型环境变量。
+func getBoolEnv(key string, defaultValue bool) bool {
+	value := strings.ToLower(strings.TrimSpace(os.Getenv(key)))
+	if value == "" {
+		return defaultValue
+	}
+	switch value {
+	case "1", "true", "yes", "on", "y":
+		return true
+	default:
+		return false
+	}
+}
+
+// splitEnvList 按逗号/空格拆分列表型环境变量。
+func splitEnvList(value string) []string {
+	fields := strings.FieldsFunc(value, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\t' || r == '\n'
+	})
+	result := make([]string, 0, len(fields))
+	for _, field := range fields {
+		if trimmed := strings.TrimSpace(field); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
 }

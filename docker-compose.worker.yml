@@ -21,17 +21,30 @@ services:
       - MODE=worker
       - PORT=10001
       # 必须修改: Master 节点地址
-      - MASTER_URL=http://master-ip:3958
+      # 面板默认启用 HTTPS，所以这里通常也要写 https://（Master 用 HTTP 时才写 http://）
+      - MASTER_URL=https://master-ip:3958
       # 必须修改: 当前节点名称（每个 Worker 必须唯一）
       - NODE_NAME=worker-1
       # 必须修改: Master 能访问到的本机地址（宿主机 IP:映射端口）
       # 桥接网络里自动探测到的是容器内网 IP，跨机器不可达
+      # 不要带协议前缀，Worker 会按自身 TLS 状态自动补 https://
       - NODE_ADDRESS=192.168.1.20:10001
       # 生产环境请修改以下密钥（Master 和 Worker 必须使用相同的密钥）
       - JWT_SECRET=change-me-in-production
       - NODE_SECRET=change-me-in-production
+      # ===== 原生 HTTPS =====
+      # 默认已启用（自签证书，首次启动自动生成到 ./data/certs）
+      # - TLS_ENABLED=true
+      # - TLS_SELF_SIGNED=true
+      # - TLS_HOSTS=worker-1.example.com,192.168.1.20   # 自签证书需要覆盖的域名/IP
+      # 集群内使用自签证书时，访问 Master 需放开校验，二选一（不设则注册/心跳会报证书错误）：
+      # - NODE_TLS_INSECURE=true
+      # - NODE_CA_FILE=/app/data/certs/ca.crt      # 更安全：指定受信任的 CA
+      # 关闭 HTTPS（Master 用 HTTP 时 Worker 也建议关掉）：
+      # - TLS_ENABLED=false
     healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:10001/api/health"]
+      # HTTPS / HTTP 两种模式都能通过
+      test: ["CMD-SHELL", "wget -q --no-check-certificate --spider https://localhost:10001/api/health || wget -q --spider http://localhost:10001/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
