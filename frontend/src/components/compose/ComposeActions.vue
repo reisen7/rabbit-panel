@@ -146,6 +146,7 @@ defineExpose({
 .compose-actions {
   display: flex;
   flex-direction: column;
+  flex-shrink: 0;
   gap: 12px;
 }
 

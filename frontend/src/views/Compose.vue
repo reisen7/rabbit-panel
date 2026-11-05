@@ -70,7 +70,7 @@
               <el-icon><Box /></el-icon>
               {{ t('compose.containers') }}
             </div>
-            <el-table :data="currentProject.containers" size="small" stripe>
+            <el-table :data="currentProject.containers" size="small" stripe max-height="200">
               <el-table-column prop="service" :label="t('compose.service')" min-width="80" />
               <el-table-column prop="name" :label="t('common.name')" min-width="120" show-overflow-tooltip />
               <el-table-column prop="state" :label="t('common.status')" width="90">
@@ -445,9 +445,11 @@ watch(searchQuery, handleSearch)
 
 <style scoped>
 .compose-page {
-  height: 100%;
+  /* 顶栏 60px + 主区域上下内边距 40px，锁在视口内，避免页面再出一条滚动条 */
+  height: calc(100vh - 100px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .page-header {
@@ -473,6 +475,7 @@ watch(searchQuery, handleSearch)
   display: flex;
   gap: 20px;
   min-height: 0;
+  overflow: hidden;
 }
 
 /* Left Panel */
@@ -481,6 +484,8 @@ watch(searchQuery, handleSearch)
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   background: var(--el-bg-color);
@@ -554,10 +559,12 @@ watch(searchQuery, handleSearch)
   flex-direction: column;
   gap: 16px;
   min-width: 0;
-  overflow-y: auto;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .container-status {
+  flex-shrink: 0;
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   overflow: hidden;
@@ -581,7 +588,7 @@ watch(searchQuery, handleSearch)
   border: 1px solid var(--el-border-color-light);
   border-radius: 4px;
   overflow: hidden;
-  min-height: 400px;
+  min-height: 0;
 }
 
 .section-header {
@@ -604,6 +611,10 @@ watch(searchQuery, handleSearch)
 
 /* Responsive */
 @media (max-width: 768px) {
+  .compose-page {
+    height: calc(100vh - 84px);
+  }
+
   .compose-content {
     flex-direction: column;
   }

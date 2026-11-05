@@ -34,7 +34,6 @@
         :placeholder="t('compose.editorPlaceholder')"
         :disabled="!projectName || loading"
         class="yaml-editor"
-        :autosize="{ minRows: 20, maxRows: 40 }"
         @input="handleInput"
       />
     </div>
@@ -153,7 +152,10 @@ defineExpose({
 .compose-editor {
   display: flex;
   flex-direction: column;
+  flex: 1;
+  min-height: 0;
   height: 100%;
+  overflow: hidden;
 }
 
 .editor-toolbar {
@@ -175,16 +177,31 @@ defineExpose({
 
 .editor-container {
   flex: 1;
+  min-height: 0;
   padding: 12px;
-  overflow: auto;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.yaml-editor {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
 .yaml-editor :deep(.el-textarea__inner) {
+  flex: 1;
+  height: 100% !important;
+  min-height: 0;
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', 'Consolas', monospace;
   font-size: 13px;
   line-height: 1.6;
   tab-size: 2;
   resize: none;
+  overflow: auto;
 }
 
 .editor-footer {
