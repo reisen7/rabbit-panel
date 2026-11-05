@@ -74,7 +74,7 @@ jobs:
           npm install
           npm run build
 
-      - name: Build Linux binaries
+      - name: Build release binaries
         env:
           VERSION: ${{ steps.version.outputs.tag }}
           COMMIT_HASH: ${{ github.sha }}
@@ -82,6 +82,8 @@ jobs:
         run: |
           chmod +x rabbit.sh
           ./rabbit.sh build all --skip-frontend -v "${VERSION}"
+          ./rabbit.sh build windows-amd64 --skip-frontend -v "${VERSION}"
+          ./rabbit.sh build windows-arm64 --skip-frontend -v "${VERSION}"
 
       - name: Generate checksums
         env:
@@ -92,6 +94,8 @@ jobs:
             rabbit-panel-linux-amd64-${TAG}-release/rabbit-panel-linux-amd64-${TAG} \
             rabbit-panel-linux-arm64-${TAG}-release/rabbit-panel-linux-arm64-${TAG} \
             rabbit-panel-linux-armv7-${TAG}-release/rabbit-panel-linux-armv7-${TAG} \
+            rabbit-panel-windows-amd64-${TAG}-release/rabbit-panel-windows-amd64-${TAG}.exe \
+            rabbit-panel-windows-arm64-${TAG}-release/rabbit-panel-windows-arm64-${TAG}.exe \
             > sha256sums.txt
 
       - name: Create or update release
@@ -114,6 +118,8 @@ jobs:
             .dist/rabbit-panel-linux-amd64-${TAG}-release/rabbit-panel-linux-amd64-${TAG} \
             .dist/rabbit-panel-linux-arm64-${TAG}-release/rabbit-panel-linux-arm64-${TAG} \
             .dist/rabbit-panel-linux-armv7-${TAG}-release/rabbit-panel-linux-armv7-${TAG} \
+            .dist/rabbit-panel-windows-amd64-${TAG}-release/rabbit-panel-windows-amd64-${TAG}.exe \
+            .dist/rabbit-panel-windows-arm64-${TAG}-release/rabbit-panel-windows-arm64-${TAG}.exe \
             .dist/sha256sums.txt \
             --clobber
 
@@ -168,6 +174,10 @@ jobs:
                   assets["linux-arm64"] = download
               elif "linux-armv7" in name:
                   assets["linux-armv7"] = download
+              elif "windows-amd64" in name:
+                  assets["windows-amd64"] = download
+              elif "windows-arm64" in name:
+                  assets["windows-arm64"] = download
               elif name == "sha256sums.txt":
                   assets["sha256sums"] = download
 
@@ -185,11 +195,17 @@ jobs:
                       sha256["linux-arm64"] = checksum
                   elif "linux-armv7" in filename:
                       sha256["linux-armv7"] = checksum
+                  elif "windows-amd64" in filename:
+                      sha256["windows-amd64"] = checksum
+                  elif "windows-arm64" in filename:
+                      sha256["windows-arm64"] = checksum
 
           fallback_assets = {
               "linux-amd64": f"https://github.com/reisen7/rabbit-panel/releases/download/{tag}/rabbit-panel-linux-amd64-{tag}",
               "linux-arm64": f"https://github.com/reisen7/rabbit-panel/releases/download/{tag}/rabbit-panel-linux-arm64-{tag}",
               "linux-armv7": f"https://github.com/reisen7/rabbit-panel/releases/download/{tag}/rabbit-panel-linux-armv7-{tag}",
+              "windows-amd64": f"https://github.com/reisen7/rabbit-panel/releases/download/{tag}/rabbit-panel-windows-amd64-{tag}.exe",
+              "windows-arm64": f"https://github.com/reisen7/rabbit-panel/releases/download/{tag}/rabbit-panel-windows-arm64-{tag}.exe",
           }
           for key, value in fallback_assets.items():
               assets.setdefault(key, value)

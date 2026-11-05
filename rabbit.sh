@@ -76,9 +76,11 @@ build_frontend() {
 
 build_target() {
     local target="$1"
+    local goos="linux"
     local goarch=""
     local goarm=""
     local suffix=""
+    local ext=""
 
     case "$target" in
         amd64)
@@ -94,6 +96,18 @@ build_target() {
             goarm="7"
             suffix="linux-armv7"
             ;;
+        windows-amd64)
+            goos="windows"
+            goarch="amd64"
+            suffix="windows-amd64"
+            ext=".exe"
+            ;;
+        windows-arm64)
+            goos="windows"
+            goarch="arm64"
+            suffix="windows-arm64"
+            ext=".exe"
+            ;;
         *)
             echo -e "${RED}Unsupported build target: $target${NC}"
             exit 1
@@ -106,12 +120,12 @@ build_target() {
     fi
 
     local output_dir=".dist/${output_name}-release"
-    local output_file="${output_dir}/${output_name}"
+    local output_file="${output_dir}/${output_name}${ext}"
 
     mkdir -p "$output_dir"
     cd "$BACKEND_DIR"
 
-    local -a envs=("GOOS=linux" "GOARCH=$goarch" "CGO_ENABLED=0" "GOPROXY=https://goproxy.cn,direct")
+    local -a envs=("GOOS=$goos" "GOARCH=$goarch" "CGO_ENABLED=0" "GOPROXY=https://goproxy.cn,direct")
     if [ -n "$goarm" ]; then
         envs+=("GOARM=$goarm")
     fi
@@ -274,7 +288,7 @@ build() {
                 VERSION="$2"
                 shift 2
                 ;;
-            auto|all|amd64|arm64|armv7)
+            auto|all|amd64|arm64|armv7|windows-amd64|windows-arm64)
                 target="$1"
                 shift
                 ;;
@@ -304,9 +318,16 @@ build() {
         return
     fi
 
+    case "$target" in
+        windows-amd64|windows-arm64)
+            build_target "$target"
+            return
+            ;;
+    esac
+
     if ! is_supported_target "$target"; then
         echo -e "${RED}Unknown build target: $target${NC}"
-        echo "Available targets: auto | all | ${SUPPORTED_TARGETS[*]}"
+        echo "Available targets: auto | all | ${SUPPORTED_TARGETS[*]} | windows-amd64 | windows-arm64"
         exit 1
     fi
 
@@ -327,7 +348,7 @@ show_help() {
     echo "  build [target]"
     echo ""
     echo "Build targets:"
-    echo "  auto | all | amd64 | arm64 | armv7"
+    echo "  auto | all | amd64 | arm64 | armv7 | windows-amd64 | windows-arm64"
     echo "  --skip-frontend"
     echo "  -v, --version <ver>"
 }

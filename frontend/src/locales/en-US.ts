@@ -42,11 +42,11 @@ export default {
   // Sidebar Navigation
   sideNav: {
     dashboard: 'Dashboard',
-    containers: 'Container Management',
-    images: 'Image Management',
-    networks: 'Network Management',
-    compose: 'Compose Management',
-    nodes: 'Node Management',
+    containers: 'Container',
+    images: 'Image',
+    networks: 'Network',
+    compose: 'Compose',
+    nodes: 'Node',
     volumes: 'Volumes',
     registry: 'Registry',
     dockerConfig: 'Docker Config',
