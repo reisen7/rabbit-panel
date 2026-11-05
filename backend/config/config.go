@@ -2,6 +2,7 @@ package config
 
 import (
 	"embed"
+	"log"
 	"os"
 	"strings"
 
@@ -63,10 +64,9 @@ type App struct {
 
 // NewApp 创建并初始化 App 实例
 func NewApp(buildInfo service.BuildInfo) (*App, error) {
-	// 默认开启 HTTPS：面板承载容器终端与 Docker 管理接口，明文监听风险较高。
-	// 需要 HTTP 时显式设置 TLS_ENABLED=false（例如前面已有反向代理做 TLS 终止）。
+	// 默认 HTTP。需要 HTTPS 时设置 TLS_ENABLED=true；未提供证书且 TLS_SELF_SIGNED=true 时自动生成自签证书。
 	tlsConf := TLSConfig{
-		Enabled:    getBoolEnv("TLS_ENABLED", true),
+		Enabled:    getBoolEnv("TLS_ENABLED", false),
 		CertFile:   getEnv("TLS_CERT_FILE", defaultTLSCertFile),
 		KeyFile:    getEnv("TLS_KEY_FILE", defaultTLSKeyFile),
 		SelfSigned: getBoolEnv("TLS_SELF_SIGNED", true),
@@ -92,11 +92,17 @@ func NewApp(buildInfo service.BuildInfo) (*App, error) {
 	hostname, _ := os.Hostname()
 	app.NodeID = hostname + ":" + app.Port
 
-	// Initialize Docker client
-	cli, err := client.NewClientWithOpts(
-		client.FromEnv,
-		client.WithAPIVersionNegotiation(),
-	)
+	// Initialize Docker client.
+	// DOCKER_HOST 优先。未设置时沿用 Docker CLI 当前 context，
+	// 这样在 Windows 上会连到 dockerDesktopLinuxEngine，而不是需要管理员权限的 docker_engine。
+	dockerOpts := []client.Opt{client.WithAPIVersionNegotiation()}
+	if host := dockerHostFromContext(); host != "" {
+		log.Printf("Docker host: %s (docker context)", host)
+		dockerOpts = append(dockerOpts, client.WithHost(host))
+	} else {
+		dockerOpts = append(dockerOpts, client.FromEnv)
+	}
+	cli, err := client.NewClientWithOpts(dockerOpts...)
 	if err != nil {
 		return nil, err
 	}

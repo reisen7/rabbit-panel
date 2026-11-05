@@ -166,19 +166,18 @@ JWT_SECRET=${jwt_secret}
 NODE_SECRET=${node_secret}
 RABBIT_DEPLOY_MODE=binary
 RABBIT_SERVICE_NAME=${SERVICE_NAME}
-# --- 原生 HTTPS（默认开启，证书缺失时自动生成自签证书到 data/certs）---
-TLS_ENABLED=true
+# --- 访问协议（默认 HTTP；需要 HTTPS 时把 TLS_ENABLED 改为 true）---
+TLS_ENABLED=false
 TLS_SELF_SIGNED=true
 TLS_HOSTS=
-# 用已有证书时改为指向自己的证书并关掉自签：
+# 用已有证书时指向自己的证书并关掉自签：
 # TLS_ENABLED=true
 # TLS_SELF_SIGNED=false
 # TLS_CERT_FILE=${INSTALL_DIR}/data/certs/server.crt
 # TLS_KEY_FILE=${INSTALL_DIR}/data/certs/server.key
-# 可选：额外开一个 HTTP 端口，自动 301 到 HTTPS
+# 启用 HTTPS 后，可选额外开一个 HTTP 端口，自动 301 到 HTTPS
 # HTTP_PORT=3959
 # TLS_REDIRECT_PORT=3958
-# 想用纯 HTTP 访问（例如前面有 Nginx 做 TLS 终止）：TLS_ENABLED=false
 EOF
     chmod 600 "$ENV_FILE"
   fi
@@ -274,11 +273,10 @@ PY
   # 从 env 文件读取实际监听端口与 TLS 状态，避免打印与实际不符的地址
   local access_port access_scheme
   access_port="$(env_value PORT 3958)"
-  if [ "$(env_value TLS_ENABLED true)" = "false" ] || [ "$(env_value TLS_ENABLED true)" = "0" ]; then
-    access_scheme="http"
-  else
-    access_scheme="https"
-  fi
+  case "$(env_value TLS_ENABLED false | tr '[:upper:]' '[:lower:]')" in
+    1|true|yes|on|y) access_scheme="https" ;;
+    *) access_scheme="http" ;;
+  esac
 
   echo "[OK] Rabbit Panel installed."
   echo "[INFO] Service name: ${SERVICE_NAME}"
@@ -286,8 +284,9 @@ PY
   echo "[INFO] Env file:     ${ENV_FILE}"
   echo "[INFO] Access URL:   ${access_scheme}://${access_host}:${access_port}"
   if [ "$access_scheme" = "https" ]; then
-    echo "[INFO] 默认使用自签证书，浏览器首次访问会提示证书不受信任（属正常现象）。"
-    echo "[INFO] 想改用纯 HTTP：编辑 ${ENV_FILE} 设置 TLS_ENABLED=false 后 systemctl restart ${SERVICE_NAME}"
+    echo "[INFO] 使用自签证书时，浏览器首次访问会提示证书不受信任（属正常现象）。"
+  else
+    echo "[INFO] 当前为 HTTP。需要 HTTPS：编辑 ${ENV_FILE} 设置 TLS_ENABLED=true 后 systemctl restart ${SERVICE_NAME}"
   fi
   echo
   echo "[INFO] Service management commands:"

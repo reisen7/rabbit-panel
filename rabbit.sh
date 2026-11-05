@@ -156,9 +156,9 @@ set_env() {
     export HOST="${HOST:-0.0.0.0}"
     export JWT_SECRET="${JWT_SECRET:-rabbit-panel-secret-key-change-in-production}"
     export NODE_SECRET="${NODE_SECRET:-rabbit-panel-node-secret-change-in-production}"
-    # 原生 HTTPS 默认开启，证书缺失时自动生成自签证书（保存在 ./data/certs）
-    # 想用 HTTP 启动：TLS_ENABLED=false ./rabbit.sh start
-    export TLS_ENABLED="${TLS_ENABLED:-true}"
+    # 默认 HTTP。启用 HTTPS：TLS_ENABLED=true ./rabbit.sh start
+    # 未提供证书时自动生成自签证书（保存在 ./data/certs）
+    export TLS_ENABLED="${TLS_ENABLED:-false}"
     export TLS_SELF_SIGNED="${TLS_SELF_SIGNED:-true}"
     export TLS_CERT_FILE="${TLS_CERT_FILE:-./data/certs/server.crt}"
     export TLS_KEY_FILE="${TLS_KEY_FILE:-./data/certs/server.key}"
@@ -168,11 +168,10 @@ set_env() {
 }
 
 scheme() {
-    if [ "${TLS_ENABLED:-true}" = "false" ] || [ "${TLS_ENABLED}" = "0" ]; then
-        echo "http"
-    else
-        echo "https"
-    fi
+    case "$(printf '%s' "${TLS_ENABLED:-false}" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on|y) echo "https" ;;
+        *) echo "http" ;;
+    esac
 }
 
 start() {

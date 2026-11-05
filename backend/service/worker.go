@@ -37,7 +37,7 @@ func (s *NodeService) StartWorker(masterURL, nodeName, advertiseAddr, scheme str
 		return
 	}
 	if !strings.Contains(masterURL, "://") {
-		// 未写协议时按本节点协议推断（面板默认 HTTPS），避免把 https 地址误当成 http
+		// 未写协议时按本节点协议推断（本节点启用 HTTPS 才用 https）
 		if scheme == "https" {
 			masterURL = "https://" + masterURL
 		} else {

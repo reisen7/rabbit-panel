@@ -46,7 +46,7 @@ ENV TZ=Asia/Shanghai
 
 COPY --from=backend-builder /app/rabbit-panel .
 
-# 3958: panel port (HTTPS when TLS_ENABLED=true); 3959: optional HTTP -> HTTPS redirect port
+# 3958: panel port (HTTP by default, HTTPS when TLS_ENABLED=true); 3959: optional HTTP -> HTTPS redirect port
 EXPOSE 3958 3959
 
 CMD ["./rabbit-panel"]

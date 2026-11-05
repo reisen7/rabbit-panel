@@ -1,6 +1,6 @@
 # Rabbit Panel ｜ 极致轻量 AI 智能容器运维面板
 
-一个面向 Linux 服务器的轻量 Docker 运维面板，支持 ARM64 / armv7 / x86_64、多节点管理、AI 助手与在线更新。默认端口 `3958`，默认以 **HTTPS** 提供服务（首次启动自动生成自签证书）。
+一个面向 Linux 服务器的轻量 Docker 运维面板，支持 ARM64 / armv7 / x86_64、多节点管理、AI 助手与在线更新。默认端口 `3958`，默认以 **HTTP** 提供服务，设置 `TLS_ENABLED=true` 即可启用 HTTPS。
 
 ## 特性
 
@@ -8,7 +8,7 @@
 - 容器 / 镜像 / 网络 / 存储卷 / Compose 管理
 - Docker 配置、仓库配置、系统监控
 - 多节点 Master / Worker 管理
-- 默认 HTTPS：原生 TLS，首次启动自动生成自签证书，可选 HTTP 跳转端口
+- 可选 HTTPS：设置 `TLS_ENABLED=true` 后启用原生 TLS，无证书时自动生成自签证书，可选 HTTP 跳转端口
 - AI 助手支持多种模型接口，并可扫码连接微信
 - 智能体可以操作已登记的其他节点
 - 在线更新、版本检测、进度反馈
@@ -106,25 +106,24 @@ docker compose -f docker-compose.worker.yml up -d
 
 ## 原生 HTTPS
 
-面板**默认以 HTTPS 启动**，无需反向代理。首次启动找不到证书时，会自动在 `./data/certs/` 生成一张 10 年有效的自签证书，开箱即可用 `https://` 访问（浏览器提示证书不受信任属正常现象）。
+面板**默认以 HTTP 启动**。需要加密访问时设置 `TLS_ENABLED=true`。未提供证书时（`TLS_SELF_SIGNED` 默认为 `true`），首次启动会在 `./data/certs/` 生成一张 10 年有效的自签证书（浏览器提示证书不受信任属正常现象）。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `TLS_ENABLED` | `true` | 设为 `false` 退回纯 HTTP |
+| `TLS_ENABLED` | `false` | 设为 `true` 启用 HTTPS |
 | `TLS_CERT_FILE` | `./data/certs/server.crt` | 证书路径（PEM，可含证书链） |
 | `TLS_KEY_FILE` | `./data/certs/server.key` | 私钥路径（PEM） |
-| `TLS_SELF_SIGNED` | `true` | 证书缺失/过期/`TLS_HOSTS` 变化时自动生成自签证书 |
+| `TLS_SELF_SIGNED` | `true` | 启用 HTTPS 后，证书缺失/过期/`TLS_HOSTS` 变化时自动生成自签证书 |
 | `TLS_HOSTS` | 空 | 自签证书需覆盖的额外域名或 IP，逗号分隔（默认已含 `localhost`、`127.0.0.1`、`::1`、主机名与本机网卡 IP） |
 | `HTTP_PORT` | 空 | 额外监听该端口，把 HTTP 301 跳转到 HTTPS（`/api/health` 直接返回 `OK`） |
 | `TLS_REDIRECT_PORT` | 同 `PORT` | 跳转目标使用的**对外** HTTPS 端口，`-p 8443:3958` 这类映射必须设置 |
 | `NODE_TLS_INSECURE` | `false` | 访问其它节点时跳过证书校验（自签场景） |
 | `NODE_CA_FILE` | 空 | 访问其它节点时额外信任的 CA 证书路径 |
 
-### 使用自签证书（默认）
-
-按「快速开始」启动即可。要指定域名/IP 并开一个 HTTP 跳转端口：
+### 启用 HTTPS（自签证书）
 
 ```bash
+-e TLS_ENABLED=true \
 -e TLS_HOSTS=panel.example.com,192.168.1.10 \
 -e HTTP_PORT=3959
 ```
@@ -137,6 +136,7 @@ docker compose -f docker-compose.worker.yml up -d
 
 ```bash
 -v /etc/letsencrypt:/etc/letsencrypt:ro \
+-e TLS_ENABLED=true \
 -e TLS_SELF_SIGNED=false \
 -e TLS_CERT_FILE=/etc/letsencrypt/live/panel.example.com/fullchain.pem \
 -e TLS_KEY_FILE=/etc/letsencrypt/live/panel.example.com/privkey.pem
@@ -148,13 +148,13 @@ docker compose -f docker-compose.worker.yml up -d
 
 ### 多节点
 
-- Worker 的 `MASTER_URL` 写 `https://master-ip:3958`（未写协议时按自身 TLS 状态推断）。
+- Worker 的 `MASTER_URL` 写 `http://master-ip:3958`。Master 启用了 HTTPS 时改为 `https://`（未写协议时按 Worker 自身 TLS 状态推断）。
 - `NODE_ADDRESS` 保持 `IP:端口` 即可，Worker 会自动补协议前缀。
 - 自签场景需设 `NODE_TLS_INSECURE=true`，或通过 `NODE_CA_FILE` 分发 CA，否则跨节点调用会因证书校验失败。
 
-### 关闭 HTTPS
+### 反向代理
 
-前面已有 Nginx / Cloudflare 做 TLS 终止时，设 `TLS_ENABLED=false` 即可。反代转发带 `X-Forwarded-Proto: https` 时，登录 Cookie 仍会自动加 `Secure`。
+前面已有 Nginx / Cloudflare 做 TLS 终止时，保持默认 HTTP 即可。反代转发带 `X-Forwarded-Proto: https` 时，登录 Cookie 仍会自动加 `Secure`。
 
 ### 说明
 

@@ -1,5 +1,20 @@
 # 更新日志
 
+## v2.3.3 (2026-11-05)
+
+### 访问协议
+
+- 默认改为 HTTP。需要 HTTPS 时设置 `TLS_ENABLED=true`；未提供证书时仍会自动生成自签证书。
+- 已有安装的环境文件不会被覆盖。文件里已经写了 `TLS_ENABLED=true` 的机器继续走 HTTPS。
+
+### Windows
+
+- 未设置 `DOCKER_HOST` 时，跟随 Docker CLI 当前 context 连接引擎，避免去连需要管理员权限的 `docker_engine` 管道。
+
+### 升级注意
+
+- 从 v2.3.2 升级后，没有显式设置 `TLS_ENABLED=true` 的部署会改回 HTTP。Docker Compose 示例默认不再打开 HTTPS。
+
 ## v2.3.2 (2026-10-22)
 
 ### 安全：默认启用 HTTPS

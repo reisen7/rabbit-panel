@@ -6,9 +6,8 @@ import Components from 'unplugin-vue-components/vite'
 import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
-// 后端默认以 HTTPS（自签证书）启动，开发代理默认走 https 并跳过证书校验。
-// 若后端用 TLS_ENABLED=false 启动，可用 RABBIT_DEV_BACKEND=http://localhost:3958 覆盖。
-const backendTarget = process.env.RABBIT_DEV_BACKEND ?? 'https://localhost:3958'
+// 后端默认 HTTP。后端以 TLS_ENABLED=true 启动时，用 RABBIT_DEV_BACKEND=https://localhost:3958 覆盖。
+const backendTarget = process.env.RABBIT_DEV_BACKEND ?? 'http://localhost:3958'
 const wsTarget = backendTarget.replace(/^http/, 'ws')
 
 export default defineConfig({
