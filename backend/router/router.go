@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/base64"
 	"encoding/binary"
@@ -18,6 +19,7 @@ import (
 	"path"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -245,11 +247,83 @@ func serveEmbeddedFile(c *gin.Context, embeddedFS fs.FS, path string) {
 			c.Status(http.StatusNotFound)
 			return
 		}
-		c.Data(http.StatusOK, "text/html; charset=utf-8", fileData)
+		writeEmbedded(c, "index.html", fileData)
 		return
 	}
 
-	c.Data(http.StatusOK, detectContentType(cleanPath), fileData)
+	writeEmbedded(c, cleanPath, fileData)
+}
+
+// staticGzipCache 缓存嵌入文件的 gzip 结果。文件打进二进制后不会变，同一路径只压缩一次。
+var staticGzipCache sync.Map
+
+// writeEmbedded 写出前端静态文件。
+// Vite 产物在 assets/ 下且文件名带内容哈希，可以长期缓存。
+// index.html 不缓存，这样升级后浏览器会拿到新的文件名。
+func writeEmbedded(c *gin.Context, path string, data []byte) {
+	if strings.HasPrefix(path, "assets/") {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		c.Header("Cache-Control", "no-cache")
+	}
+
+	contentType := detectContentType(path)
+	if acceptsGzip(c.Request) && compressibleStatic(path) && len(data) >= 1024 {
+		c.Header("Vary", "Accept-Encoding")
+		compressed := gzipStatic(path, data)
+		if len(compressed) > 0 && len(compressed) < len(data) {
+			c.Header("Content-Encoding", "gzip")
+			c.Data(http.StatusOK, contentType, compressed)
+			return
+		}
+	}
+	c.Data(http.StatusOK, contentType, data)
+}
+
+func acceptsGzip(r *http.Request) bool {
+	for _, part := range strings.Split(r.Header.Get("Accept-Encoding"), ",") {
+		token := strings.TrimSpace(part)
+		if i := strings.Index(token, ";"); i >= 0 {
+			token = strings.TrimSpace(token[:i])
+		}
+		if token == "gzip" {
+			return true
+		}
+	}
+	return false
+}
+
+func compressibleStatic(path string) bool {
+	switch {
+	case strings.HasSuffix(path, ".js"),
+		strings.HasSuffix(path, ".css"),
+		strings.HasSuffix(path, ".html"),
+		strings.HasSuffix(path, ".svg"),
+		strings.HasSuffix(path, ".json"):
+		return true
+	default:
+		return false
+	}
+}
+
+func gzipStatic(path string, data []byte) []byte {
+	if v, ok := staticGzipCache.Load(path); ok {
+		return v.([]byte)
+	}
+	var buf bytes.Buffer
+	zw, err := gzip.NewWriterLevel(&buf, gzip.DefaultCompression)
+	if err != nil {
+		return nil
+	}
+	if _, err := zw.Write(data); err != nil {
+		return nil
+	}
+	if err := zw.Close(); err != nil {
+		return nil
+	}
+	compressed := buf.Bytes()
+	actual, _ := staticGzipCache.LoadOrStore(path, compressed)
+	return actual.([]byte)
 }
 
 func detectContentType(path string) string {
