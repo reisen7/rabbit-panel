@@ -1,0 +1,30 @@
+{
+  "version": "v2.3.4",
+  "version_number": "2.3.4",
+  "release_url": "https://github.com/reisen7/rabbit-panel/releases/tag/v2.3.4",
+  "release_name": "v2.3.4",
+  "release_notes": "**Full Changelog**: https://github.com/reisen7/rabbit-panel/compare/v2.3.3...v2.3.4",
+  "published_at": "2026-11-06T17:00:27Z",
+  "docker_image": "reisen7/rabbit-panel",
+  "docker_tag": "latest",
+  "docker_tags": [
+    "v2.3.4",
+    "2.3.4",
+    "latest"
+  ],
+  "assets": {
+    "linux-amd64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/rabbit-panel-linux-amd64-v2.3.4",
+    "linux-arm64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/rabbit-panel-linux-arm64-v2.3.4",
+    "linux-armv7": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/rabbit-panel-linux-armv7-v2.3.4",
+    "windows-amd64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/rabbit-panel-windows-amd64-v2.3.4.exe",
+    "windows-arm64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/rabbit-panel-windows-arm64-v2.3.4.exe",
+    "sha256sums": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.4/sha256sums.txt"
+  },
+  "sha256": {
+    "linux-amd64": "9b8c723a6157a95bc841b67b36b097c72691a36130cc2258bf5c0b561daa21ca",
+    "linux-arm64": "81d5c9400ac2efed4dc8789042b291a435c919c50f327dd39bf86f3aa807d525",
+    "linux-armv7": "56fe04cffb35a7894e3a4f2581a8351af9373a9bb374c7cae3eb768a811d9ece",
+    "windows-amd64": "349fc28287d02ad45196977b3afd770fe405ffd714aaf0239ecb7b95f74df859",
+    "windows-arm64": "f0a08d9aa30958f4ddf722c669d5f099b2fcdd7cfebd96f68ff0bf8af857f21a"
+  }
+}
