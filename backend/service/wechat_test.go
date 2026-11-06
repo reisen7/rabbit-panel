@@ -105,15 +105,15 @@ func (f *ilinkFake) handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if mode == "image" && n == 1 {
-			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c1","msgs":[{"message_id":3,"from_user_id":"user-9","message_type":1,"message_state":2,"context_token":"ctx-img","item_list":[{"type":2}]}]}`))
+			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c1","msgs":[{"message_id":3,"from_user_id":"user-1","message_type":1,"message_state":2,"context_token":"ctx-img","item_list":[{"type":2}]}]}`))
 			return
 		}
 		if n == 1 {
-			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c1","msgs":[{"message_id":7,"from_user_id":"user-9","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"你好"}}]},{"message_id":7,"from_user_id":"user-9","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"重复"}}]}]}`))
+			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c1","msgs":[{"message_id":7,"from_user_id":"user-1","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"你好"}}]},{"message_id":7,"from_user_id":"user-1","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"重复"}}]}]}`))
 			return
 		}
 		if n == 2 && mode == "login" {
-			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c2","msgs":[{"message_id":8,"from_user_id":"user-9","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"再问"}}]}]}`))
+			_, _ = w.Write([]byte(`{"ret":0,"get_updates_buf":"c2","msgs":[{"message_id":8,"from_user_id":"user-1","message_type":1,"message_state":2,"context_token":"ctx-1","item_list":[{"type":1,"text_item":{"text":"再问"}}]}]}`))
 			return
 		}
 		<-r.Context().Done()
@@ -261,11 +261,30 @@ func TestILinkVerifyCode(t *testing.T) {
 	}
 }
 
+func TestWeChatRejectsUnboundSender(t *testing.T) {
+	agent := &scriptAgent{reply: "好的"}
+	service := newWeChatService(agent, filepath.Join(t.TempDir(), "wechat.json"))
+	service.store.UserID = "user-1"
+	service.handleIncoming(context.Background(), wireMessage{
+		MessageID:   1,
+		FromUserID:  "user-9",
+		MessageType: 1,
+		ItemList:    []wireItem{{Type: 1, TextItem: &wireTextItem{Text: "列出所有容器"}}},
+	})
+	agent.mu.Lock()
+	called := agent.called
+	agent.mu.Unlock()
+	if called != 0 {
+		t.Fatalf("agent called for unbound sender: %d", called)
+	}
+}
+
 func TestILinkImageOnly(t *testing.T) {
 	service, fake, agent := newILinkService(t, "image")
 	service.mu.Lock()
 	service.store.Token = "tok-1234567890abcd"
 	service.store.BaseURL = service.apiBase
+	service.store.UserID = "user-1"
 	service.mu.Unlock()
 	service.restore()
 	waitUntil(t, func() bool {

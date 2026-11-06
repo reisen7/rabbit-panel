@@ -164,12 +164,29 @@ check_binary() {
     fi
 }
 
+require_secret() {
+    local name="$1"
+    local value="$2"
+    case "$value" in
+        ""|change-me|node-secret|change-me-in-production|rabbit-panel-secret-key-change-in-production|rabbit-panel-node-secret-change-in-production)
+            echo -e "${RED}${name} 未设置或仍是示例值。请先执行：export ${name}=\$(openssl rand -hex 32)${NC}"
+            exit 1
+            ;;
+    esac
+    if [ "${#value}" -lt 32 ]; then
+        echo -e "${RED}${name} 长度不足 32 个字符。请用 openssl rand -hex 32 重新生成。${NC}"
+        exit 1
+    fi
+}
+
 set_env() {
     export MODE="${MODE:-master}"
     export PORT="${PORT:-3958}"
     export HOST="${HOST:-0.0.0.0}"
-    export JWT_SECRET="${JWT_SECRET:-rabbit-panel-secret-key-change-in-production}"
-    export NODE_SECRET="${NODE_SECRET:-rabbit-panel-node-secret-change-in-production}"
+    require_secret JWT_SECRET "${JWT_SECRET:-}"
+    require_secret NODE_SECRET "${NODE_SECRET:-}"
+    export JWT_SECRET
+    export NODE_SECRET
     # 默认 HTTP。启用 HTTPS：TLS_ENABLED=true ./rabbit.sh start
     # 未提供证书时自动生成自签证书（保存在 ./data/certs）
     export TLS_ENABLED="${TLS_ENABLED:-false}"

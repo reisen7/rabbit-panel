@@ -38,6 +38,7 @@ const router = createRouter({
         { path: 'docker-config', name: 'dockerConfig', component: () => import('@/views/DockerConfig.vue'), meta: { title: 'Docker Config' } },
         { path: 'agent', name: 'agent', component: () => import('@/views/AgentChat.vue'), meta: { title: 'Agent' } },
         { path: 'settings/agent', name: 'agentSettings', component: () => import('@/views/AgentSettings.vue'), meta: { title: 'Agent Settings' } },
+        { path: 'settings/notify', name: 'notifySettings', component: () => import('@/views/NotifySettings.vue'), meta: { title: 'Notify Binding' } },
         { path: 'settings/update', name: 'updateSettings', component: () => import('@/views/UpdateSettings.vue'), meta: { title: 'Update' } },
       ],
     },

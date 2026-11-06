@@ -496,12 +496,24 @@ func (s *WeChatService) expireSession() {
 	log.Printf("[WeChat] iLink session expired")
 }
 
+// allowsBoundUser 只放行扫码绑定时记下的那个微信账号。
+func (s *WeChatService) allowsBoundUser(userID string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bound := strings.TrimSpace(s.store.UserID)
+	return bound != "" && userID == bound
+}
+
 func (s *WeChatService) handleIncoming(ctx context.Context, msg wireMessage) {
 	userID := msg.FromUserID
 	if msg.MessageType == 2 {
 		userID = msg.ToUserID
 	}
 	if userID == "" {
+		return
+	}
+	if !s.allowsBoundUser(userID) {
+		log.Printf("[WeChat] 拒绝非绑定账号的消息")
 		return
 	}
 	if msg.ContextToken != "" {

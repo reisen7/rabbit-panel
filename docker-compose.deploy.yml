@@ -16,8 +16,9 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PORT=3958
-      - JWT_SECRET=change-me-in-production
-      - NODE_SECRET=change-me-in-production
+      # 必填，各生成一次：openssl rand -hex 32。未设置或仍是示例值时容器不会启动。
+      - JWT_SECRET=${JWT_SECRET:?请设置 JWT_SECRET，用 openssl rand -hex 32 生成}
+      - NODE_SECRET=${NODE_SECRET:?请设置 NODE_SECRET，用 openssl rand -hex 32 生成}
       - RABBIT_DEPLOY_MODE=docker
       - RABBIT_IMAGE=reisen7/rabbit-panel
       - RABBIT_IMAGE_TAG=latest

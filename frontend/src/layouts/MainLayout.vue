@@ -11,6 +11,7 @@ import {
   Fold,
   FolderOpened,
   Menu,
+  Message,
   Monitor,
   Moon,
   OfficeBuilding,
@@ -132,6 +133,13 @@ function handleChangePassword() {
 function handlePasswordChangeSuccess() {
   showPasswordDialog.value = false
   ElMessage.success(t('auth.passwordChanged'))
+}
+
+function handleOpenNotify() {
+  router.push('/settings/notify')
+  if (isMobile.value) {
+    drawerVisible.value = false
+  }
 }
 
 function handleOpenSettings() {
@@ -260,6 +268,10 @@ onUnmounted(() => {
         </div>
 
         <div class="drawer-actions">
+          <el-button text @click="handleOpenNotify">
+            <el-icon><Message /></el-icon>
+            {{ t('notify.title') }}
+          </el-button>
           <el-button text @click="showUpdateDialog = true">
             <el-icon><Bell /></el-icon>
             {{ t('update.title') }}
@@ -346,6 +358,10 @@ onUnmounted(() => {
                 <el-dropdown-item @click="handleOpenSettings">
                   <el-icon><Setting /></el-icon>
                   {{ t('settings.pageSettings') }}
+                </el-dropdown-item>
+                <el-dropdown-item @click="handleOpenNotify">
+                  <el-icon><Message /></el-icon>
+                  {{ t('notify.title') }}
                 </el-dropdown-item>
                 <el-dropdown-item @click="handleChangePassword">
                   <el-icon><SwitchButton /></el-icon>

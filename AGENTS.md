@@ -22,6 +22,7 @@ cd frontend && npm install && npm run dev
 ```bash
 cd backend && go run main.go
 # Listens on 0.0.0.0:3958 over HTTP by default
+# JWT_SECRET and NODE_SECRET are required (at least 32 chars). Placeholder values are rejected.
 # Use TLS_ENABLED=true go run main.go for HTTPS (self-signed cert auto-generated into ./data/certs)
 ```
 

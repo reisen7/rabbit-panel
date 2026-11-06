@@ -2,6 +2,7 @@ package config
 
 import (
 	"embed"
+	"fmt"
 	"log"
 	"os"
 	"strings"
@@ -51,6 +52,7 @@ type App struct {
 	DockerConfigService *service.DockerConfigService
 	AgentService        *service.AgentService
 	WeChatService       *service.WeChatService
+	NotifyService       *service.NotifyService
 	NodeService         *service.NodeService
 	Scheduler           *service.Scheduler
 	UpdateService       *service.UpdateService
@@ -76,13 +78,22 @@ func NewApp(buildInfo service.BuildInfo) (*App, error) {
 		return nil, err
 	}
 
+	jwtSecret, err := requireUserSecret("JWT_SECRET", os.Getenv("JWT_SECRET"))
+	if err != nil {
+		return nil, err
+	}
+	nodeSecret, err := requireUserSecret("NODE_SECRET", os.Getenv("NODE_SECRET"))
+	if err != nil {
+		return nil, err
+	}
+
 	app := &App{
 		Mode:       getEnv("MODE", "master"),
 		Port:       getEnv("PORT", "3958"),
 		Host:       getEnv("HOST", "0.0.0.0"),
 		HTTPPort:   getEnv("HTTP_PORT", ""),
-		JWTSecret:  []byte(getEnv("JWT_SECRET", "change-me")),
-		NodeSecret: getEnv("NODE_SECRET", "node-secret"),
+		JWTSecret:  []byte(jwtSecret),
+		NodeSecret: nodeSecret,
 		BuildInfo:  buildInfo,
 		TLS:        tlsConf,
 	}
@@ -148,6 +159,7 @@ func (app *App) initServices() {
 	app.ComposeService = service.NewComposeService(app.DockerRepo, app.FileRepo)
 	app.RegistryService = service.NewRegistryService(app.FileRepo)
 	app.DockerConfigService = service.NewDockerConfigService()
+	app.NotifyService = service.NewNotifyService()
 	app.AgentService = service.NewAgentService(app.SQLiteRepo, app.DockerRepo)
 	app.AgentService.UseRegistry(app.RegistryService)
 	app.AgentService.UseNodes(app.NodeService, app.JWTSecret)
@@ -187,6 +199,25 @@ func (app *App) Scheme() string {
 		return "https"
 	}
 	return "http"
+}
+
+// placeholderSecrets 是仓库和文档里出现过的示例值。它们能签出令牌，不能当正式密钥。
+var placeholderSecrets = map[string]bool{
+	"":                        true,
+	"change-me":               true,
+	"node-secret":             true,
+	"change-me-in-production": true,
+	"rabbit-panel-secret-key-change-in-production":  true,
+	"rabbit-panel-node-secret-change-in-production": true,
+}
+
+// requireUserSecret 要求用户自己填入足够长的密钥。空值、示例值和短于 32 字符都拒绝启动。
+func requireUserSecret(name, value string) (string, error) {
+	value = strings.TrimSpace(value)
+	if placeholderSecrets[value] || len(value) < 32 {
+		return "", fmt.Errorf("%s 未设置或仍是示例值。请自行生成后填入环境变量，例如：openssl rand -hex 32", name)
+	}
+	return value, nil
 }
 
 // getEnv 获取环境变量，带默认值

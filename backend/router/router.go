@@ -157,6 +157,9 @@ func (r *Router) Register() {
 		apiAuth.POST("/settings/agent", r.handleAgentConfig)
 		apiAuth.POST("/settings/agent/models", r.handleAgentModels)
 		apiAuth.POST("/settings/agent/test", r.handleAgentTest)
+		apiAuth.GET("/settings/notify", r.handleNotifySettings)
+		apiAuth.POST("/settings/notify", r.handleNotifySettings)
+		apiAuth.POST("/settings/notify/test", r.handleNotifyTest)
 		apiAuth.GET("/channels/wechat", r.handleWeChatStatus)
 		apiAuth.POST("/channels/wechat/qrcode", r.handleWeChatQRCode)
 		apiAuth.GET("/channels/wechat/qrcode/status", r.handleWeChatQRStatus)
@@ -2200,6 +2203,47 @@ func (r *Router) handleAgentHistory(c *gin.Context) {
 	default:
 		c.JSON(http.StatusMethodNotAllowed, gin.H{"error": "method not allowed"})
 	}
+}
+
+func (r *Router) handleNotifySettings(c *gin.Context) {
+	if r.app.NotifyService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "通知服务不可用"})
+		return
+	}
+	if c.Request.Method == http.MethodGet {
+		c.JSON(http.StatusOK, r.app.NotifyService.Settings())
+		return
+	}
+	var req service.NotifyConfig
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	saved, err := r.app.NotifyService.Save(req)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, saved)
+}
+
+func (r *Router) handleNotifyTest(c *gin.Context) {
+	if r.app.NotifyService == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{"error": "通知服务不可用"})
+		return
+	}
+	var req struct {
+		Token string `json:"token"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	if err := r.app.NotifyService.Test(c.Request.Context(), req.Token); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func (r *Router) handleAgentConfig(c *gin.Context) {

@@ -21,9 +21,9 @@ services:
       - TZ=Asia/Shanghai
       - MODE=master
       - PORT=3958
-      # 生产环境请修改以下密钥（Master 和 Worker 必须使用相同的密钥）
-      - JWT_SECRET=change-me-in-production
-      - NODE_SECRET=change-me-in-production
+      # 必填，且与 Worker 相同。各生成一次：openssl rand -hex 32。
+      - JWT_SECRET=${JWT_SECRET:?请设置 JWT_SECRET，用 openssl rand -hex 32 生成}
+      - NODE_SECRET=${NODE_SECRET:?请设置 NODE_SECRET，用 openssl rand -hex 32 生成，并与 Worker 保持一致}
       # ===== 原生 HTTPS（默认 HTTP，需要时取消注释）=====
       # - TLS_ENABLED=true
       # - TLS_SELF_SIGNED=true            # 证书缺失时自动生成自签证书（保存到 ./data/certs）
