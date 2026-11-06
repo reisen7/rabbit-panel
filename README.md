@@ -10,6 +10,7 @@
 - 多节点 Master / Worker 管理
 - 可选 HTTPS：设置 `TLS_ENABLED=true` 后启用原生 TLS，无证书时自动生成自签证书，可选 HTTP 跳转端口
 - AI 助手支持多种模型接口，并可扫码连接微信
+- 容器异常可绑定 Showdoc 推送 Token，按容器和规则发到微信
 - 智能体可以操作已登记的其他节点
 - 在线更新、版本检测、进度反馈
 - 中文 / English 界面

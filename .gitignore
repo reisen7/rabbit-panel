@@ -25,6 +25,10 @@ Thumbs.db
 data/certs/
 backend/data/certs/
 
+# 本机运行数据：微信凭证、Showdoc Token、智能体密钥等
+data/*.json
+backend/data/*.json
+
 # 临时文件
 *.db
 *.log
