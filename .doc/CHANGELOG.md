@@ -37,6 +37,7 @@
 - 修复网络列表容器数始终为 0（Docker 网络列表接口不返回挂载信息，改由容器列表反查）。
 - 修复存储卷页因后端返回 `containers: null` 导致的整页报错。
 - 修复登录态过期后停留在当前页、未跳转登录页的问题。
+- 修复 Windows 二进制部署下系统监控（CPU/内存/磁盘）全为 0：平台采集代码拆分为构建标签实现，Windows 改走 GetSystemTimes / GlobalMemoryStatusEx / GetDiskFreeSpaceEx。
 
 ### 部署
 
