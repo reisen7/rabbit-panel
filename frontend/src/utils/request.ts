@@ -2,6 +2,7 @@ import axios, { type AxiosError, type AxiosInstance, type AxiosResponse, type In
 import { toast } from '@/composables/useToast'
 import router from '@/router'
 import { getTargetNodeId } from '@/utils/targetNode'
+import { useAuthStore } from '@/stores/auth'
 
 declare module 'axios' {
   interface AxiosRequestConfig {
@@ -39,6 +40,24 @@ export function removeToken(): void {
   localStorage.removeItem(TOKEN_KEY)
 }
 
+/**
+ * Centralized 401 handler shared by the axios interceptor and native fetch callers.
+ * Clears the auth store (not just localStorage) so the router guard cannot bounce
+ * /login back to the dashboard, then redirects to the login page once.
+ */
+export function handleUnauthorized(): void {
+  const authStore = useAuthStore()
+  if (!authStore.isAuthenticated) return
+  authStore.clearSession()
+  toast.error('登录已过期，请重新登录')
+  if (router.currentRoute.value.name !== 'login') {
+    void router.replace({
+      name: 'login',
+      query: { redirect: router.currentRoute.value.fullPath },
+    })
+  }
+}
+
 // Request interceptor
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
@@ -74,9 +93,7 @@ request.interceptors.response.use(
 
     if (status === 401) {
       // Token expired or invalid
-      removeToken()
-      router.push('/login')
-      toast.error('登录已过期，请重新登录')
+      handleUnauthorized()
     } else if (status === 403) {
       // Check if password change is required
       if (typeof data === 'object' && data !== null && 'need_change_password' in data) {
@@ -112,7 +129,7 @@ request.interceptors.response.use(
  * 支持纯文本和 JSON 格式
  */
 function isNodeScopedPath(url: string): boolean {
-  return ['/containers', '/networks', '/volumes', '/compose', '/registries'].some(
+  return ['/containers', '/networks', '/volumes', '/compose', '/registries', '/images'].some(
     (prefix) => url === prefix || url.startsWith(`${prefix}/`)
   )
 }

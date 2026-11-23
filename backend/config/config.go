@@ -56,6 +56,7 @@ type App struct {
 	NodeService         *service.NodeService
 	Scheduler           *service.Scheduler
 	UpdateService       *service.UpdateService
+	SshService          *service.SshService
 
 	// Terminal service
 	TerminalService *exec.TerminalService
@@ -129,6 +130,13 @@ func NewApp(buildInfo service.BuildInfo) (*App, error) {
 		return nil, err
 	}
 	app.SQLiteRepo = sqliteRepo
+
+	// SSH 服务（凭证加密存储 + 用户名/密码终端）
+	sshService, err := service.NewSshService(sqliteRepo, "./data")
+	if err != nil {
+		return nil, err
+	}
+	app.SshService = sshService
 
 	// Initialize other repositories
 	app.FileRepo = repository.NewFileRepository()

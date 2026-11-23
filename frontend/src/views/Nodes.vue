@@ -1,8 +1,12 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { AlertTriangle, CheckCircle2, Monitor, RefreshCw, Search, XCircle } from 'lucide-vue-next'
+import { AlertTriangle, CheckCircle2, Monitor, RefreshCw, Search, TerminalSquare, Trash2, XCircle } from 'lucide-vue-next'
+import { toast } from 'vue-sonner'
 import { useNodesStore } from '@/stores/nodes'
 import { useI18n } from '@/composables/useI18n'
+import { nodesApi } from '@/api/nodes'
+import SshDialog from '@/components/nodes/SshDialog.vue'
+import type { NodeInfo } from '@/types'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 import { Alert, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
@@ -17,6 +21,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import {
   Table,
   TableBody,
@@ -45,6 +59,39 @@ function handleStatusFilterChange(value: unknown) {
 
 async function handleRefresh() {
   await nodesStore.fetchNodes()
+}
+
+const sshDialogVisible = ref(false)
+const sshTargetNode = ref<NodeInfo | null>(null)
+
+function openSsh(node: NodeInfo) {
+  sshTargetNode.value = node
+  sshDialogVisible.value = true
+}
+
+const deleteTargetNode = ref<NodeInfo | null>(null)
+const deleteConfirmOpen = ref(false)
+const deleting = ref(false)
+
+function askDeleteNode(node: NodeInfo) {
+  deleteTargetNode.value = node
+  deleteConfirmOpen.value = true
+}
+
+async function handleDeleteNode() {
+  const node = deleteTargetNode.value
+  if (!node) return
+  deleting.value = true
+  try {
+    await nodesApi.remove(node.id)
+    toast.success(t('node.deleteSuccess'))
+    await nodesStore.fetchNodes()
+  } catch {
+    // request.ts 已弹错误提示
+  } finally {
+    deleting.value = false
+    deleteConfirmOpen.value = false
+  }
 }
 
 function getStatusVariant(status: string): 'success' | 'destructive' | 'warning' {
@@ -176,7 +223,7 @@ onMounted(() => {
 
     <!-- Nodes table -->
     <div v-if="nodesStore.isMasterMode" class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
-      <LoadingOverlay :loading="nodesStore.loading" />
+      <LoadingOverlay :loading="nodesStore.loading && nodesStore.filteredNodes.length === 0" />
       <Table>
         <TableHeader>
           <TableRow>
@@ -188,17 +235,18 @@ onMounted(() => {
             <TableHead class="max-[991px]:hidden min-w-[260px]">{{ t('node.resourceUsage') }}</TableHead>
             <TableHead class="text-center">{{ t('node.containers') }}</TableHead>
             <TableHead class="max-[1199px]:hidden">{{ t('node.lastHeartbeat') }}</TableHead>
+            <TableHead class="text-center">{{ t('common.actions') }}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           <TableRow v-if="nodesStore.filteredNodes.length === 0 && !nodesStore.loading">
-            <TableCell colspan="8" class="h-24 text-center text-muted-foreground">
+            <TableCell colspan="9" class="h-24 text-center text-muted-foreground">
               {{ t('node.noNodes') }}
             </TableCell>
           </TableRow>
           <TableRow v-for="row in nodesStore.filteredNodes" :key="row.id">
             <TableCell class="max-[991px]:hidden">
-              <span class="font-mono text-xs text-muted-foreground">{{ row.id.substring(0, 12) }}</span>
+              <span class="font-mono text-xs text-muted-foreground break-all" :title="row.id">{{ row.id }}</span>
             </TableCell>
             <TableCell class="font-medium">{{ row.name }}</TableCell>
             <TableCell class="max-[767px]:hidden font-mono text-xs text-muted-foreground">{{ row.address }}</TableCell>
@@ -237,9 +285,52 @@ onMounted(() => {
             <TableCell class="max-[1199px]:hidden text-xs text-muted-foreground tabular-nums">
               {{ formatLastSeen(row.last_seen) }}
             </TableCell>
+            <TableCell class="text-center">
+              <div class="flex items-center justify-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  :title="t('ssh.title')"
+                  :disabled="row.status !== 'online'"
+                  @click="openSsh(row)"
+                >
+                  <TerminalSquare class="size-4" />
+                  SSH
+                </Button>
+                <Button
+                  v-if="row.mode !== 'master'"
+                  variant="ghost"
+                  size="icon-sm"
+                  :title="t('node.deleteNode')"
+                  class="text-muted-foreground hover:text-destructive"
+                  @click="askDeleteNode(row)"
+                >
+                  <Trash2 class="size-4" />
+                </Button>
+              </div>
+            </TableCell>
           </TableRow>
         </TableBody>
       </Table>
     </div>
+
+    <SshDialog v-model:visible="sshDialogVisible" :node="sshTargetNode" />
+
+    <AlertDialog v-model:open="deleteConfirmOpen">
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{{ t('node.deleteNode') }}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {{ t('node.deleteConfirm').replace('{name}', deleteTargetNode?.name ?? '') }}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>{{ t('common.cancel') }}</AlertDialogCancel>
+          <AlertDialogAction :disabled="deleting" @click="handleDeleteNode">
+            {{ t('common.delete') }}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   </div>
 </template>

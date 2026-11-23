@@ -6,6 +6,7 @@ import { useContainerStore, type ContainerState, type SortField } from '@/stores
 import { useContainerCreateStore } from '@/stores/containerCreate'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import { containerApi } from '@/api/containers'
 import type { ContainerStats } from '@/types'
 import ContainerActions from '@/components/container/ContainerActions.vue'
@@ -231,6 +232,8 @@ watch(
   }
 )
 
+useNodeRefresh(() => containerStore.fetchContainers())
+
 onMounted(async () => {
   if (containerCreateStore.restorePending) {
     showCreateDialog.value = true
@@ -312,7 +315,7 @@ onMounted(async () => {
 
     <!-- Container table -->
     <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
-      <LoadingOverlay :loading="containerStore.loading" />
+      <LoadingOverlay :loading="containerStore.loading && containerStore.paginatedContainers.length === 0" />
       <Table>
         <TableHeader>
           <TableRow>

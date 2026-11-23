@@ -77,11 +77,11 @@ Multi-package Go application using **Gin Web Framework**. Entry point is `main.g
 - `IDockerRepository` interface wraps `*docker/client.Client` (testable)
 - `ICacheRepository` for in-memory caches
 - `ISQLiteRepository` for auth/sessions
-- Frontend assets embedded via `//go:embed .dist`
+- Frontend assets embedded via `//go:embed all:.dist` (the `all:` prefix is required — Go embed silently skips `_`-prefixed Vite chunks like `_plugin-vue_export-helper-*.js` otherwise)
 
 **Data storage:** SQLite at `backend/data/auth.db` (modernc.org/sqlite, CGO-free) + JSON config at `backend/data/agent.json`. No external database required.
 
-**Frontend assets** are embedded at compile time via `//go:embed .dist`.
+**Frontend assets** are embedded at compile time via `//go:embed all:.dist`. Missing paths under `assets/` return 404 (never `index.html`); other unknown paths fall back to `index.html` for SPA routing.
 
 ### Frontend (Vue 3 + TypeScript, `/frontend/src`)
 
@@ -107,7 +107,7 @@ Environment variables `MODE` (master/worker), `JWT_SECRET`, `NODE_SECRET`, `MAST
 
 **Backend:** Go 1.25, gin-gonic/gin v1.12, docker/docker v25, gorilla/websocket, golang-jwt/jwt/v5, modernc.org/sqlite
 
-**Frontend:** Vue 3.5, Vite 7, Element Plus 2, Pinia 3, Vue Router 4, Vue i18n 11, ECharts + vue-echarts, Xterm.js 6, Axios, Marked
+**Frontend:** Vue 3.5, Vite 7, shadcn-vue (Reka UI) + Tailwind CSS 4 + lucide-vue-next, Pinia 3, Vue Router 4, Vue i18n 11, ECharts + vue-echarts, Xterm.js 6, Axios, Marked, vue-sonner
 
 ## Important Notes
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/docker/api/types"
@@ -35,14 +36,29 @@ func (s *ImageService) ListImages(ctx context.Context) ([]model.ImageInfo, error
 		return cached, nil
 	}
 
-	images, err := s.dockerRepo.ImageList(ctx, types.ImageListOptions{})
-	if err != nil {
-		return nil, err
+	// 两个 docker 调用无依赖关系，并行执行减少整体延迟
+	var (
+		images     []image.Summary
+		containers []types.Container
+		imagesErr  error
+		contsErr   error
+		wg         sync.WaitGroup
+	)
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		images, imagesErr = s.dockerRepo.ImageList(ctx, types.ImageListOptions{})
+	}()
+	go func() {
+		defer wg.Done()
+		containers, contsErr = s.dockerRepo.ContainerList(ctx, container.ListOptions{All: true})
+	}()
+	wg.Wait()
+	if imagesErr != nil {
+		return nil, imagesErr
 	}
-
-	containers, err := s.dockerRepo.ContainerList(ctx, container.ListOptions{All: true})
-	if err != nil {
-		return nil, err
+	if contsErr != nil {
+		return nil, contsErr
 	}
 
 	usageMap := buildImageUsage(containers)

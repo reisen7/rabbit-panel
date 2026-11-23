@@ -52,7 +52,26 @@ func (s *NodeService) RegisterNode(node *model.NodeInfo) {
 	defer s.mu.Unlock()
 	node.LastSeen = time.Now()
 	node.Status = model.NodeStatusOnline
+	// 节点 ID = hostname:port，同一台机器换端口重启会产生新 ID。
+	// 注册时把同主机名且已离线的旧 Worker 条目清掉，避免一台机器堆多个节点。
+	if node.Mode == model.ModeWorker {
+		host := nodeHostOnly(node.ID)
+		for id, n := range s.nodes {
+			if id != node.ID && id != s.nodeID && n.Mode == model.ModeWorker &&
+				n.Status != model.NodeStatusOnline && nodeHostOnly(id) == host {
+				delete(s.nodes, id)
+			}
+		}
+	}
 	s.nodes[node.ID] = node
+}
+
+// nodeHostOnly 取节点 ID 的主机名部分（ID 形如 "hostname:port"）
+func nodeHostOnly(id string) string {
+	if i := strings.LastIndex(id, ":"); i > 0 {
+		return id[:i]
+	}
+	return id
 }
 
 // UpdateHeartbeat 更新节点心跳。节点尚未注册时忽略，等待下一次注册。
@@ -82,6 +101,17 @@ func (s *NodeService) GetAllNodes() []*model.NodeInfo {
 		n.LastSeenStr = n.LastSeen.Format("2006-01-02 15:04:05")
 		result = append(result, n)
 	}
+	// map 遍历顺序随机，排序保证每次刷新列表顺序稳定：主节点在前，其余按名称/ID 排序
+	sort.Slice(result, func(i, j int) bool {
+		mi, mj := result[i].Mode == model.ModeMaster, result[j].Mode == model.ModeMaster
+		if mi != mj {
+			return mi
+		}
+		if result[i].Name != result[j].Name {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].ID < result[j].ID
+	})
 	return result
 }
 

@@ -88,7 +88,7 @@ func isNodeProxyPath(path string) bool {
 	if isContainerProxyPath(path) {
 		return true
 	}
-	for _, prefix := range []string{"/api/networks", "/api/volumes", "/api/compose", "/api/registries"} {
+	for _, prefix := range []string{"/api/networks", "/api/volumes", "/api/compose", "/api/registries", "/api/images"} {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
 		}

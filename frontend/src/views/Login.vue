@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { Box, Eye, EyeOff, Loader2, Lock, User } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useToast } from '@/composables/useToast'
@@ -19,6 +19,7 @@ import { Label } from '@/components/ui/label'
 import mikuDark from '@/assets/miku-dark.svg'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const toast = useToast()
 
@@ -72,7 +73,8 @@ async function handleLogin() {
 
     if (success) {
       toast.success('登录成功')
-      router.push('/')
+      const redirect = route.query.redirect
+      router.push(typeof redirect === 'string' && redirect.startsWith('/') ? redirect : '/')
     } else {
       toast.error('用户名或密码错误')
       await loadCaptcha()

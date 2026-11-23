@@ -57,13 +57,20 @@ export const useAuthStore = defineStore('auth', () => {
     } catch {
       // Ignore logout errors, still clear local state
     } finally {
-      // Clear local state
-      token.value = null
-      username.value = null
-      needChangePassword.value = false
-      removeToken()
-      updateStore.resetAllState()
+      clearSession()
     }
+  }
+
+  /**
+   * Clear local auth state without calling the API
+   * Used when the session is already invalid (e.g. a 401 response)
+   */
+  function clearSession(): void {
+    token.value = null
+    username.value = null
+    needChangePassword.value = false
+    removeToken()
+    updateStore.resetAllState()
   }
 
   /**
@@ -104,11 +111,7 @@ export const useAuthStore = defineStore('auth', () => {
       return true
     } catch {
       // Token invalid, clear state
-      token.value = null
-      username.value = null
-      needChangePassword.value = false
-      removeToken()
-      updateStore.resetAllState()
+      clearSession()
       return false
     }
   }
@@ -134,6 +137,7 @@ export const useAuthStore = defineStore('auth', () => {
     // Actions
     login,
     logout,
+    clearSession,
     changePassword,
     checkAuth,
     initialize,

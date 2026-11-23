@@ -103,7 +103,7 @@ export const useVolumeStore = defineStore('volumes', () => {
    * Count of unused volumes (not attached to any container)
    */
   const unusedCount = computed(() =>
-    volumes.value.filter((v) => v.containers.length === 0).length
+    volumes.value.filter((v) => (v.containers ?? []).length === 0).length
   )
 
   // Actions
@@ -121,7 +121,9 @@ export const useVolumeStore = defineStore('volumes', () => {
     try {
       loading.value = true
       error.value = null
-      volumes.value = await volumeApi.list()
+      const list = await volumeApi.list()
+      // 后端对未被容器使用的卷返回 containers: null，统一归一成 [] 防止空指针
+      volumes.value = list.map((v) => ({ ...v, containers: v.containers ?? [] }))
     } catch (e) {
       error.value = e instanceof Error ? e.message : 'Failed to fetch volumes'
     } finally {

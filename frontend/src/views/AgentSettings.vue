@@ -68,6 +68,33 @@ const showKeyDialog = ref(false)
 const newApiKey = ref('')
 const showNewKey = ref(false)
 
+// 主流大模型服务商预设：选择后自动填充 API 地址、接口格式与默认模型
+interface ProviderPreset {
+  label: string
+  api_url: string
+  api_format: AgentConfig['api_format']
+  model: string
+}
+const providerPresets: ProviderPreset[] = [
+  { label: 'OpenAI', api_url: 'https://api.openai.com/v1', api_format: 'openai_chat', model: 'gpt-4o-mini' },
+  { label: 'Anthropic', api_url: 'https://api.anthropic.com', api_format: 'anthropic', model: 'claude-sonnet-4-5' },
+  { label: 'Gemini', api_url: 'https://generativelanguage.googleapis.com/v1beta/openai', api_format: 'openai_chat', model: 'gemini-2.5-flash' },
+  { label: 'Grok (xAI)', api_url: 'https://api.x.ai/v1', api_format: 'openai_chat', model: 'grok-4' },
+  { label: 'DeepSeek', api_url: 'https://api.deepseek.com/v1', api_format: 'openai_chat', model: 'deepseek-chat' },
+  { label: 'GLM (智谱)', api_url: 'https://open.bigmodel.cn/api/paas/v4', api_format: 'openai_chat', model: 'glm-4.5' },
+]
+const providerPreset = ref('')
+function applyProviderPreset(value: unknown) {
+  const preset = providerPresets.find((p) => p.label === String(value))
+  providerPreset.value = '' // 一次性填充动作，不持久选中
+  if (!preset) return
+  form.value.api_url = preset.api_url
+  form.value.api_format = preset.api_format
+  form.value.model = preset.model
+  modelOptions.value = []
+  toast.success(t('agent.providerApplied').replace('{name}', preset.label))
+}
+
 const wechatLoading = ref(false)
 const wechatLoaded = ref(false)
 const wechat = ref<WeChatStatus>({
@@ -279,6 +306,24 @@ onUnmounted(() => {
             <div class="flex items-center justify-between rounded-lg border p-3.5">
               <Label for="agent-enable">{{ t('agent.enable') }}</Label>
               <Switch id="agent-enable" v-model="form.enabled" />
+            </div>
+
+            <div class="space-y-1.5">
+              <Label>{{ t('agent.provider') }}</Label>
+              <Select
+                :model-value="providerPreset"
+                @update:model-value="applyProviderPreset"
+              >
+                <SelectTrigger class="w-full">
+                  <SelectValue :placeholder="t('agent.providerPlaceholder')" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="p in providerPresets" :key="p.label" :value="p.label">
+                    {{ p.label }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+              <p class="text-xs text-muted-foreground">{{ t('agent.providerHint') }}</p>
             </div>
 
             <div class="space-y-1.5">

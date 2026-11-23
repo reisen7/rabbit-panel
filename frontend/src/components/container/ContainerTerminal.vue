@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { AlertTriangle, Loader2, XCircle } from 'lucide-vue-next'
+import { AlertTriangle, Loader2, X, XCircle } from 'lucide-vue-next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -10,6 +10,7 @@ import { containerApi } from '@/api/containers'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -249,11 +250,22 @@ onUnmounted(() => {
   <Dialog v-model:open="dialogVisible">
     <DialogContent
       class="sm:max-w-[85vw] max-w-[1100px] p-0 overflow-hidden gap-0"
+      :show-close-button="false"
       @interact-outside.prevent
       @escape-key-down.prevent
     >
-      <DialogHeader class="px-5 py-3.5 border-b">
+      <DialogHeader class="flex-row items-center justify-between space-y-0 px-5 py-3.5 border-b">
         <DialogTitle>{{ t('container.terminal') + ' - ' + containerName }}</DialogTitle>
+        <DialogClose as-child>
+          <Button
+            variant="ghost"
+            size="icon"
+            class="size-8 -my-1 shrink-0 text-muted-foreground hover:text-foreground"
+          >
+            <X class="size-4" />
+            <span class="sr-only">{{ t('common.close') }}</span>
+          </Button>
+        </DialogClose>
       </DialogHeader>
 
       <div class="relative h-[520px] bg-[#1e1e1e]">

@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
-import { getToken } from '@/utils/request'
+import { getToken, handleUnauthorized } from '@/utils/request'
 import { getTargetNodeId } from '@/utils/targetNode'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -68,6 +68,7 @@ const loadHistory = async () => {
     const response = await fetch('/api/agent/history', {
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (response.status === 401) handleUnauthorized()
     if (response.ok) {
       const data = await response.json()
       if (Array.isArray(data)) {
@@ -86,10 +87,11 @@ const loadHistory = async () => {
 const clearMessages = async () => {
   const token = getToken()
   try {
-    await fetch('/api/agent/history', {
+    const response = await fetch('/api/agent/history', {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     })
+    if (response.status === 401) handleUnauthorized()
     messages.value = []
   } catch (e) {
     console.error('Failed to clear history:', e)
@@ -136,6 +138,7 @@ const sendMessage = async () => {
       }),
     })
 
+    if (response.status === 401) handleUnauthorized()
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }

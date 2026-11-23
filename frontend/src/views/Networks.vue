@@ -5,6 +5,7 @@ import { useNetworkStore, type SortField } from '@/stores/networks'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import type { NetworkInfo } from '@/types'
 import CreateNetworkDialog from '@/components/network/CreateNetworkDialog.vue'
 import NetworkDetailDialog from '@/components/network/NetworkDetailDialog.vue'
@@ -98,6 +99,8 @@ function handleNetworkCreated() {
   networkStore.fetchNetworks()
 }
 
+useNodeRefresh(() => networkStore.fetchNetworks())
+
 onMounted(() => {
   networkStore.fetchNetworks()
 })
@@ -135,7 +138,7 @@ onMounted(() => {
 
     <!-- Network table -->
     <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
-      <LoadingOverlay :loading="networkStore.loading" />
+      <LoadingOverlay :loading="networkStore.loading && networkStore.paginatedNetworks.length === 0" />
       <Table>
         <TableHeader>
           <TableRow>

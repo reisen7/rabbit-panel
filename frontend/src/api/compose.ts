@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { ComposeProject } from '@/types'
-import { getToken } from '@/utils/request'
+import { getToken, handleUnauthorized } from '@/utils/request'
 import { targetNodeHeaders } from '@/utils/targetNode'
 
 /**
@@ -101,6 +101,7 @@ export const composeApi = {
       body: JSON.stringify({ project, action }),
       signal: controller.signal
     }).then(async response => {
+      if (response.status === 401) handleUnauthorized()
       if (!response.ok) {
         const text = await response.text()
         callbacks.onError?.(text || `HTTP ${response.status}`)

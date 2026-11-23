@@ -5,6 +5,7 @@ import { useRegistryStore } from '@/stores/registry'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import RegistryDialog from '@/components/registry/RegistryDialog.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 import { Badge } from '@/components/ui/badge'
@@ -85,6 +86,8 @@ function handleSaved() {
   registryStore.fetchRegistries()
 }
 
+useNodeRefresh(() => registryStore.fetchRegistries())
+
 onMounted(() => {
   registryStore.fetchRegistries()
 })
@@ -112,7 +115,7 @@ onMounted(() => {
 
     <!-- Registry cards -->
     <div class="relative grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-      <LoadingOverlay :loading="registryStore.loading" />
+      <LoadingOverlay :loading="registryStore.loading && registryStore.registries.length === 0" />
       <template v-if="registryStore.registries.length > 0">
         <Card
           v-for="registry in registryStore.registries"

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch, nextTick } from 'vue'
 import { Download, Loader2, Play, RotateCw, Square, Terminal, X } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
@@ -29,6 +29,21 @@ const emit = defineEmits<{
 }>()
 
 const currentAction = ref<ComposeAction | null>(null)
+const outputEl = ref<HTMLElement | null>(null)
+const stickToBottom = ref(true)
+
+function handleOutputScroll() {
+  const el = outputEl.value
+  if (!el) return
+  stickToBottom.value = el.scrollTop + el.clientHeight >= el.scrollHeight - 24
+}
+
+watch(() => props.output, () => {
+  if (!stickToBottom.value) return
+  nextTick(() => {
+    if (outputEl.value) outputEl.value.scrollTop = outputEl.value.scrollHeight
+  })
+})
 
 async function handleAction(action: ComposeAction) {
   if (!props.projectName) return
@@ -134,7 +149,7 @@ defineExpose({
           <Terminal class="size-3.5 text-muted-foreground" />
           <span>{{ t('compose.output') }}</span>
         </div>
-        <div class="max-h-[140px] overflow-auto bg-zinc-950 text-zinc-100">
+        <div ref="outputEl" class="max-h-[140px] overflow-auto bg-zinc-950 text-zinc-100" @scroll="handleOutputScroll">
           <pre
             v-if="output"
             class="m-0 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all"

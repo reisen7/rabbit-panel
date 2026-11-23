@@ -5,6 +5,7 @@ import { useVolumeStore, type SortField } from '@/stores/volumes'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import CreateVolumeDialog from '@/components/volumes/CreateVolumeDialog.vue'
 import DataPagination from '@/components/common/DataPagination.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
@@ -126,6 +127,8 @@ function handleVolumeCreated() {
   volumeStore.fetchVolumes()
 }
 
+useNodeRefresh(() => volumeStore.fetchVolumes())
+
 onMounted(() => {
   volumeStore.fetchVolumes()
 })
@@ -172,7 +175,7 @@ onMounted(() => {
 
     <!-- Volume table -->
     <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
-      <LoadingOverlay :loading="volumeStore.loading" />
+      <LoadingOverlay :loading="volumeStore.loading && volumeStore.paginatedVolumes.length === 0" />
       <Table>
         <TableHeader>
           <TableRow>

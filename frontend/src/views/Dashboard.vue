@@ -4,10 +4,12 @@ import { Container, Cpu, HardDrive, MemoryStick } from 'lucide-vue-next'
 import * as echarts from 'echarts'
 import { useSystemStore } from '@/stores/system'
 import { useContainerStore } from '@/stores/containers'
+import { useNodesStore } from '@/stores/nodes'
 import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import UpdateBanner from '@/components/common/UpdateBanner.vue'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
+import NodeTopologyCard from '@/components/dashboard/NodeTopologyCard.vue'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -16,6 +18,7 @@ const { t } = useI18n()
 const { theme } = useTheme()
 const systemStore = useSystemStore()
 const containerStore = useContainerStore()
+const nodesStore = useNodesStore()
 
 const lineChartRef = ref<HTMLElement | null>(null)
 const pieChartRef = ref<HTMLElement | null>(null)
@@ -283,6 +286,14 @@ onUnmounted(() => {
 })
 
 watch(() => containerStore.containers, () => updatePieChart(), { deep: true })
+watch(() => nodesStore.currentNodeId, async (id, prev) => {
+  if (!id || id === prev) return
+  cpuHistory.value = Array(5).fill(0)
+  memoryHistory.value = Array(5).fill(0)
+  historyLabels.value = Array(5).fill('--:--:--')
+  await systemStore.fetchStats()
+  updateHistory()
+})
 watch(theme, () => {
   updateLineChart()
   updatePieChart()
@@ -389,6 +400,9 @@ watch(theme, () => {
         </CardContent>
       </Card>
     </div>
+
+    <!-- Cluster Node Topology (Master mode) -->
+    <NodeTopologyCard />
 
     <!-- Charts Row 1 -->
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">

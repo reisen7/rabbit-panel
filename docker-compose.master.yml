@@ -29,7 +29,7 @@ services:
       # - TLS_SELF_SIGNED=true            # 证书缺失时自动生成自签证书（保存到 ./data/certs）
       # - TLS_CERT_FILE=/app/data/certs/server.crt
       # - TLS_KEY_FILE=/app/data/certs/server.key
-      # - TLS_HOSTS=panel.example.com,192.168.1.10   # 自签证书需要覆盖的域名/IP
+      # - TLS_HOSTS=panel.example.com,x.x.x.x   # 自签证书需要覆盖的域名/IP
       # - HTTP_PORT=3959                  # 可选：HTTP 自动跳转到 HTTPS 的端口（同时取消上面的端口映射注释）
       # - TLS_REDIRECT_PORT=3958          # 跳转目标端口；容器端口被映射成别的对外端口时必填（如 -p 8443:3958 则填 8443）
       # 集群内使用自签证书时，Master 访问 Worker 也需要放开校验，二选一（不设则跨节点调用会报证书错误）：

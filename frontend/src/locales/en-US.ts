@@ -48,6 +48,13 @@ export default {
     logout: 'Logout',
   },
 
+  // Dashboard
+  dashboard: {
+    topology: 'Cluster Topology',
+    topologyHint: 'Click an online node to switch target or open SSH',
+    topologyExpand: 'Expand view',
+  },
+
   // Sidebar Navigation
   sideNav: {
     dashboard: 'Dashboard',
@@ -179,10 +186,14 @@ export default {
     saveSuccess: 'Saved successfully',
     loadError: 'Failed to load file list',
     confirmDelete: 'Are you sure you want to delete this file/folder?',
+    confirmDeleteDir: 'Delete this folder and all its contents?',
     protectedPath: 'Cannot delete protected system path',
     fileTooLarge: 'File size cannot exceed 10MB',
     fileContent: 'File Content',
     saving: 'Saving...',
+    rename: 'Rename',
+    newName: 'New name',
+    renameSuccess: 'Renamed successfully',
   },
 
   // Container Config
@@ -326,6 +337,8 @@ export default {
     actionFailed: 'Action failed',
     unsavedChanges: 'Unsaved changes',
     unsavedConfirm: 'You have unsaved changes. Are you sure you want to switch projects?',
+    unsavedCloseConfirm: 'You have unsaved changes. Are you sure you want to close?',
+    editorExpand: 'Expand editor',
     editorPlaceholder: 'Edit docker-compose.yml content here...',
     lines: 'Lines',
     uploadSuccess: 'Upload successful',
@@ -381,6 +394,38 @@ export default {
     nodeStatus: 'Node Status',
     lastHeartbeat: 'Last Heartbeat',
     neverSeen: 'Never connected',
+    deleteNode: 'Delete Node',
+    deleteConfirm: 'Delete node {name}? An online node will re-register itself on its next heartbeat.',
+    deleteSuccess: 'Node deleted',
+  },
+
+  // SSH Terminal
+  ssh: {
+    title: 'SSH Terminal',
+    description: 'Log in to this node via SSH with a username and password',
+    host: 'Host',
+    port: 'Port',
+    username: 'Username',
+    password: 'Password',
+    hostPlaceholder: 'e.g. 192.168.1.10',
+    usernamePlaceholder: 'e.g. root',
+    passwordPlaceholder: 'Enter password',
+    passwordSaved: 'Use saved password',
+    savedUsers: 'Saved users',
+    selectCredential: 'Select a saved user',
+    noCredential: 'None (enter manually)',
+    saveCredential: 'Save this user and password',
+    deleteCredential: 'Delete saved user',
+    deleteConfirm: 'Delete the saved user {user}?',
+    credentialSaved: 'SSH user saved',
+    credentialDeleted: 'SSH user deleted',
+    connect: 'Connect',
+    connecting: 'Establishing SSH connection...',
+    disconnected: 'SSH connection closed',
+    connectFailed: 'SSH connection failed',
+    back: 'Back',
+    tabTerminal: 'Terminal',
+    tabFiles: 'Files',
   },
 
   // Volumes
@@ -504,6 +549,10 @@ export default {
     thinking: 'Thinking...',
     settingsTitle: 'Agent Configuration',
     enable: 'Enable Agent',
+    provider: 'Provider preset',
+    providerPlaceholder: 'Pick a provider to auto-fill',
+    providerHint: 'Fills API URL, format and default model — you still need your own API key',
+    providerApplied: '{name} preset applied',
     apiUrl: 'API URL',
     apiTip: 'For OpenAI, include /v1, for example https://api.openai.com/v1. For Anthropic, use https://api.anthropic.com or a URL that already includes /v1.',
     apiKey: 'API KEY',

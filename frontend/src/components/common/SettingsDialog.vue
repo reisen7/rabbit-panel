@@ -32,7 +32,7 @@ const SETTINGS_KEY = 'rabbit_panel_settings'
 const DEFAULT_COLOR = 'neutral'
 
 const settings = ref({
-  fontSize: 14,
+  fontSize: 16,
   sidebarWidth: 220,
   primaryColor: DEFAULT_COLOR,
 })
@@ -62,7 +62,7 @@ function applySettings() {
 
 function resetSettings() {
   settings.value = {
-    fontSize: 14,
+    fontSize: 16,
     sidebarWidth: 220,
     primaryColor: DEFAULT_COLOR,
   }

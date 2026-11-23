@@ -29,6 +29,22 @@ func (s *NetworkService) ListNetworks(ctx context.Context) ([]model.NetworkInfo,
 		return nil, err
 	}
 
+	// /networks 列表不返回挂载的容器，从容器列表的 NetworkSettings 反查使用关系
+	usage := make(map[string]map[string]struct{})
+	if containers, err := s.dockerRepo.ContainerList(ctx, types.ContainerListOptions{All: true}); err == nil {
+		for _, c := range containers {
+			if c.NetworkSettings == nil {
+				continue
+			}
+			for netName := range c.NetworkSettings.Networks {
+				if usage[netName] == nil {
+					usage[netName] = make(map[string]struct{})
+				}
+				usage[netName][c.ID] = struct{}{}
+			}
+		}
+	}
+
 	result := make([]model.NetworkInfo, 0, len(networks))
 	for _, n := range networks {
 		info := model.NetworkInfo{
@@ -47,12 +63,15 @@ func (s *NetworkService) ListNetworks(ctx context.Context) ([]model.NetworkInfo,
 			info.Gateway = n.IPAM.Config[0].Gateway
 		}
 
-		// Get connected containers
-		if n.Containers != nil {
-			for id := range n.Containers {
-				info.Containers = append(info.Containers, id[:12])
+		// Get connected containers（按网络名反查，NetworkSettings.Networks 以网络名为键）
+		for id := range usage[n.Name] {
+			shortID := id
+			if len(shortID) > 12 {
+				shortID = shortID[:12]
 			}
+			info.Containers = append(info.Containers, shortID)
 		}
+		sort.Strings(info.Containers)
 		info.ContainerCount = len(info.Containers)
 		info.InUse = info.ContainerCount > 0
 

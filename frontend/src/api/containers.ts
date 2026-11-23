@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { getToken } from '@/utils/request'
+import { getToken, handleUnauthorized } from '@/utils/request'
 import { targetNodeHeaders, withTargetNode } from '@/utils/targetNode'
 import type {
   ContainerInfo,
@@ -67,6 +67,7 @@ export const containerApi = {
       signal,
     })
 
+    if (response.status === 401) handleUnauthorized()
     if (!response.ok || !response.body) {
       throw new Error(await response.text() || 'Request failed')
     }
@@ -144,6 +145,7 @@ export const containerApi = {
         body: JSON.stringify({ command }),
       })
 
+      if (response.status === 401) handleUnauthorized()
       if (!response.ok) {
         const text = await response.text()
         onError(text || 'Request failed')
@@ -202,6 +204,7 @@ export const containerApi = {
     const response = await fetch(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=false&token=${encodeURIComponent(token || '')}`), {
       headers: token ? { Authorization: `Bearer ${token}`, ...targetNodeHeaders() } : targetNodeHeaders(),
     })
+    if (response.status === 401) handleUnauthorized()
     if (!response.ok) {
       throw new Error(await response.text() || `HTTP ${response.status}`)
     }

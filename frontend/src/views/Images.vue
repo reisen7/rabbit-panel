@@ -5,6 +5,7 @@ import { useImageStore, type SortField } from '@/stores/images'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import BuildImageDialog from '@/components/image/BuildImageDialog.vue'
 import DataPagination from '@/components/common/DataPagination.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
@@ -89,6 +90,8 @@ function handleImageBuilt() {
   imageStore.fetchImages(true)
 }
 
+useNodeRefresh(() => imageStore.fetchImages())
+
 onMounted(() => {
   imageStore.fetchImages()
 })
@@ -126,7 +129,7 @@ onMounted(() => {
 
     <!-- Image table -->
     <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
-      <LoadingOverlay :loading="imageStore.loading" />
+      <LoadingOverlay :loading="imageStore.loading && imageStore.paginatedImages.length === 0" />
       <Table>
         <TableHeader>
           <TableRow>

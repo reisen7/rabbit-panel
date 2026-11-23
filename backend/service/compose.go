@@ -73,22 +73,23 @@ func (s *ComposeService) DeleteProject(name string) error {
 }
 
 // ExecuteAction 执行 Compose 操作（up, down, restart, pull, logs）
-func (s *ComposeService) ExecuteAction(name, action string, writer io.Writer) error {
+// ctx 取消时终止命令；writer 实时接收 stdout/stderr 输出
+func (s *ComposeService) ExecuteAction(ctx context.Context, name, action string, writer io.Writer) error {
 	dir := s.fileRepo.GetComposeProjectDir(name)
 	composeFile := filepath.Base(resolveComposeFile(dir))
 	var cmd *exec.Cmd
 
 	switch action {
 	case "up":
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "up", "-d")
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "up", "-d")
 	case "down":
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "down")
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "down")
 	case "restart":
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "restart")
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "restart")
 	case "pull":
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "pull")
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "pull")
 	case "logs":
-		cmd = exec.Command("docker", "compose", "-f", composeFile, "logs", "--tail=50")
+		cmd = exec.CommandContext(ctx, "docker", "compose", "-f", composeFile, "logs", "--tail=50")
 	default:
 		return fmt.Errorf("unknown action: %s", action)
 	}
@@ -115,9 +116,13 @@ func (s *ComposeService) projectFromContainers(name string) *model.ComposeProjec
 		return project
 	}
 
+	// docker compose 不带 -p 时项目名取 yaml 顶层 name: 字段，否则是规范化目录名。
+	// 状态匹配要用同一个有效名，否则 name: 与面板项目名不一致时永远查不到容器。
+	effectiveName := effectiveComposeName(s.fileRepo.GetComposeProjectDir(name))
+
 	running := 0
 	for _, container := range containers {
-		if container.Labels["com.docker.compose.project"] != name {
+		if container.Labels["com.docker.compose.project"] != effectiveName {
 			continue
 		}
 		if container.State == "running" {
@@ -159,6 +164,46 @@ func (s *ComposeService) projectFromContainers(name string) *model.ComposeProjec
 		project.Status = "stopped"
 	}
 	return project
+}
+
+// effectiveComposeName 解析 compose 命令实际使用的项目名：
+// 优先取 compose 文件顶层 name: 字段（docker compose 的同名规则），
+// 否则回退为规范化后的目录名（docker compose 对项目名的默认推导）。
+func effectiveComposeName(dir string) string {
+	if data, err := os.ReadFile(resolveComposeFile(dir)); err == nil {
+		if n := parseComposeNameField(string(data)); n != "" {
+			return n
+		}
+	}
+	return normalizeComposeName(filepath.Base(dir))
+}
+
+// parseComposeNameField 提取 compose 文件顶层 name: 字段值（仅匹配行首无缩进的写法）。
+func parseComposeNameField(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		if !strings.HasPrefix(line, "name:") {
+			continue
+		}
+		v := strings.TrimSpace(strings.TrimPrefix(line, "name:"))
+		return strings.Trim(v, `"'`)
+	}
+	return ""
+}
+
+// normalizeComposeName 将任意目录名规范化为合法的 compose 项目名
+// （小写字母/数字/-/_，且以字母或数字开头），与 docker compose 的行为一致。
+func normalizeComposeName(name string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(name) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			b.WriteRune(r)
+		}
+	}
+	n := strings.TrimLeft(b.String(), "-_")
+	if n == "" {
+		n = "project"
+	}
+	return n
 }
 
 func resolveComposeFile(dir string) string {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive, watch } from 'vue'
+import { ref, onMounted, reactive, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
   Box,
@@ -7,6 +7,7 @@ import {
   FolderOpen,
   Layers,
   Loader2,
+  Maximize2,
   Plus,
   RefreshCw,
   Search,
@@ -17,6 +18,7 @@ import {
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
+import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import { useComposeStore } from '@/stores/compose'
 import ComposeEditor from '@/components/compose/ComposeEditor.vue'
 import ComposeActions from '@/components/compose/ComposeActions.vue'
@@ -68,6 +70,8 @@ const editorRef = ref<InstanceType<typeof ComposeEditor> | null>(null)
 const showLogsDialog = ref(false)
 const showTerminalDialog = ref(false)
 const showFilesDialog = ref(false)
+const showEditorDialog = ref(false)
+const dialogEditorRef = ref<InstanceType<typeof ComposeEditor> | null>(null)
 const selectedContainerId = ref('')
 const selectedContainerName = ref('')
 
@@ -179,6 +183,26 @@ watch(showCreateDialog, (open) => {
   if (!open) resetCreateForm()
 })
 
+// 打开放大编辑器：把内联编辑器的草稿（含未保存修改）带过去
+async function openEditorDialog() {
+  showEditorDialog.value = true
+  await nextTick()
+  dialogEditorRef.value?.loadDraft(editorRef.value?.getContent() ?? fileContent.value)
+}
+
+async function onEditorDialogOpenChange(open: boolean) {
+  if (!open && dialogEditorRef.value?.hasChanges) {
+    const ok = await confirm({
+      title: t('common.warning'),
+      description: t('compose.unsavedCloseConfirm'),
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+    })
+    if (!ok) return
+  }
+  showEditorDialog.value = open
+}
+
 async function handleSaveFile(content: string) {
   if (!selectedProject.value) return
 
@@ -223,6 +247,11 @@ function handleOpenLogs(containerId: string, containerName: string) {
 
 watch(searchQuery, () => {
   composeStore.setSearch(searchQuery.value)
+})
+
+useNodeRefresh(async () => {
+  composeStore.selectProject(null)
+  await composeStore.fetchProjects()
 })
 
 onMounted(async () => {
@@ -390,6 +419,15 @@ onMounted(async () => {
             <div class="flex items-center gap-2 px-3.5 py-2.5 bg-muted/40 border-b text-sm font-medium">
               <FileCode2 class="size-4 text-muted-foreground" />
               <span>{{ t('compose.editor') }}</span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="ml-auto"
+                :title="t('compose.editorExpand')"
+                @click="openEditorDialog"
+              >
+                <Maximize2 class="size-3.5" />
+              </Button>
             </div>
             <ComposeEditor
               ref="editorRef"
@@ -443,6 +481,27 @@ onMounted(async () => {
             </Button>
           </DialogFooter>
         </form>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Expanded Editor Dialog -->
+    <Dialog :open="showEditorDialog" @update:open="onEditorDialogOpenChange">
+      <DialogContent class="sm:max-w-5xl h-[82vh] flex flex-col overflow-hidden">
+        <DialogHeader class="shrink-0">
+          <DialogTitle class="flex items-center gap-2">
+            <FileCode2 class="size-4 text-muted-foreground" />
+            <span>{{ selectedProject }} · {{ t('compose.editor') }}</span>
+          </DialogTitle>
+        </DialogHeader>
+        <div class="flex-1 min-h-0 rounded-md border overflow-hidden">
+          <ComposeEditor
+            ref="dialogEditorRef"
+            :project-name="selectedProject"
+            :content="fileContent"
+            :loading="fileLoading"
+            @save="handleSaveFile"
+          />
+        </div>
       </DialogContent>
     </Dialog>
 

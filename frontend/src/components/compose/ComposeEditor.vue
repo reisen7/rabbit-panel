@@ -94,6 +94,10 @@ function handleFileSelect(event: Event) {
 
 defineExpose({
   hasChanges,
+  getContent: () => localContent.value,
+  loadDraft: (content: string) => {
+    localContent.value = content
+  },
   resetChanges: () => {
     localContent.value = originalContent.value
   },

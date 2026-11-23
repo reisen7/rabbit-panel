@@ -1,5 +1,6 @@
 import request from '@/utils/request'
-import { getToken } from '@/utils/request'
+import { getToken, handleUnauthorized } from '@/utils/request'
+import { targetNodeHeaders, withTargetNode } from '@/utils/targetNode'
 import type { ImageInfo } from '@/types'
 
 /**
@@ -52,6 +53,7 @@ export const imageApi = {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
+          ...targetNodeHeaders(),
         },
         body: JSON.stringify({
           image_name: imageName,
@@ -60,6 +62,7 @@ export const imageApi = {
         }),
       })
 
+      if (response.status === 401) handleUnauthorized()
       if (!response.ok) {
         const text = await response.text()
         onError(text || 'Build request failed')
@@ -116,7 +119,7 @@ export const imageApi = {
       dockerfile,
       token: token || '',
     })
-    return new EventSource(`/api/images/build?${params.toString()}`)
+    return new EventSource(withTargetNode(`/api/images/build?${params.toString()}`))
   },
 }
 

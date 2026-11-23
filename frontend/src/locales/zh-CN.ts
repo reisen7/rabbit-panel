@@ -48,6 +48,13 @@ export default {
     logout: '退出登录',
   },
 
+  // Dashboard
+  dashboard: {
+    topology: '节点拓扑',
+    topologyHint: '点击在线节点可切换监控目标，或直接打开 SSH 终端',
+    topologyExpand: '放大查看',
+  },
+
   // Sidebar Navigation (侧边栏专用)
   sideNav: {
     dashboard: '仪表板',
@@ -179,10 +186,14 @@ export default {
     saveSuccess: '保存成功',
     loadError: '加载文件列表失败',
     confirmDelete: '确定要删除此文件/文件夹吗？',
+    confirmDeleteDir: '确定要删除此文件夹及其全部内容吗？',
     protectedPath: '无法删除系统保护路径',
     fileTooLarge: '文件大小不能超过 10MB',
     fileContent: '文件内容',
     saving: '保存中...',
+    rename: '重命名',
+    newName: '新名称',
+    renameSuccess: '重命名成功',
   },
 
   // Container Config
@@ -326,6 +337,8 @@ export default {
     actionFailed: '操作失败',
     unsavedChanges: '有未保存的更改',
     unsavedConfirm: '有未保存的更改，确定要切换项目吗？',
+    unsavedCloseConfirm: '有未保存的更改，确定要关闭吗？',
+    editorExpand: '放大编辑',
     editorPlaceholder: '在此编辑 docker-compose.yml 内容...',
     lines: '行数',
     uploadSuccess: '上传成功',
@@ -381,6 +394,38 @@ export default {
     nodeStatus: '节点状态',
     lastHeartbeat: '最后心跳时间',
     neverSeen: '从未连接',
+    deleteNode: '删除节点',
+    deleteConfirm: '确定要删除节点 {name} 吗？在线节点会在下一次心跳时自动重新注册。',
+    deleteSuccess: '节点已删除',
+  },
+
+  // SSH Terminal
+  ssh: {
+    title: 'SSH 终端',
+    description: '使用用户名和密码登录到该节点的 SSH',
+    host: '主机',
+    port: '端口',
+    username: '用户名',
+    password: '密码',
+    hostPlaceholder: '例如 192.168.1.10',
+    usernamePlaceholder: '例如 root',
+    passwordPlaceholder: '请输入密码',
+    passwordSaved: '使用已保存的密码',
+    savedUsers: '已保存的用户',
+    selectCredential: '选择已保存的用户',
+    noCredential: '不使用（手动输入）',
+    saveCredential: '保存此用户和密码',
+    deleteCredential: '删除已保存用户',
+    deleteConfirm: '确定要删除已保存的用户 {user} 吗？',
+    credentialSaved: '已保存该 SSH 用户',
+    credentialDeleted: '已删除该 SSH 用户',
+    connect: '连接',
+    connecting: '正在建立 SSH 连接...',
+    disconnected: 'SSH 连接已断开',
+    connectFailed: 'SSH 连接失败',
+    back: '返回',
+    tabTerminal: '终端',
+    tabFiles: '文件',
   },
 
   // Volumes
@@ -504,6 +549,10 @@ export default {
     thinking: '思考中...',
     settingsTitle: '智能体配置',
     enable: '启用智能体',
+    provider: '服务商模板',
+    providerPlaceholder: '选择服务商自动填充配置',
+    providerHint: '选择后自动填充 API 地址、接口格式与默认模型，仍需自行填写 API Key',
+    providerApplied: '已应用 {name} 模板',
     apiUrl: 'API URL',
     apiTip: 'OpenAI 请填写到 /v1，例如 https://api.openai.com/v1。Anthropic 填写 https://api.anthropic.com，或已经带 /v1 的地址。',
     apiKey: 'API Key',

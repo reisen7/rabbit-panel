@@ -182,7 +182,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none rounded-l-md text-emerald-600 dark:text-emerald-400"
                 :disabled="container.state === 'running' || containerStore.actionInProgress"
                 @click="handleAction('start')"
@@ -200,7 +200,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none text-amber-600 dark:text-amber-400"
                 :disabled="container.state !== 'running' || containerStore.actionInProgress"
                 @click="handleAction('stop')"
@@ -218,7 +218,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none"
                 :disabled="containerStore.actionInProgress"
                 @click="handleAction('restart')"
@@ -233,7 +233,7 @@ function handleOpenConfig() {
 
         <Tooltip>
           <TooltipTrigger as-child>
-            <Button variant="ghost" size="icon-sm" class="rounded-none" @click="handleViewLogs">
+            <Button variant="ghost" size="icon" class="rounded-none" @click="handleViewLogs">
               <FileText />
             </Button>
           </TooltipTrigger>
@@ -245,7 +245,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none"
                 :disabled="container.state !== 'running'"
                 @click="handleOpenTerminal"
@@ -262,7 +262,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none"
                 :disabled="container.state !== 'running'"
                 @click="handleOpenFiles"
@@ -276,7 +276,7 @@ function handleOpenConfig() {
 
         <Tooltip>
           <TooltipTrigger as-child>
-            <Button variant="ghost" size="icon-sm" class="rounded-none" @click="handleOpenConfig">
+            <Button variant="ghost" size="icon" class="rounded-none" @click="handleOpenConfig">
               <Settings />
             </Button>
           </TooltipTrigger>
@@ -288,7 +288,7 @@ function handleOpenConfig() {
             <span>
               <Button
                 variant="ghost"
-                size="icon-sm"
+                size="icon"
                 class="rounded-none rounded-r-md text-destructive hover:text-destructive"
                 :disabled="containerStore.actionInProgress"
                 @click="confirmRemove"

@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { marked } from 'marked'
 import { Bot, Loader2, Send, User } from 'lucide-vue-next'
 import { useToast } from '@/composables/useToast'
-import { getToken } from '@/utils/request'
+import { getToken, handleUnauthorized } from '@/utils/request'
 import { getTargetNodeId } from '@/utils/targetNode'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -71,6 +71,7 @@ const sendMessage = async () => {
       }),
     })
 
+    if (response.status === 401) handleUnauthorized()
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }

@@ -110,6 +110,7 @@ export interface FileInfo {
   mode: string
   mod_time: string
   is_dir: boolean
+  is_link?: boolean
 }
 
 // Image Types

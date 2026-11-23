@@ -148,6 +148,21 @@ func (r *Router) Register() {
 		apiAuth.POST("/auth/logout", r.handleLogout)
 		apiAuth.GET("/auth/me", r.handleGetCurrentUser)
 
+		// SSH 凭证与终端（用户名/密码登录节点）
+		apiAuth.GET("/ssh/credentials", r.handleSshCredentialsList)
+		apiAuth.POST("/ssh/credentials", r.handleSshCredentialCreate)
+		apiAuth.DELETE("/ssh/credentials", r.handleSshCredentialDelete)
+		apiAuth.GET("/ssh/terminal", r.handleSshTerminalWS)
+		// SFTP 文件管理（每次请求独立拨号；连接参数与终端同一套）
+		apiAuth.POST("/ssh/sftp/list", r.handleSshSftpList)
+		apiAuth.POST("/ssh/sftp/read", r.handleSshSftpRead)
+		apiAuth.POST("/ssh/sftp/write", r.handleSshSftpWrite)
+		apiAuth.POST("/ssh/sftp/mkdir", r.handleSshSftpMkdir)
+		apiAuth.POST("/ssh/sftp/delete", r.handleSshSftpDelete)
+		apiAuth.POST("/ssh/sftp/rename", r.handleSshSftpRename)
+		apiAuth.POST("/ssh/sftp/download", r.handleSshSftpDownload)
+		apiAuth.POST("/ssh/sftp/upload", r.handleSshSftpUpload)
+
 		// Agent routes
 		apiAuth.POST("/agent/chat", r.handleAgentChat)
 		apiAuth.GET("/agent/history", r.handleAgentHistory)
@@ -178,6 +193,7 @@ func (r *Router) Register() {
 	// Master-only routes
 	if app.Mode == "master" {
 		apiAuth.GET("/nodes", r.handleNodesList)
+		apiAuth.DELETE("/nodes", r.handleNodeDelete)
 
 		// Node auth routes (separate group)
 		nodeGroup := engine.Group("/api")
@@ -1136,29 +1152,24 @@ func (r *Router) handleContainerStats(c *gin.Context) {
 	}
 
 	configuredMemoryLimit := containerInfo.HostConfig.Memory
-	statsResp, err := r.app.DockerRepo.ContainerStats(ctx, id, true)
+	// stream=false 返回当前+上一帧(precpu_stats)快照，一次调用即可算 CPU 差值；
+	// stream=true 需等 daemon 推两帧，每次调用要 ~1-2s，容器多时会把页面拖死
+	statsResp, err := r.app.DockerRepo.ContainerStats(ctx, id, false)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 	defer statsResp.Body.Close()
 
-	decoder := json.NewDecoder(statsResp.Body)
-	var stats1 types.StatsJSON
-	if err := decoder.Decode(&stats1); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
 	var stats types.StatsJSON
-	if err := decoder.Decode(&stats); err != nil {
+	if err := json.NewDecoder(statsResp.Body).Decode(&stats); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
 	cpuPercent := 0.0
-	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats1.CPUStats.CPUUsage.TotalUsage)
-	systemDelta := float64(stats.CPUStats.SystemUsage - stats1.CPUStats.SystemUsage)
+	cpuDelta := float64(stats.CPUStats.CPUUsage.TotalUsage - stats.PreCPUStats.CPUUsage.TotalUsage)
+	systemDelta := float64(stats.CPUStats.SystemUsage - stats.PreCPUStats.SystemUsage)
 	onlineCPUs := stats.CPUStats.OnlineCPUs
 	if onlineCPUs == 0 {
 		onlineCPUs = uint32(len(stats.CPUStats.CPUUsage.PercpuUsage))
@@ -1924,18 +1935,9 @@ func (r *Router) handleComposeAction(c *gin.Context) {
 		return
 	}
 
-	var output bytes.Buffer
-	err := r.app.ComposeService.ExecuteAction(reqBody.Project, reqBody.Action, &output)
-	logs := strings.ReplaceAll(output.String(), "\r\n", "\n")
-	for _, line := range strings.Split(logs, "\n") {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
-		}
-		fmt.Fprintf(c.Writer, "event: log\n")
-		fmt.Fprintf(c.Writer, "data: %s\n\n", line)
-		flusher.Flush()
-	}
+	writer := &sseLogWriter{w: c.Writer, flusher: flusher}
+	err := r.app.ComposeService.ExecuteAction(c.Request.Context(), reqBody.Project, reqBody.Action, writer)
+	writer.flushPending()
 	if err != nil {
 		fmt.Fprintf(c.Writer, "event: error\n")
 		fmt.Fprintf(c.Writer, "data: %s\n\n", err.Error())
@@ -1947,6 +1949,49 @@ func (r *Router) handleComposeAction(c *gin.Context) {
 	fmt.Fprintf(c.Writer, "event: done\n")
 	fmt.Fprintf(c.Writer, "data: success\n\n")
 	flusher.Flush()
+}
+
+// sseLogWriter 按行把命令输出转发为 SSE "log" 事件并立即 flush，
+// 让前端在执行过程中就能看到实时输出，而不是等命令结束。
+type sseLogWriter struct {
+	w       io.Writer
+	flusher http.Flusher
+	mu      sync.Mutex
+	pending bytes.Buffer
+}
+
+func (s *sseLogWriter) Write(p []byte) (int, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.pending.Write(p)
+	for {
+		data := s.pending.Bytes()
+		idx := bytes.IndexByte(data, '\n')
+		if idx < 0 {
+			break
+		}
+		line := strings.TrimSpace(string(data[:idx]))
+		s.pending.Next(idx + 1)
+		if line != "" {
+			s.emit(line)
+		}
+	}
+	return len(p), nil
+}
+
+func (s *sseLogWriter) emit(line string) {
+	fmt.Fprintf(s.w, "event: log\n")
+	fmt.Fprintf(s.w, "data: %s\n\n", line)
+	s.flusher.Flush()
+}
+
+func (s *sseLogWriter) flushPending() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if line := strings.TrimSpace(s.pending.String()); line != "" {
+		s.emit(line)
+	}
+	s.pending.Reset()
 }
 
 func (r *Router) handleComposeDelete(c *gin.Context) {
@@ -2322,6 +2367,27 @@ func (r *Router) handleSystemStats(c *gin.Context) {
 func (r *Router) handleNodesList(c *gin.Context) {
 	nodes := r.app.NodeService.GetAllNodes()
 	c.JSON(http.StatusOK, nodes)
+}
+
+// handleNodeDelete DELETE /api/nodes?id=
+// 从节点列表移除一个节点。在线 Worker 被删除后会在下一次心跳时自动重新注册。
+func (r *Router) handleNodeDelete(c *gin.Context) {
+	id := c.Query("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id 不能为空"})
+		return
+	}
+	node, ok := r.app.NodeService.GetNode(id)
+	if !ok {
+		c.JSON(http.StatusNotFound, gin.H{"error": "节点不存在"})
+		return
+	}
+	if node.Mode == model.ModeMaster {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "不能删除主节点"})
+		return
+	}
+	r.app.NodeService.RemoveNode(id)
+	c.JSON(http.StatusOK, gin.H{"message": "已删除"})
 }
 
 func (r *Router) handleNodeRegister(c *gin.Context) {

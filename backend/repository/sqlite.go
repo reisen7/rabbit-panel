@@ -122,6 +122,21 @@ func (r *SQLiteRepository) initTables() error {
 		return fmt.Errorf("创建聊天记录表失败: %w", err)
 	}
 
+	// SSH credentials table
+	_, err = r.db.Exec(`
+		CREATE TABLE IF NOT EXISTS ssh_credentials (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			node_id TEXT NOT NULL,
+			host TEXT NOT NULL,
+			port INTEGER NOT NULL DEFAULT 22,
+			username TEXT NOT NULL,
+			password_enc TEXT NOT NULL,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		)`)
+	if err != nil {
+		return fmt.Errorf("创建 SSH 凭证表失败: %w", err)
+	}
+
 	// Check if default admin user exists
 	var count int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)

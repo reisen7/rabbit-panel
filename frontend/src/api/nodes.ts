@@ -44,6 +44,15 @@ export const nodesApi = {
   },
 
   /**
+   * Remove a node from the node list (master mode only).
+   * An online worker will re-register itself on its next heartbeat.
+   * @param nodeId Node ID to remove
+   */
+  async remove(nodeId: string): Promise<void> {
+    await request.delete('/nodes', { params: { id: nodeId } })
+  },
+
+  /**
    * Schedule a container to run on a specific node or auto-select best node
    * @param data Schedule request with container configuration
    * @returns Schedule response with node and container info

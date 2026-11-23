@@ -41,15 +41,17 @@ export const useContainerCreateStore = defineStore('containerCreate', () => {
 
     try {
       abortController = new AbortController()
-      await containerApi.createStream(
+      const result = await containerApi.createStream(
         payload,
         (entry) => {
           streamLogs.value.push(entry)
         },
         abortController.signal
       )
-      toast.success(t('container.createSuccess'))
-      createdSignal.value++
+      if (result.container_id) {
+        toast.success(t('container.createSuccess'))
+        createdSignal.value++
+      }
     } catch (error: unknown) {
       if ((error as { name?: string })?.name === 'AbortError') {
         // cancelled by user
