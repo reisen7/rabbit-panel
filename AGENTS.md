@@ -22,7 +22,8 @@ cd frontend && npm install && npm run dev
 ```bash
 cd backend && go run main.go
 # Listens on 0.0.0.0:3958 over HTTP by default
-# JWT_SECRET and NODE_SECRET are required (at least 32 chars). Placeholder values are rejected.
+# JWT_SECRET and NODE_SECRET are optional in master/standalone mode: if unset, random values are generated on each start and printed to the log.
+# If set, they must be at least 32 chars and not placeholder values. Worker mode requires both, matching the master.
 # Use TLS_ENABLED=true go run main.go for HTTPS (self-signed cert auto-generated into ./data/certs)
 ```
 

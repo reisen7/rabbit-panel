@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/fstest"
 
 	"github.com/gin-gonic/gin"
 )
@@ -109,6 +110,44 @@ func TestWriteEmbeddedSkipsGzipForImages(t *testing.T) {
 	if w.Body.Len() != len(payload) {
 		t.Fatalf("body len = %d, want %d", w.Body.Len(), len(payload))
 	}
+}
+
+func TestServeEmbeddedFileMissingAssetReturns404(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	fsys := fstest.MapFS{
+		".dist/index.html":                              {Data: []byte("<html>ok</html>")},
+		".dist/assets/_plugin-vue_export-helper-abc.js": {Data: []byte("export default {}")},
+	}
+
+	t.Run("serves underscore-prefixed asset", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/assets/_plugin-vue_export-helper-abc.js", nil)
+		serveEmbeddedFile(c, fsys, "/assets/_plugin-vue_export-helper-abc.js")
+		if w.Code != http.StatusOK || !strings.Contains(w.Header().Get("Content-Type"), "javascript") {
+			t.Fatalf("status=%d ct=%q", w.Code, w.Header().Get("Content-Type"))
+		}
+	})
+
+	t.Run("missing asset returns 404 instead of index.html", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/assets/missing-123.js", nil)
+		serveEmbeddedFile(c, fsys, "/assets/missing-123.js")
+		if w.Code != http.StatusNotFound {
+			t.Fatalf("status=%d, want 404", w.Code)
+		}
+	})
+
+	t.Run("spa route falls back to index.html", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		c, _ := gin.CreateTestContext(w)
+		c.Request = httptest.NewRequest(http.MethodGet, "/login", nil)
+		serveEmbeddedFile(c, fsys, "/login")
+		if w.Code != http.StatusOK || w.Body.String() != "<html>ok</html>" {
+			t.Fatalf("status=%d body=%q", w.Code, w.Body.String())
+		}
+	})
 }
 
 func bytesRepeat(n int) []byte {

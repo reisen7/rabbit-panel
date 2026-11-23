@@ -245,6 +245,10 @@ func serveEmbeddedFile(c *gin.Context, embeddedFS fs.FS, path string) {
 
 	fileData, err := fs.ReadFile(embeddedFS, ".dist/"+cleanPath)
 	if err != nil {
+		if strings.HasPrefix(cleanPath, "assets/") {
+			c.AbortWithStatus(http.StatusNotFound)
+			return
+		}
 		fileData, err = fs.ReadFile(embeddedFS, ".dist/index.html")
 		if err != nil {
 			c.Status(http.StatusNotFound)

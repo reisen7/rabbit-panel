@@ -10,7 +10,8 @@ import (
 )
 
 func (r *Router) handleUpdateCheck(c *gin.Context) {
-	result, err := r.app.UpdateService.Check(c.Request.Context())
+	force := c.Query("force")
+	result, err := r.app.UpdateService.Check(c.Request.Context(), force == "1" || force == "true")
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

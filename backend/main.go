@@ -15,7 +15,7 @@ import (
 	"rabbit-panel/service"
 )
 
-//go:embed .dist
+//go:embed all:.dist
 var embeddedDist embed.FS
 
 var (

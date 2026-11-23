@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +25,7 @@ import (
 const (
 	updateManifestURL         = "https://reisen7.github.io/rabbit-panel/latest.json"
 	updateManifestFallbackURL = "https://raw.githubusercontent.com/reisen7/rabbit-panel/gh-pages/latest.json"
+	updateManifestMirrorURL   = "https://cdn.jsdelivr.net/gh/reisen7/rabbit-panel@gh-pages/latest.json"
 	updateLogPath             = "/tmp/rabbit-panel-update.log"
 	updateScriptPath          = "/tmp/rabbit-panel-update.sh"
 	updateBinaryDir           = "/tmp/rabbit-panel-update"
@@ -135,6 +137,25 @@ type UpdateService struct {
 	httpClient     *http.Client
 	downloadClient *http.Client
 	mu             sync.Mutex
+
+	manifestMu           sync.Mutex
+	manifestCache        *manifestCacheEntry
+	manifestInflight     *manifestFetch
+	manifestFetchTimeout time.Duration
+	manifestSuccessTTL   time.Duration
+	manifestFailureTTL   time.Duration
+}
+
+type manifestCacheEntry struct {
+	manifest  *UpdateManifest
+	err       error
+	expiresAt time.Time
+}
+
+type manifestFetch struct {
+	done     chan struct{}
+	manifest *UpdateManifest
+	err      error
 }
 
 func NewUpdateService(fileRepo repository.IFileRepository, buildInfo BuildInfo) *UpdateService {
@@ -146,7 +167,10 @@ func NewUpdateService(fileRepo repository.IFileRepository, buildInfo BuildInfo) 
 		},
 		// Binary downloads can take much longer than manifest checks.
 		// We rely on request contexts to bound download duration.
-		downloadClient: &http.Client{},
+		downloadClient:       &http.Client{},
+		manifestFetchTimeout: 10 * time.Second,
+		manifestSuccessTTL:   10 * time.Minute,
+		manifestFailureTTL:   time.Minute,
 	}
 }
 
@@ -167,13 +191,13 @@ func (s *UpdateService) DetectDeployConfig() DeployConfig {
 		Mode:           mode,
 		Image:          getEnv("RABBIT_IMAGE", "reisen7/rabbit-panel"),
 		ImageTag:       getEnv("RABBIT_IMAGE_TAG", "latest"),
-		HostProjectDir: getEnv("RABBIT_HOST_PROJECT_DIR", "/root/rabbit-panel"),
+		HostProjectDir: getEnv("RABBIT_HOST_PROJECT_DIR", "/opt/rabbit-panel"),
 		ComposeFile:    getEnv("RABBIT_COMPOSE_FILE", "docker-compose.deploy.yml"),
 		ServiceName:    getEnv("RABBIT_SERVICE_NAME", "rabbit-panel"),
 	}
 }
 
-func (s *UpdateService) Check(ctx context.Context) (*UpdateCheckResult, error) {
+func (s *UpdateService) Check(ctx context.Context, force bool) (*UpdateCheckResult, error) {
 	if err := s.reconcileUpdateArtifacts(); err != nil {
 		return nil, err
 	}
@@ -202,7 +226,7 @@ func (s *UpdateService) Check(ctx context.Context) (*UpdateCheckResult, error) {
 		}, nil
 	}
 
-	manifest, err := s.fetchManifest(ctx)
+	manifest, err := s.getManifest(ctx, force)
 	if err != nil {
 		return nil, err
 	}
@@ -455,22 +479,93 @@ func (s *UpdateService) updateStatus(status, errMsg string) {
 	}
 }
 
+func (s *UpdateService) getManifest(ctx context.Context, force bool) (*UpdateManifest, error) {
+	s.manifestMu.Lock()
+	if !force && s.manifestCache != nil && time.Now().Before(s.manifestCache.expiresAt) {
+		cached := s.manifestCache
+		s.manifestMu.Unlock()
+		return cached.manifest, cached.err
+	}
+	if s.manifestInflight != nil {
+		fetch := s.manifestInflight
+		s.manifestMu.Unlock()
+		select {
+		case <-fetch.done:
+			return fetch.manifest, fetch.err
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
+	}
+	fetch := &manifestFetch{done: make(chan struct{})}
+	s.manifestInflight = fetch
+	s.manifestMu.Unlock()
+
+	fetchCtx, cancel := context.WithTimeout(context.Background(), s.manifestFetchTimeout)
+	manifest, err := s.fetchManifest(fetchCtx)
+	cancel()
+	fetch.manifest, fetch.err = manifest, err
+	close(fetch.done)
+
+	s.manifestMu.Lock()
+	s.manifestInflight = nil
+	ttl := s.manifestFailureTTL
+	if err == nil {
+		ttl = s.manifestSuccessTTL
+	}
+	s.manifestCache = &manifestCacheEntry{manifest: manifest, err: err, expiresAt: time.Now().Add(ttl)}
+	s.manifestMu.Unlock()
+
+	return manifest, err
+}
+
 func (s *UpdateService) fetchManifest(ctx context.Context) (*UpdateManifest, error) {
 	primaryURL := getEnv("RABBIT_UPDATE_MANIFEST_URL", updateManifestURL)
 	fallbackURL := getEnv("RABBIT_UPDATE_MANIFEST_FALLBACK_URL", updateManifestFallbackURL)
+	mirrorURL := getEnv("RABBIT_UPDATE_MANIFEST_MIRROR_URL", updateManifestMirrorURL)
+	if lower := strings.ToLower(strings.TrimSpace(mirrorURL)); lower == "off" || lower == "-" {
+		mirrorURL = ""
+	}
 
-	urls := []string{primaryURL}
-	if fallbackURL != "" && fallbackURL != primaryURL {
-		urls = append(urls, fallbackURL)
+	var urls []string
+	seen := make(map[string]bool)
+	for _, manifestURL := range []string{primaryURL, fallbackURL, mirrorURL} {
+		manifestURL = strings.TrimSpace(manifestURL)
+		if manifestURL == "" || seen[manifestURL] {
+			continue
+		}
+		seen[manifestURL] = true
+		urls = append(urls, manifestURL)
+	}
+
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	type fetchResult struct {
+		manifest *UpdateManifest
+		err      error
+	}
+	results := make(chan fetchResult, len(urls))
+	for _, manifestURL := range urls {
+		go func(url string) {
+			manifest, err := s.fetchManifestFromURL(ctx, url)
+			select {
+			case results <- fetchResult{manifest: manifest, err: err}:
+			case <-ctx.Done():
+			}
+		}(manifestURL)
 	}
 
 	var errs []string
-	for _, manifestURL := range urls {
-		manifest, err := s.fetchManifestFromURL(ctx, manifestURL)
-		if err == nil {
-			return manifest, nil
+	for range urls {
+		select {
+		case res := <-results:
+			if res.err == nil {
+				cancel()
+				return res.manifest, nil
+			}
+			errs = append(errs, res.err.Error())
+		case <-ctx.Done():
+			return nil, fmt.Errorf("failed to fetch update manifest: %s", ctx.Err())
 		}
-		errs = append(errs, err.Error())
 	}
 
 	return nil, fmt.Errorf("failed to fetch update manifest: %s", strings.Join(errs, "; "))
@@ -510,7 +605,10 @@ func (s *UpdateService) prepareBinaryUpdate(ctx context.Context, manifest *Updat
 	if err != nil {
 		return err
 	}
-	expectedSHA := strings.TrimSpace(manifest.SHA256[archKey])
+	expectedSHA, err := requireManifestSHA(manifest, archKey)
+	if err != nil {
+		return err
+	}
 
 	if err := os.MkdirAll(updateBinaryDir, 0755); err != nil {
 		return err
@@ -789,8 +887,28 @@ func (s *UpdateService) downloadBinaryWithProgress(ctx context.Context, download
 	}()
 
 	writeLog("[%s] binary update started", time.Now().Format(time.RFC3339))
-	writeLog("download url: %s", downloadURL)
 
+	urls := []string{downloadURL}
+	if proxied := applyDownloadProxy(downloadURL, os.Getenv("RABBIT_UPDATE_DOWNLOAD_PROXY")); proxied != downloadURL {
+		urls = []string{proxied, downloadURL}
+	}
+
+	var lastErr error
+	for _, url := range urls {
+		writeLog("download url: %s", url)
+		if err := s.downloadBinaryAttempt(ctx, url, outputPath, expectedSHA, writeLog); err != nil {
+			writeLog("download via %s failed: %v", url, err)
+			lastErr = err
+			_ = os.Remove(outputPath)
+			continue
+		}
+		cleanupOutput = false
+		return nil
+	}
+	return lastErr
+}
+
+func (s *UpdateService) downloadBinaryAttempt(ctx context.Context, downloadURL, outputPath, expectedSHA string, writeLog func(string, ...interface{})) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, downloadURL, nil)
 	if err != nil {
 		return err
@@ -890,8 +1008,36 @@ func (s *UpdateService) downloadBinaryWithProgress(ctx context.Context, download
 		writeLog("sha256 verified")
 	}
 
-	cleanupOutput = false
 	return nil
+}
+
+func requireManifestSHA(manifest *UpdateManifest, archKey string) (string, error) {
+	sha := strings.ToLower(strings.TrimSpace(manifest.SHA256[archKey]))
+	if len(sha) != 64 {
+		return "", fmt.Errorf("manifest missing valid sha256 for %s, refusing to update", archKey)
+	}
+	for _, c := range sha {
+		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+			return "", fmt.Errorf("manifest missing valid sha256 for %s, refusing to update", archKey)
+		}
+	}
+	return sha, nil
+}
+
+func applyDownloadProxy(rawURL, proxy string) string {
+	proxy = strings.TrimSpace(proxy)
+	if proxy == "" {
+		return rawURL
+	}
+	lowerProxy := strings.ToLower(proxy)
+	if !strings.HasPrefix(lowerProxy, "https://") && !strings.HasPrefix(lowerProxy, "http://") {
+		return rawURL
+	}
+	parsed, err := url.Parse(rawURL)
+	if err != nil || !strings.EqualFold(parsed.Hostname(), "github.com") {
+		return rawURL
+	}
+	return strings.TrimRight(proxy, "/") + "/" + rawURL
 }
 
 func (s *UpdateService) watchProcess(cmd *exec.Cmd) {

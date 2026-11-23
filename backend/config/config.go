@@ -78,17 +78,20 @@ func NewApp(buildInfo service.BuildInfo) (*App, error) {
 		return nil, err
 	}
 
-	jwtSecret, err := requireUserSecret("JWT_SECRET", os.Getenv("JWT_SECRET"))
+	mode := getEnv("MODE", "master")
+	// Worker 必须与 Master 使用相同密钥，不允许自动生成
+	allowGenerate := mode != "worker"
+	jwtSecret, err := resolveSecret("JWT_SECRET", os.Getenv("JWT_SECRET"), allowGenerate)
 	if err != nil {
 		return nil, err
 	}
-	nodeSecret, err := requireUserSecret("NODE_SECRET", os.Getenv("NODE_SECRET"))
+	nodeSecret, err := resolveSecret("NODE_SECRET", os.Getenv("NODE_SECRET"), allowGenerate)
 	if err != nil {
 		return nil, err
 	}
 
 	app := &App{
-		Mode:       getEnv("MODE", "master"),
+		Mode:       mode,
 		Port:       getEnv("PORT", "3958"),
 		Host:       getEnv("HOST", "0.0.0.0"),
 		HTTPPort:   getEnv("HTTP_PORT", ""),

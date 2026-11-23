@@ -14,8 +14,8 @@ services:
       - "10001:10001"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-      - /root/rabbit-panel/compose_projects:/app/compose_projects
-      - /root/rabbit-panel/data:/app/data
+      - /opt/rabbit-panel/compose_projects:/app/compose_projects
+      - /opt/rabbit-panel/data:/app/data
     environment:
       - TZ=Asia/Shanghai
       - MODE=worker
