@@ -1,28 +1,28 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   Bell,
+  Bot,
   Box,
-  Connection,
+  ChevronsLeft,
+  ChevronsRight,
   Cpu,
-  Expand,
-  Files,
-  Fold,
-  FolderOpened,
+  HardDrive,
+  Image as ImageIcon,
+  KeyRound,
+  Layers,
+  LogOut,
   Menu,
-  Message,
+  MessageSquare,
   Monitor,
   Moon,
-  OfficeBuilding,
-  Picture,
-  Service,
-  Setting,
-  Sunny,
-  SwitchButton,
+  Building2,
+  Network,
+  Settings,
+  Sun,
   User,
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+} from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
 import { useNodesStore } from '@/stores/nodes'
 import { useContainerStore } from '@/stores/containers'
@@ -32,15 +32,46 @@ import { useComposeStore } from '@/stores/compose'
 import { useRegistryStore } from '@/stores/registry'
 import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import { useUpdateStore } from '@/stores/update'
 import SystemMonitor from '@/components/common/SystemMonitor.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import SettingsDialog from '@/components/common/SettingsDialog.vue'
 import AgentChatFloat from '@/components/common/AgentChatFloat.vue'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
+import ContainerCreateTaskFloat from '@/components/container/ContainerCreateTaskFloat.vue'
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import {
+  Sheet,
+  SheetContent,
+} from '@/components/ui/sheet'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 import mikuLight from '@/assets/miku-light.svg'
 import mikuDark from '@/assets/miku-dark.svg'
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const nodesStore = useNodesStore()
@@ -52,8 +83,10 @@ const registryStore = useRegistryStore()
 const updateStore = useUpdateStore()
 const { theme, toggleTheme } = useTheme()
 const { language, t, setLanguage } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
 
-const logoSrc = computed(() => theme.value === 'dark' ? mikuDark : mikuLight)
+const logoSrc = computed(() => (theme.value === 'dark' ? mikuDark : mikuLight))
 const windowWidth = ref(window.innerWidth)
 const isMobile = computed(() => windowWidth.value < 768)
 const isCollapse = ref(false)
@@ -69,8 +102,9 @@ const updateProgressText = computed(() => {
 })
 const showUpdateDot = computed(() => updateStore.shouldShowIndicator && !isUpdating.value)
 
-const themeIcon = computed(() => theme.value === 'dark' ? Sunny : Moon)
-const themeTooltip = computed(() => theme.value === 'dark' ? t('header.lightMode') : t('header.darkMode'))
+const themeTooltip = computed(() =>
+  theme.value === 'dark' ? t('header.lightMode') : t('header.darkMode')
+)
 
 const languageOptions = [
   { label: '简体中文', value: 'zh-CN' as const },
@@ -80,15 +114,19 @@ const languageOptions = [
 const menuItems = computed(() => [
   { index: '/', icon: Monitor, title: t('sideNav.dashboard') },
   { index: '/containers', icon: Box, title: t('sideNav.containers') },
-  { index: '/images', icon: Picture, title: t('sideNav.images') },
-  { index: '/networks', icon: Connection, title: t('sideNav.networks') },
-  { index: '/volumes', icon: FolderOpened, title: t('sideNav.volumes') },
-  { index: '/compose', icon: Files, title: t('sideNav.compose') },
+  { index: '/images', icon: ImageIcon, title: t('sideNav.images') },
+  { index: '/networks', icon: Network, title: t('sideNav.networks') },
+  { index: '/volumes', icon: HardDrive, title: t('sideNav.volumes') },
+  { index: '/compose', icon: Layers, title: t('sideNav.compose') },
   { index: '/nodes', icon: Cpu, title: t('sideNav.nodes') },
-  { index: '/registry', icon: OfficeBuilding, title: t('sideNav.registry') },
-  { index: '/docker-config', icon: Setting, title: t('sideNav.dockerConfig') },
-  { index: '/settings/agent', icon: Service, title: t('sideNav.agentSettings') },
+  { index: '/registry', icon: Building2, title: t('sideNav.registry') },
+  { index: '/docker-config', icon: Settings, title: t('sideNav.dockerConfig') },
+  { index: '/settings/agent', icon: Bot, title: t('sideNav.agentSettings') },
 ])
+
+function isActiveMenu(index: string) {
+  return index === '/' ? route.path === '/' : route.path.startsWith(index)
+}
 
 function handleResize() {
   windowWidth.value = window.innerWidth
@@ -105,18 +143,16 @@ function handleMenuSelect(index: string) {
 }
 
 async function handleLogout() {
-  try {
-    await ElMessageBox.confirm(`${t('auth.logout')}?`, t('common.confirm'), {
-      confirmButtonText: t('common.confirm'),
-      cancelButtonText: t('common.cancel'),
-      type: 'warning',
-    })
-    await authStore.logout()
-    ElMessage.success(t('auth.logoutSuccess'))
-    router.push('/login')
-  } catch {
-    // ignore cancel
-  }
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: `${t('auth.logout')}?`,
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+  })
+  if (!ok) return
+  await authStore.logout()
+  toast.success(t('auth.logoutSuccess'))
+  router.push('/login')
 }
 
 function handleLanguageChange(lang: 'zh-CN' | 'en-US') {
@@ -132,7 +168,7 @@ function handleChangePassword() {
 
 function handlePasswordChangeSuccess() {
   showPasswordDialog.value = false
-  ElMessage.success(t('auth.passwordChanged'))
+  toast.success(t('auth.passwordChanged'))
 }
 
 function handleOpenNotify() {
@@ -163,28 +199,34 @@ const selectedNodeId = computed({
 })
 
 const currentNodeName = computed(() => {
-  return nodesStore.nodes.find(node => node.id === nodesStore.currentNodeId)?.name || t('node.master')
+  return nodesStore.nodes.find((node) => node.id === nodesStore.currentNodeId)?.name || t('node.master')
 })
 
-watch(() => nodesStore.currentNodeId, (id, prev) => {
-  if (id === prev) return
-  containerStore.prepareNodeSwitch()
-  networkStore.prepareNodeSwitch()
-  volumeStore.prepareNodeSwitch()
-  composeStore.prepareNodeSwitch()
-  registryStore.prepareNodeSwitch()
-  containerStore.fetchContainers()
-  networkStore.fetchNetworks()
-  volumeStore.fetchVolumes()
-  composeStore.fetchProjects()
-  registryStore.fetchRegistries()
-})
+watch(
+  () => nodesStore.currentNodeId,
+  (id, prev) => {
+    if (id === prev) return
+    containerStore.prepareNodeSwitch()
+    networkStore.prepareNodeSwitch()
+    volumeStore.prepareNodeSwitch()
+    composeStore.prepareNodeSwitch()
+    registryStore.prepareNodeSwitch()
+    containerStore.fetchContainers()
+    networkStore.fetchNetworks()
+    volumeStore.fetchVolumes()
+    composeStore.fetchProjects()
+    registryStore.fetchRegistries()
+  }
+)
 
-watch(() => nodesStore.fellBackToMaster, (fellBack) => {
-  if (!fellBack) return
-  ElMessage.warning(t('node.nodeOfflineSwitched'))
-  nodesStore.acknowledgeFallback()
-})
+watch(
+  () => nodesStore.fellBackToMaster,
+  (fellBack) => {
+    if (!fellBack) return
+    toast.warning(t('node.nodeOfflineSwitched'))
+    nodesStore.acknowledgeFallback()
+  }
+)
 
 onMounted(() => {
   window.addEventListener('resize', handleResize)
@@ -198,449 +240,322 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <el-container class="main-layout">
-    <el-aside v-if="!isMobile" :width="isCollapse ? '64px' : '200px'" class="main-sidebar">
-      <div class="sidebar-header">
-        <img :src="logoSrc" alt="Logo" class="logo" />
-        <span v-show="!isCollapse" class="logo-text">Rabbit Panel</span>
-      </div>
-
-      <el-menu :default-active="$route.path" :collapse="isCollapse" :collapse-transition="false" class="sidebar-menu" @select="handleMenuSelect">
-        <el-menu-item v-for="item in menuItems" :key="item.index" :index="item.index">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <template #title>{{ item.title }}</template>
-        </el-menu-item>
-      </el-menu>
-
-      <div v-if="nodesStore.isMasterMode" class="node-switcher" :class="{ collapsed: isCollapse }">
-        <template v-if="!isCollapse">
-          <div class="node-switcher-label">{{ t('node.switchNode') }}</div>
-          <el-select v-model="selectedNodeId" size="small">
-            <el-option
-              v-for="node in nodesStore.nodes"
-              :key="node.id"
-              :label="node.name"
-              :value="node.id"
-              :disabled="node.status !== 'online'"
-            />
-          </el-select>
-        </template>
-        <el-tooltip v-else :content="currentNodeName" placement="right">
-          <el-icon :size="20" @click="isCollapse = false"><Cpu /></el-icon>
-        </el-tooltip>
-      </div>
-
-      <div class="collapse-btn" @click="isCollapse = !isCollapse">
-        <el-icon :size="20"><component :is="isCollapse ? Expand : Fold" /></el-icon>
-      </div>
-    </el-aside>
-
-    <el-drawer v-model="drawerVisible" direction="ltr" :size="280" :with-header="false" class="mobile-drawer">
-      <div class="drawer-header">
-        <img :src="logoSrc" alt="Logo" class="logo" />
-        <span class="logo-text">Rabbit Panel</span>
-      </div>
-
-      <el-menu :default-active="$route.path" class="drawer-menu" @select="handleMenuSelect">
-        <el-menu-item v-for="item in menuItems" :key="item.index" :index="item.index">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.title }}</span>
-        </el-menu-item>
-      </el-menu>
-
-      <div v-if="nodesStore.isMasterMode" class="drawer-node-switcher">
-        <div class="node-switcher-label">{{ t('node.switchNode') }}</div>
-        <el-select v-model="selectedNodeId" size="small">
-          <el-option
-            v-for="node in nodesStore.nodes"
-            :key="node.id"
-            :label="node.name"
-            :value="node.id"
-            :disabled="node.status !== 'online'"
-          />
-        </el-select>
-      </div>
-
-      <div class="drawer-footer">
-        <div class="drawer-user-info">
-          <el-avatar :size="40" :icon="User" />
-          <span class="drawer-username">{{ authStore.username }}</span>
+  <TooltipProvider>
+    <div class="h-screen flex overflow-hidden bg-background text-foreground">
+      <!-- Desktop Sidebar -->
+      <aside
+        v-if="!isMobile"
+        class="shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border flex flex-col transition-[width] duration-200"
+        :class="isCollapse ? 'w-16' : 'w-[var(--rp-sidebar-width,220px)]'"
+      >
+        <div class="h-14 flex items-center justify-center px-4 border-b border-sidebar-border shrink-0">
+          <img :src="logoSrc" alt="Logo" class="size-7 shrink-0" />
+          <span v-show="!isCollapse" class="ml-2.5 text-sm font-semibold tracking-tight whitespace-nowrap">
+            Rabbit Panel
+          </span>
         </div>
 
-        <div class="drawer-actions">
-          <el-button text @click="handleOpenNotify">
-            <el-icon><Message /></el-icon>
-            {{ t('notify.title') }}
-          </el-button>
-          <el-button text @click="showUpdateDialog = true">
-            <el-icon><Bell /></el-icon>
-            {{ t('update.title') }}
-          </el-button>
-          <el-button text @click="handleChangePassword">
-            <el-icon><SwitchButton /></el-icon>
-            {{ t('header.changePassword') }}
-          </el-button>
-          <el-button text type="danger" @click="handleLogout">
-            <el-icon><SwitchButton /></el-icon>
-            {{ t('nav.logout') }}
-          </el-button>
+        <nav class="flex-1 overflow-y-auto p-2 space-y-1">
+          <template v-for="item in menuItems" :key="item.index">
+            <Tooltip v-if="isCollapse">
+              <TooltipTrigger as-child>
+                <button
+                  type="button"
+                  class="w-full h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer"
+                  :class="isActiveMenu(item.index)
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-2xs'
+                    : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
+                  @click="handleMenuSelect(item.index)"
+                >
+                  <component :is="item.icon" class="size-4 shrink-0" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="right">{{ item.title }}</TooltipContent>
+            </Tooltip>
+            <button
+              v-else
+              type="button"
+              class="w-full h-9 px-3 flex items-center gap-2.5 rounded-md text-sm whitespace-nowrap transition-colors cursor-pointer"
+              :class="isActiveMenu(item.index)
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-2xs'
+                : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
+              @click="handleMenuSelect(item.index)"
+            >
+              <component :is="item.icon" class="size-4 shrink-0" />
+              <span class="truncate">{{ item.title }}</span>
+            </button>
+          </template>
+        </nav>
+
+        <div
+          v-if="nodesStore.isMasterMode"
+          class="border-t border-sidebar-border"
+          :class="isCollapse ? 'flex justify-center py-2.5' : 'p-3 space-y-1.5'"
+        >
+          <template v-if="!isCollapse">
+            <div class="text-[11px] font-medium text-muted-foreground">{{ t('node.switchNode') }}</div>
+            <Select v-model="selectedNodeId">
+              <SelectTrigger size="sm" class="w-full bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="node in nodesStore.nodes"
+                  :key="node.id"
+                  :value="node.id"
+                  :disabled="node.status !== 'online'"
+                >
+                  {{ node.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </template>
+          <Tooltip v-else>
+            <TooltipTrigger as-child>
+              <button
+                type="button"
+                class="p-1.5 rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+                @click="isCollapse = false"
+              >
+                <Cpu class="size-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">{{ currentNodeName }}</TooltipContent>
+          </Tooltip>
         </div>
-      </div>
-    </el-drawer>
 
-    <el-container>
-      <el-header class="main-header">
-        <div class="header-left">
-          <el-button v-if="isMobile" :icon="Menu" class="mobile-menu-btn" @click="toggleDrawer" />
-          <SystemMonitor />
-          <el-select
-            v-if="nodesStore.isMasterMode"
-            v-model="selectedNodeId"
-            class="header-node-select"
-            size="small"
-          >
-            <el-option
-              v-for="node in nodesStore.nodes"
-              :key="node.id"
-              :label="node.name"
-              :value="node.id"
-              :disabled="node.status !== 'online'"
-            />
-          </el-select>
-          <el-tag size="small" effect="plain" class="version-tag">
-            {{ updateStore.info?.current_version || 'dev' }}
-          </el-tag>
-        </div>
+        <button
+          type="button"
+          class="h-11 flex items-center justify-center border-t border-sidebar-border text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground transition-colors cursor-pointer"
+          @click="isCollapse = !isCollapse"
+        >
+          <ChevronsRight v-if="isCollapse" class="size-4" />
+          <ChevronsLeft v-else class="size-4" />
+        </button>
+      </aside>
 
-        <div class="header-right">
-          <el-tooltip content="GitHub" placement="bottom">
-            <el-button circle @click="openGitHub">
-              <svg class="github-icon" viewBox="0 0 16 16" width="18" height="18" fill="currentColor">
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-              </svg>
-            </el-button>
-          </el-tooltip>
+      <!-- Mobile Drawer -->
+      <Sheet v-model:open="drawerVisible">
+        <SheetContent side="left" class="w-[280px] p-0 flex flex-col bg-sidebar text-sidebar-foreground">
+          <div class="h-14 flex items-center px-5 border-b border-sidebar-border shrink-0">
+            <img :src="logoSrc" alt="Logo" class="size-7" />
+            <span class="ml-2.5 text-base font-semibold tracking-tight">Rabbit Panel</span>
+          </div>
 
-          <el-tooltip :content="t('update.title')" placement="bottom">
-            <el-badge :is-dot="showUpdateDot" :value="updateProgressText" :hidden="!updateProgressText">
-              <el-button :icon="Bell" circle :class="{ 'updating-button': isUpdating }" @click="showUpdateDialog = true" />
-            </el-badge>
-          </el-tooltip>
+          <nav class="flex-1 overflow-y-auto p-2.5 space-y-1">
+            <button
+              v-for="item in menuItems"
+              :key="item.index"
+              type="button"
+              class="w-full h-10 px-3 flex items-center gap-3 rounded-md text-sm transition-colors cursor-pointer"
+              :class="isActiveMenu(item.index)
+                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
+              @click="handleMenuSelect(item.index)"
+            >
+              <component :is="item.icon" class="size-4 shrink-0" />
+              <span>{{ item.title }}</span>
+            </button>
+          </nav>
 
-          <el-tooltip :content="themeTooltip" placement="bottom">
-            <el-button :icon="themeIcon" circle @click="toggleTheme" />
-          </el-tooltip>
+          <div v-if="nodesStore.isMasterMode" class="px-4 py-3 border-t border-sidebar-border space-y-1.5">
+            <div class="text-xs text-muted-foreground">{{ t('node.switchNode') }}</div>
+            <Select v-model="selectedNodeId">
+              <SelectTrigger size="sm" class="w-full bg-background">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="node in nodesStore.nodes"
+                  :key="node.id"
+                  :value="node.id"
+                  :disabled="node.status !== 'online'"
+                >
+                  {{ node.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-          <el-dropdown @command="handleLanguageChange">
-            <el-button circle>
-              <span class="lang-icon">{{ language === 'zh-CN' ? '中' : 'En' }}</span>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item v-for="opt in languageOptions" :key="opt.value" :command="opt.value" :class="{ 'is-active': language === opt.value }">
-                  {{ opt.label }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-
-          <el-dropdown v-if="!isMobile">
-            <div class="user-info">
-              <el-avatar :size="32" :icon="User" />
-              <span class="username">{{ authStore.username }}</span>
+          <div class="p-4 border-t border-sidebar-border space-y-3">
+            <div class="flex items-center gap-3">
+              <Avatar class="size-9">
+                <AvatarFallback><User class="size-4" /></AvatarFallback>
+              </Avatar>
+              <span class="text-sm font-medium">{{ authStore.username }}</span>
             </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item @click="showUpdateDialog = true">
-                  <el-icon><Bell /></el-icon>
-                  {{ t('update.title') }}
-                </el-dropdown-item>
-                <el-dropdown-item @click="handleOpenSettings">
-                  <el-icon><Setting /></el-icon>
-                  {{ t('settings.pageSettings') }}
-                </el-dropdown-item>
-                <el-dropdown-item @click="handleOpenNotify">
-                  <el-icon><Message /></el-icon>
-                  {{ t('notify.title') }}
-                </el-dropdown-item>
-                <el-dropdown-item @click="handleChangePassword">
-                  <el-icon><SwitchButton /></el-icon>
-                  {{ t('header.changePassword') }}
-                </el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout">
-                  <el-icon><SwitchButton /></el-icon>
-                  {{ t('nav.logout') }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </div>
-      </el-header>
 
-      <el-main class="main-content">
-        <router-view />
-      </el-main>
-    </el-container>
-  </el-container>
+            <div class="flex flex-col gap-1">
+              <Button variant="ghost" size="sm" class="justify-start" @click="handleOpenNotify">
+                <MessageSquare />
+                {{ t('notify.title') }}
+              </Button>
+              <Button variant="ghost" size="sm" class="justify-start" @click="showUpdateDialog = true">
+                <Bell />
+                {{ t('update.title') }}
+              </Button>
+              <Button variant="ghost" size="sm" class="justify-start" @click="handleChangePassword">
+                <KeyRound />
+                {{ t('header.changePassword') }}
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="justify-start text-destructive hover:text-destructive"
+                @click="handleLogout"
+              >
+                <LogOut />
+                {{ t('nav.logout') }}
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <!-- Main Body -->
+      <div class="flex-1 flex flex-col min-w-0">
+        <header class="h-14 shrink-0 flex items-center justify-between px-3 md:px-6 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+          <div class="flex items-center gap-2.5 md:gap-3 min-w-0">
+            <Button v-if="isMobile" variant="outline" size="icon-sm" @click="toggleDrawer">
+              <Menu />
+            </Button>
+            <SystemMonitor />
+            <Select v-if="nodesStore.isMasterMode" v-model="selectedNodeId">
+              <SelectTrigger size="sm" class="hidden sm:flex w-[160px] md:w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="node in nodesStore.nodes"
+                  :key="node.id"
+                  :value="node.id"
+                  :disabled="node.status !== 'online'"
+                >
+                  {{ node.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <Badge variant="outline" class="rounded-full font-mono text-xs">
+              {{ updateStore.info?.current_version || 'dev' }}
+            </Badge>
+          </div>
+
+          <div class="flex items-center gap-1.5 md:gap-2 shrink-0">
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="outline" size="icon-sm" class="rounded-full" @click="openGitHub">
+                  <svg class="size-4" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                  </svg>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>GitHub</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <span class="relative inline-flex">
+                  <Button
+                    variant="outline"
+                    size="icon-sm"
+                    class="rounded-full"
+                    :class="{ 'ring-2 ring-primary/40 text-primary': isUpdating }"
+                    @click="showUpdateDialog = true"
+                  >
+                    <Bell />
+                  </Button>
+                  <span
+                    v-if="updateProgressText"
+                    class="absolute -top-1.5 -right-2 px-1 text-[10px] leading-3.5 rounded-full bg-primary text-primary-foreground font-mono"
+                  >
+                    {{ updateProgressText }}
+                  </span>
+                  <span
+                    v-else-if="showUpdateDot"
+                    class="absolute top-0 right-0 size-2 rounded-full bg-destructive ring-2 ring-background"
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>{{ t('update.title') }}</TooltipContent>
+            </Tooltip>
+
+            <Tooltip>
+              <TooltipTrigger as-child>
+                <Button variant="outline" size="icon-sm" class="rounded-full" @click="toggleTheme">
+                  <Sun v-if="theme === 'dark'" />
+                  <Moon v-else />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{{ themeTooltip }}</TooltipContent>
+            </Tooltip>
+
+            <DropdownMenu>
+              <DropdownMenuTrigger as-child>
+                <Button variant="outline" size="icon-sm" class="rounded-full">
+                  <span class="text-xs font-semibold">{{ language === 'zh-CN' ? '中' : 'En' }}</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  v-for="opt in languageOptions"
+                  :key="opt.value"
+                  :class="{ 'font-semibold text-primary': language === opt.value }"
+                  @click="handleLanguageChange(opt.value)"
+                >
+                  {{ opt.label }}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
+            <DropdownMenu v-if="!isMobile">
+              <DropdownMenuTrigger as-child>
+                <button
+                  type="button"
+                  class="flex items-center gap-2 rounded-md px-2 py-1 hover:bg-accent transition-colors cursor-pointer"
+                >
+                  <Avatar class="size-7">
+                    <AvatarFallback><User class="size-3.5" /></AvatarFallback>
+                  </Avatar>
+                  <span class="text-sm font-medium">{{ authStore.username }}</span>
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" class="w-48">
+                <DropdownMenuItem @click="showUpdateDialog = true">
+                  <Bell />
+                  {{ t('update.title') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem @click="handleOpenSettings">
+                  <Settings />
+                  {{ t('settings.pageSettings') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem @click="handleOpenNotify">
+                  <MessageSquare />
+                  {{ t('notify.title') }}
+                </DropdownMenuItem>
+                <DropdownMenuItem @click="handleChangePassword">
+                  <KeyRound />
+                  {{ t('header.changePassword') }}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem class="text-destructive focus:text-destructive" @click="handleLogout">
+                  <LogOut />
+                  {{ t('nav.logout') }}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </header>
+
+        <main class="flex-1 overflow-y-auto bg-muted/20 p-4 md:p-6">
+          <router-view />
+        </main>
+      </div>
+    </div>
+  </TooltipProvider>
 
   <ChangePasswordDialog v-model="showPasswordDialog" @success="handlePasswordChangeSuccess" />
   <SettingsDialog v-model="showSettingsDialog" />
   <UpdateDialog v-model="showUpdateDialog" />
   <AgentChatFloat />
+  <ContainerCreateTaskFloat />
 </template>
-
-<style scoped>
-.main-layout {
-  height: 100vh;
-  overflow: hidden;
-}
-
-.main-sidebar {
-  background-color: var(--rp-sidebar-bg);
-  border-right: 1px solid var(--rp-border-color);
-  display: flex;
-  flex-direction: column;
-  transition: width 0.3s;
-}
-
-.sidebar-header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--rp-border-color);
-}
-
-.logo {
-  width: 32px;
-  height: 32px;
-}
-
-.logo-text {
-  margin-left: 12px;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-  white-space: nowrap;
-}
-
-.sidebar-menu {
-  flex: 1;
-  border-right: none;
-  overflow-y: auto;
-}
-
-.sidebar-menu:not(.el-menu--collapse) {
-  width: 100%;
-}
-
-.node-switcher {
-  padding: 10px 12px 6px;
-  border-top: 1px solid var(--rp-border-color);
-}
-
-.node-switcher.collapsed {
-  display: flex;
-  justify-content: center;
-  padding: 10px 0;
-  cursor: pointer;
-  color: var(--el-text-color-secondary);
-}
-
-.node-switcher-label {
-  margin-bottom: 6px;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-.node-switcher :deep(.el-select),
-.drawer-node-switcher :deep(.el-select) {
-  width: 100%;
-}
-
-.drawer-node-switcher {
-  padding: 12px 16px;
-  border-top: 1px solid var(--rp-border-color);
-}
-
-.collapse-btn {
-  height: 48px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  border-top: 1px solid var(--rp-border-color);
-  color: var(--el-text-color-secondary);
-  transition: color 0.3s, background-color 0.3s;
-}
-
-.collapse-btn:hover {
-  color: var(--el-color-primary);
-  background-color: var(--rp-hover-bg);
-}
-
-.main-header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 20px;
-  background-color: var(--rp-header-bg);
-  border-bottom: 1px solid var(--rp-border-color);
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.header-node-select {
-  width: 180px;
-}
-
-.version-tag {
-  border-radius: 999px;
-  font-weight: 600;
-}
-
-.updating-button {
-  color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.25) inset;
-}
-
-:deep(.el-badge__content.is-fixed) {
-  top: 8px;
-  right: 8px;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.header-right > * {
-  margin: 0 !important;
-}
-
-.lang-icon {
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.github-icon {
-  display: block;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  padding: 4px 8px;
-  border-radius: 4px;
-  transition: background-color 0.3s;
-}
-
-.user-info:hover {
-  background-color: var(--rp-hover-bg);
-}
-
-.username {
-  font-size: 14px;
-  color: var(--el-text-color-primary);
-}
-
-.main-content {
-  background-color: var(--rp-bg-color);
-  overflow-y: auto;
-  padding: 20px;
-}
-
-:deep(.el-dropdown-menu__item.is-active) {
-  color: var(--el-color-primary);
-  background-color: var(--el-color-primary-light-9);
-}
-
-.mobile-menu-btn {
-  margin-right: 8px;
-}
-
-.mobile-drawer :deep(.el-drawer__body) {
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.drawer-header {
-  height: 60px;
-  display: flex;
-  align-items: center;
-  padding: 0 20px;
-  border-bottom: 1px solid var(--rp-border-color);
-  background-color: var(--rp-header-bg);
-}
-
-.drawer-menu {
-  flex: 1;
-  border-right: none;
-  overflow-y: auto;
-}
-
-.drawer-menu .el-menu-item {
-  height: 50px;
-  line-height: 50px;
-  font-size: 15px;
-}
-
-.drawer-menu .el-menu-item .el-icon {
-  font-size: 18px;
-  margin-right: 12px;
-}
-
-.drawer-footer {
-  padding: 16px 20px;
-  border-top: 1px solid var(--rp-border-color);
-  background-color: var(--rp-header-bg);
-}
-
-.drawer-user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.drawer-username {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-}
-
-.drawer-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.drawer-actions .el-button {
-  justify-content: flex-start;
-  width: 100%;
-}
-
-@media (max-width: 767px) {
-  .main-header {
-    padding: 0 12px;
-  }
-
-  .main-content {
-    padding: 12px;
-  }
-
-  .header-right {
-    gap: 8px;
-  }
-}
-</style>

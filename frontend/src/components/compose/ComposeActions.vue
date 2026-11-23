@@ -1,104 +1,18 @@
-<template>
-  <div class="compose-actions">
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-      <el-tooltip
-        :content="status === 'running' ? '项目已在运行中' : ''"
-        :disabled="status !== 'running'"
-        placement="top"
-      >
-        <el-button
-          type="success"
-          :icon="VideoPlay"
-          :loading="loading && currentAction === 'up'"
-          :disabled="!projectName || loading || status === 'running'"
-          @click="handleAction('up')"
-        >
-          {{ t('compose.up') }}
-        </el-button>
-      </el-tooltip>
-      <el-tooltip
-        :content="status === 'stopped' ? '项目未运行' : ''"
-        :disabled="status !== 'stopped'"
-        placement="top"
-      >
-        <el-button
-          type="danger"
-          :icon="VideoPause"
-          :loading="loading && currentAction === 'down'"
-          :disabled="!projectName || loading || status === 'stopped'"
-          @click="handleAction('down')"
-        >
-          {{ t('compose.down') }}
-        </el-button>
-      </el-tooltip>
-      <el-tooltip
-        :content="status === 'stopped' ? '项目未运行' : ''"
-        :disabled="status !== 'stopped'"
-        placement="top"
-      >
-        <el-button
-          type="warning"
-          :icon="RefreshRight"
-          :loading="loading && currentAction === 'restart'"
-          :disabled="!projectName || loading || status === 'stopped'"
-          @click="handleAction('restart')"
-        >
-          {{ t('compose.restart') }}
-        </el-button>
-      </el-tooltip>
-      <el-button
-        :icon="Download"
-        :loading="loading && currentAction === 'pull'"
-        :disabled="!projectName || loading"
-        @click="handleAction('pull')"
-      >
-        {{ t('compose.pull') }}
-      </el-button>
-      <el-button
-        v-if="output"
-        :icon="Close"
-        text
-        @click="handleClear"
-      >
-        {{ t('compose.clearOutput') }}
-      </el-button>
-    </div>
-
-    <!-- Output Panel (inline, small) -->
-    <div v-if="output || loading" class="output-panel">
-      <div class="output-header">
-        <span class="output-title">
-          <el-icon><Monitor /></el-icon>
-          {{ t('compose.output') }}
-        </span>
-      </div>
-      <div class="output-content">
-        <pre v-if="output">{{ output }}</pre>
-        <div v-else-if="loading" class="loading-placeholder">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          {{ t('compose.executing') }}
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref } from 'vue'
-import {
-  VideoPlay,
-  VideoPause,
-  RefreshRight,
-  Download,
-  Close,
-  Monitor,
-  Loading,
-} from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { Download, Loader2, Play, RotateCw, Square, Terminal, X } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { Button } from '@/components/ui/button'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const { t } = useI18n()
+const toast = useToast()
 
 type ComposeAction = 'up' | 'down' | 'restart' | 'pull'
 
@@ -123,9 +37,7 @@ async function handleAction(action: ComposeAction) {
   try {
     emit('action', action)
   } catch (error) {
-    ElMessage.error(
-      error instanceof Error ? error.message : t('compose.actionFailed')
-    )
+    toast.error(error instanceof Error ? error.message : t('compose.actionFailed'))
   }
 }
 
@@ -134,7 +46,6 @@ function handleClear() {
   emit('clear')
 }
 
-// Reset current action when loading completes
 defineExpose({
   resetAction: () => {
     currentAction.value = null
@@ -142,68 +53,98 @@ defineExpose({
 })
 </script>
 
-<style scoped>
-.compose-actions {
-  display: flex;
-  flex-direction: column;
-  flex-shrink: 0;
-  gap: 12px;
-}
+<template>
+  <TooltipProvider>
+    <div class="flex flex-col shrink-0 gap-3">
+      <div class="flex flex-wrap items-center gap-2">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                size="sm"
+                class="bg-emerald-600 text-white hover:bg-emerald-600/90"
+                :disabled="!projectName || loading || status === 'running'"
+                @click="handleAction('up')"
+              >
+                <Loader2 v-if="loading && currentAction === 'up'" class="animate-spin" />
+                <Play v-else />
+                {{ t('compose.up') }}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent v-if="status === 'running'">项目已在运行中</TooltipContent>
+        </Tooltip>
 
-.action-buttons {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                size="sm"
+                variant="destructive"
+                :disabled="!projectName || loading || status === 'stopped'"
+                @click="handleAction('down')"
+              >
+                <Loader2 v-if="loading && currentAction === 'down'" class="animate-spin" />
+                <Square v-else />
+                {{ t('compose.down') }}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent v-if="status === 'stopped'">项目未运行</TooltipContent>
+        </Tooltip>
 
-.output-panel {
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  overflow: hidden;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                size="sm"
+                variant="outline"
+                class="text-amber-600 dark:text-amber-400"
+                :disabled="!projectName || loading || status === 'stopped'"
+                @click="handleAction('restart')"
+              >
+                <Loader2 v-if="loading && currentAction === 'restart'" class="animate-spin" />
+                <RotateCw v-else />
+                {{ t('compose.restart') }}
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent v-if="status === 'stopped'">项目未运行</TooltipContent>
+        </Tooltip>
 
-.output-header {
-  display: flex;
-  align-items: center;
-  padding: 6px 12px;
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-light);
-}
+        <Button
+          size="sm"
+          variant="outline"
+          :disabled="!projectName || loading"
+          @click="handleAction('pull')"
+        >
+          <Loader2 v-if="loading && currentAction === 'pull'" class="animate-spin" />
+          <Download v-else />
+          {{ t('compose.pull') }}
+        </Button>
 
-.output-title {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 500;
-}
+        <Button v-if="output" size="sm" variant="ghost" @click="handleClear">
+          <X />
+          {{ t('compose.clearOutput') }}
+        </Button>
+      </div>
 
-.output-content {
-  max-height: 120px;
-  overflow: auto;
-  background: #1e1e1e;
-}
-
-.output-content pre {
-  margin: 0;
-  padding: 8px 12px;
-  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-  font-size: 13px;
-  line-height: 1;
-  letter-spacing: 0;
-  white-space: pre;
-  word-break: break-all;
-  color: #d4d4d4;
-}
-
-.loading-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 16px;
-  color: #999;
-  font-size: 12px;
-}
-</style>
+      <div v-if="output || loading" class="rounded-lg border overflow-hidden">
+        <div class="flex items-center gap-1.5 px-3 py-1.5 bg-muted/50 border-b text-xs font-medium">
+          <Terminal class="size-3.5 text-muted-foreground" />
+          <span>{{ t('compose.output') }}</span>
+        </div>
+        <div class="max-h-[140px] overflow-auto bg-zinc-950 text-zinc-100">
+          <pre
+            v-if="output"
+            class="m-0 p-3 font-mono text-xs leading-relaxed whitespace-pre-wrap break-all"
+          >{{ output }}</pre>
+          <div v-else-if="loading" class="flex items-center justify-center gap-2 p-4 text-xs text-zinc-400">
+            <Loader2 class="size-4 animate-spin" />
+            <span>{{ t('compose.executing') }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </TooltipProvider>
+</template>

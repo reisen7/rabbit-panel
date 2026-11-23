@@ -1,178 +1,52 @@
-<template>
-  <div class="images-page">
-    <!-- Header with title and actions -->
-    <div class="page-header">
-      <h2>{{ t('image.title') }}</h2>
-      <div class="header-actions">
-        <el-button type="primary" @click="showBuildDialog = true">
-          <el-icon><Box /></el-icon>
-          {{ t('image.build') }}
-        </el-button>
-        <el-button :loading="imageStore.loading" @click="handleRefresh">
-          <el-icon><Refresh /></el-icon>
-          {{ t('common.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <!-- Search bar -->
-    <div class="filter-bar">
-      <el-input
-        v-model="searchInput"
-        :placeholder="t('common.search')"
-        clearable
-        style="width: 300px"
-        @input="handleSearch"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-    </div>
-
-    <!-- Image table -->
-    <el-table
-      v-loading="imageStore.loading"
-      :data="imageStore.paginatedImages"
-      stripe
-      style="width: 100%"
-      @sort-change="handleSortChange"
-    >
-      <el-table-column
-        prop="id"
-        :label="t('image.id')"
-        width="140"
-        sortable="custom"
-        class-name="hidden-sm-and-down"
-      >
-        <template #default="{ row }">
-          <span class="image-id">{{ row.id.substring(0, 12) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="name"
-        :label="t('common.name')"
-        min-width="200"
-        sortable="custom"
-      />
-      <el-table-column
-        prop="tag"
-        :label="t('image.tag')"
-        width="120"
-        sortable="custom"
-      >
-        <template #default="{ row }">
-          <el-tag size="small">{{ row.tag }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="size"
-        :label="t('common.size')"
-        width="120"
-        sortable="custom"
-        class-name="hidden-xs-only"
-      />
-      <el-table-column
-        prop="created"
-        :label="t('image.created')"
-        width="180"
-        sortable="custom"
-        class-name="hidden-md-and-down"
-      />
-      <el-table-column
-        prop="used_by_count"
-        label="Usage"
-        width="140"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-tooltip v-if="row.used_by && row.used_by.length > 0" :content="row.used_by.join(', ')" placement="top">
-            <el-tag type="success" size="small">
-              In Use ({{ row.used_by_count }})
-            </el-tag>
-          </el-tooltip>
-          <el-tag v-else type="info" size="small">
-            Unused
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.actions')"
-        width="120"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <el-popconfirm
-            :title="t('image.confirmRemove')"
-            :confirm-button-text="t('common.confirm')"
-            :cancel-button-text="t('common.cancel')"
-            @confirm="handleRemoveImage(row.id)"
-          >
-            <template #reference>
-              <el-button type="danger" size="small" link>
-                <el-icon><Delete /></el-icon>
-                {{ t('common.delete') }}
-              </el-button>
-            </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <!-- Pagination -->
-    <div class="pagination-wrapper">
-      <el-pagination
-        v-model:current-page="currentPageValue"
-        v-model:page-size="pageSizeValue"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="imageStore.totalImages"
-        layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handlePageSizeChange"
-      />
-    </div>
-
-    <!-- Build Image Dialog -->
-    <BuildImageDialog
-      v-model:visible="showBuildDialog"
-      @built="handleImageBuilt"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { Refresh, Search, Delete, Box } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { RefreshCw, Search, Trash2, Box } from 'lucide-vue-next'
 import { useImageStore, type SortField } from '@/stores/images'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import BuildImageDialog from '@/components/image/BuildImageDialog.vue'
+import DataPagination from '@/components/common/DataPagination.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import SortableTableHead from '@/components/common/SortableTableHead.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const { t } = useI18n()
 const imageStore = useImageStore()
+const toast = useToast()
+const { confirm } = useConfirm()
 
-// Local state for v-model bindings
 const searchInput = ref('')
 const currentPageValue = ref(imageStore.currentPage)
 const pageSizeValue = ref(imageStore.pageSize)
-
-// Dialog visibility
 const showBuildDialog = ref(false)
 
-// Sync local state with store
 watch(() => imageStore.searchQuery, (val) => { searchInput.value = val })
 watch(() => imageStore.currentPage, (val) => { currentPageValue.value = val })
 watch(() => imageStore.pageSize, (val) => { pageSizeValue.value = val })
 
-// Handlers
 function handleSearch(value: string) {
   imageStore.setSearch(value)
 }
 
-function handleSortChange({ prop, order }: { prop: string; order: string | null }) {
+function handleSortChange(prop: string, order: 'ascending' | 'descending') {
   if (prop && order) {
     const field = prop as SortField
-    // Map Element Plus sort order to our format
     imageStore.sortField = field
     imageStore.sortOrder = order === 'ascending' ? 'asc' : 'desc'
   }
@@ -190,10 +64,22 @@ async function handleRefresh() {
   await imageStore.fetchImages(true)
 }
 
+async function confirmRemoveImage(id: string) {
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('image.confirmRemove'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+  await handleRemoveImage(id)
+}
+
 async function handleRemoveImage(id: string) {
   try {
     await imageStore.removeImage(id)
-    ElMessage.success(t('image.removeSuccess'))
+    toast.success(t('image.removeSuccess'))
   } catch {
     // Error is handled by request interceptor
   }
@@ -203,103 +89,148 @@ function handleImageBuilt() {
   imageStore.fetchImages(true)
 }
 
-// Fetch images on mount
 onMounted(() => {
   imageStore.fetchImages()
 })
 </script>
 
-<style scoped>
-.images-page {
-  padding: 20px;
-}
+<template>
+  <div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">{{ t('image.title') }}</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button @click="showBuildDialog = true">
+          <Box />
+          {{ t('image.build') }}
+        </Button>
+        <Button variant="outline" :disabled="imageStore.loading" @click="handleRefresh">
+          <RefreshCw :class="{ 'animate-spin': imageStore.loading }" />
+          {{ t('common.refresh') }}
+        </Button>
+      </div>
+    </div>
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+    <!-- Search bar -->
+    <div class="flex flex-col sm:flex-row gap-3">
+      <div class="relative w-full sm:w-[300px]">
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+        <Input
+          v-model="searchInput"
+          :placeholder="t('common.search')"
+          class="pl-9 bg-background"
+          @input="handleSearch(searchInput)"
+        />
+      </div>
+    </div>
 
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
+    <!-- Image table -->
+    <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
+      <LoadingOverlay :loading="imageStore.loading" />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <SortableTableHead
+              prop="id"
+              :sort-field="imageStore.sortField"
+              :sort-order="imageStore.sortOrder"
+              class="max-[991px]:hidden"
+              @sort="handleSortChange"
+            >
+              {{ t('image.id') }}
+            </SortableTableHead>
+            <SortableTableHead
+              prop="name"
+              :sort-field="imageStore.sortField"
+              :sort-order="imageStore.sortOrder"
+              @sort="handleSortChange"
+            >
+              {{ t('common.name') }}
+            </SortableTableHead>
+            <SortableTableHead
+              prop="tag"
+              :sort-field="imageStore.sortField"
+              :sort-order="imageStore.sortOrder"
+              @sort="handleSortChange"
+            >
+              {{ t('image.tag') }}
+            </SortableTableHead>
+            <SortableTableHead
+              prop="size"
+              :sort-field="imageStore.sortField"
+              :sort-order="imageStore.sortOrder"
+              class="max-[767px]:hidden"
+              @sort="handleSortChange"
+            >
+              {{ t('common.size') }}
+            </SortableTableHead>
+            <SortableTableHead
+              prop="created"
+              :sort-field="imageStore.sortField"
+              :sort-order="imageStore.sortOrder"
+              class="max-[1199px]:hidden"
+              @sort="handleSortChange"
+            >
+              {{ t('image.created') }}
+            </SortableTableHead>
+            <TableHead class="text-center">Usage</TableHead>
+            <TableHead class="text-right">{{ t('common.actions') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-if="imageStore.paginatedImages.length === 0">
+            <TableCell colspan="7" class="h-24 text-center text-muted-foreground">
+              {{ t('common.none') }}
+            </TableCell>
+          </TableRow>
+          <TableRow v-for="row in imageStore.paginatedImages" :key="row.id">
+            <TableCell class="max-[991px]:hidden">
+              <span class="font-mono text-xs text-muted-foreground">{{ row.id.substring(0, 12) }}</span>
+            </TableCell>
+            <TableCell class="font-medium">{{ row.name }}</TableCell>
+            <TableCell>
+              <Badge variant="secondary">{{ row.tag }}</Badge>
+            </TableCell>
+            <TableCell class="max-[767px]:hidden tabular-nums text-xs">{{ row.size }}</TableCell>
+            <TableCell class="max-[1199px]:hidden text-xs text-muted-foreground">{{ row.created }}</TableCell>
+            <TableCell class="text-center">
+              <Tooltip v-if="row.used_by && row.used_by.length > 0">
+                <TooltipTrigger as-child>
+                  <span>
+                    <Badge variant="success">In Use ({{ row.used_by_count }})</Badge>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{{ row.used_by.join(', ') }}</TooltipContent>
+              </Tooltip>
+              <Badge v-else variant="info">Unused</Badge>
+            </TableCell>
+            <TableCell class="text-right">
+              <Button
+                variant="ghost"
+                size="sm"
+                class="text-destructive hover:text-destructive"
+                @click="confirmRemoveImage(row.id)"
+              >
+                <Trash2 />
+                {{ t('common.delete') }}
+              </Button>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
+    <!-- Pagination -->
+    <div class="flex justify-center md:justify-end">
+      <DataPagination
+        v-model:current-page="currentPageValue"
+        v-model:page-size="pageSizeValue"
+        :total="imageStore.totalImages"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
 
-.filter-bar {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.image-id {
-  font-family: monospace;
-  font-size: 12px;
-}
-
-/* Responsive styles */
-@media (max-width: 767px) {
-  .images-page {
-    padding: 12px;
-  }
-  
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-  
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-  
-  .header-actions .el-button {
-    flex: 1;
-    min-width: 80px;
-  }
-  
-  .filter-bar {
-    flex-direction: column;
-  }
-  
-  .filter-bar .el-input {
-    width: 100% !important;
-  }
-  
-  .pagination-wrapper {
-    justify-content: center;
-  }
-}
-
-/* Hide columns on smaller screens */
-:deep(.hidden-xs-only) {
-  @media (max-width: 767px) {
-    display: none !important;
-  }
-}
-
-:deep(.hidden-sm-and-down) {
-  @media (max-width: 991px) {
-    display: none !important;
-  }
-}
-
-:deep(.hidden-md-and-down) {
-  @media (max-width: 1199px) {
-    display: none !important;
-  }
-}
-</style>
+    <BuildImageDialog v-model:visible="showBuildDialog" @built="handleImageBuilt" />
+  </div>
+</template>

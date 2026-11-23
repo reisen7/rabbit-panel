@@ -1,241 +1,54 @@
-<template>
-  <div class="compose-page">
-    <!-- Page Header -->
-    <div class="page-header">
-      <h2>{{ t('compose.title') }}</h2>
-      <div class="header-actions">
-        <el-button type="primary" :icon="Plus" @click="showCreateDialog = true">
-          {{ t('compose.create') }}
-        </el-button>
-        <el-button :icon="Refresh" :loading="loading" @click="handleRefresh">
-          {{ t('common.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <!-- Main Content -->
-    <div class="compose-content">
-      <!-- Left Panel: Project List -->
-      <div class="project-list-panel">
-        <div class="panel-header">
-          <span class="panel-title">{{ t('compose.projects') }}</span>
-          <el-input
-            v-model="searchQuery"
-            :placeholder="t('common.search')"
-            :prefix-icon="Search"
-            clearable
-            size="small"
-            class="search-input"
-          />
-        </div>
-        <div class="project-list" v-loading="loading">
-          <div
-            v-for="project in filteredProjects"
-            :key="project.name"
-            class="project-item"
-            :class="{ active: selectedProject === project.name }"
-            @click="handleSelectProject(project.name)"
-          >
-            <div class="project-info">
-              <span class="project-name">{{ project.name }}</span>
-              <el-tag
-                :type="getStatusType(project.status)"
-                size="small"
-                effect="plain"
-              >
-                {{ getStatusText(project.status) }}
-              </el-tag>
-            </div>
-            <el-button
-              type="danger"
-              :icon="Delete"
-              size="small"
-              text
-              @click.stop="handleDeleteProject(project.name)"
-            />
-          </div>
-          <el-empty
-            v-if="!loading && filteredProjects.length === 0"
-            :description="t('compose.noProjects')"
-          />
-        </div>
-      </div>
-
-      <!-- Right Panel: Editor and Actions -->
-      <div class="editor-panel">
-        <template v-if="selectedProject">
-          <!-- Container Status -->
-          <div v-if="currentProject?.containers?.length" class="container-status">
-            <div class="status-header">
-              <el-icon><Box /></el-icon>
-              {{ t('compose.containers') }}
-            </div>
-            <el-table :data="currentProject.containers" size="small" stripe max-height="200">
-              <el-table-column prop="service" :label="t('compose.service')" min-width="80" />
-              <el-table-column prop="name" :label="t('common.name')" min-width="120" show-overflow-tooltip />
-              <el-table-column prop="state" :label="t('common.status')" width="90">
-                <template #default="{ row }">
-                  <el-tag
-                    :type="row.state === 'running' ? 'success' : 'info'"
-                    size="small"
-                  >
-                    {{ row.state }}
-                  </el-tag>
-                </template>
-              </el-table-column>
-              <el-table-column prop="status" :label="t('compose.statusDetail')" min-width="100" show-overflow-tooltip />
-              <el-table-column prop="ports" :label="t('container.ports')" min-width="120" show-overflow-tooltip />
-              <el-table-column :label="t('common.actions')" width="180" fixed="right">
-                <template #default="{ row }">
-                  <el-button
-                    type="primary"
-                    size="small"
-                    link
-                    :disabled="row.state !== 'running'"
-                    @click="handleOpenTerminal(row.id, row.name)"
-                  >
-                    <el-icon><Monitor /></el-icon>
-                    {{ t('container.terminal') }}
-                  </el-button>
-                  <el-button
-                    type="primary"
-                    size="small"
-                    link
-                    :disabled="row.state !== 'running'"
-                    @click="handleOpenFiles(row.id, row.name)"
-                  >
-                    <el-icon><Folder /></el-icon>
-                    {{ t('container.files') }}
-                  </el-button>
-                  <el-button
-                    type="primary"
-                    size="small"
-                    link
-                    @click="handleOpenLogs(row.id, row.name)"
-                  >
-                    <el-icon><Document /></el-icon>
-                    {{ t('container.logs') }}
-                  </el-button>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <!-- Actions -->
-          <ComposeActions
-            :project-name="selectedProject"
-            :output="actionOutput"
-            :loading="actionLoading"
-            :status="currentProject?.status"
-            @action="handleAction"
-            @clear="handleClearOutput"
-          />
-
-          <!-- Editor -->
-          <div class="editor-section">
-            <div class="section-header">
-              <el-icon><Document /></el-icon>
-              {{ t('compose.editor') }}
-            </div>
-            <ComposeEditor
-              ref="editorRef"
-              :project-name="selectedProject"
-              :content="fileContent"
-              :loading="fileLoading"
-              @save="handleSaveFile"
-              @change="handleFileChange"
-            />
-          </div>
-        </template>
-
-        <!-- No Project Selected -->
-        <el-empty
-          v-else
-          :description="t('compose.selectProject')"
-          class="empty-state"
-        />
-      </div>
-    </div>
-
-    <!-- Create Project Dialog -->
-    <el-dialog
-      v-model="showCreateDialog"
-      :title="t('compose.create')"
-      width="400px"
-      @close="resetCreateForm"
-    >
-      <el-form
-        ref="createFormRef"
-        :model="createForm"
-        :rules="createRules"
-        label-width="100px"
-      >
-        <el-form-item :label="t('compose.projectName')" prop="name">
-          <el-input
-            v-model="createForm.name"
-            :placeholder="t('compose.projectNamePlaceholder')"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDialog = false">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button type="primary" :loading="creating" @click="handleCreate">
-          {{ t('common.create') }}
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- Container Logs Dialog -->
-    <ContainerLogsDialog
-      v-model:visible="showLogsDialog"
-      :container-id="selectedContainerId"
-      :container-name="selectedContainerName"
-    />
-
-    <!-- Container Terminal Dialog -->
-    <ContainerTerminal
-      v-model:visible="showTerminalDialog"
-      :container-id="selectedContainerId"
-      :container-name="selectedContainerName"
-    />
-
-    <!-- Container File Explorer Dialog -->
-    <FileExplorer
-      v-model:visible="showFilesDialog"
-      :container-id="selectedContainerId"
-      :container-name="selectedContainerName"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import {
-  Plus,
-  Refresh,
-  Search,
-  Delete,
-  Document,
   Box,
-  Monitor,
-  Folder,
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+  FileCode2,
+  FolderOpen,
+  Layers,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+  Terminal,
+  FileText,
+  Trash2,
+} from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import { useComposeStore } from '@/stores/compose'
 import ComposeEditor from '@/components/compose/ComposeEditor.vue'
 import ComposeActions from '@/components/compose/ComposeActions.vue'
 import ContainerLogsDialog from '@/components/container/ContainerLogsDialog.vue'
 import ContainerTerminal from '@/components/container/ContainerTerminal.vue'
 import FileExplorer from '@/components/container/FileExplorer.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
 const composeStore = useComposeStore()
 
-// Store state
 const {
   filteredProjects,
   loading,
@@ -247,50 +60,35 @@ const {
   currentProject,
 } = storeToRefs(composeStore)
 
-// Local state
 const searchQuery = ref('')
 const showCreateDialog = ref(false)
 const creating = ref(false)
 const editorRef = ref<InstanceType<typeof ComposeEditor> | null>(null)
 
-// 容器对话框状态
 const showLogsDialog = ref(false)
 const showTerminalDialog = ref(false)
 const showFilesDialog = ref(false)
 const selectedContainerId = ref('')
 const selectedContainerName = ref('')
 
-// Create form
-const createFormRef = ref<FormInstance>()
 const createForm = reactive({
   name: '',
 })
-const createRules: FormRules = {
-  name: [
-    { required: true, message: t('compose.nameRequired'), trigger: 'blur' },
-    {
-      pattern: /^[a-zA-Z0-9_-]+$/,
-      message: t('compose.nameInvalid'),
-      trigger: 'blur',
-    },
-  ],
-}
+const createError = ref('')
+const namePattern = /^[a-zA-Z0-9_-]+$/
 
-// Computed
-const getStatusType = (status: string) => {
+function getStatusVariant(status: string): 'success' | 'warning' | 'info' {
   switch (status) {
     case 'running':
       return 'success'
     case 'partial':
       return 'warning'
-    case 'stopped':
-      return 'info'
     default:
       return 'info'
   }
 }
 
-const getStatusText = (status: string) => {
+function getStatusText(status: string) {
   switch (status) {
     case 'running':
       return t('compose.statusRunning')
@@ -303,7 +101,6 @@ const getStatusText = (status: string) => {
   }
 }
 
-// Methods
 async function handleRefresh() {
   await composeStore.fetchProjects()
   if (selectedProject.value) {
@@ -312,65 +109,62 @@ async function handleRefresh() {
 }
 
 async function handleSelectProject(name: string) {
-  if (selectedProject.value === name) {
-    return
-  }
+  if (selectedProject.value === name) return
   if (editorRef.value?.hasChanges) {
-    try {
-      await ElMessageBox.confirm(
-        t('compose.unsavedConfirm'),
-        t('common.warning'),
-        {
-          confirmButtonText: t('common.confirm'),
-          cancelButtonText: t('common.cancel'),
-          type: 'warning',
-        }
-      )
-    } catch {
-      return // User cancelled
-    }
+    const ok = await confirm({
+      title: t('common.warning'),
+      description: t('compose.unsavedConfirm'),
+      confirmText: t('common.confirm'),
+      cancelText: t('common.cancel'),
+    })
+    if (!ok) return
   }
   await composeStore.selectProject(name)
 }
 
 async function handleDeleteProject(name: string) {
+  const ok = await confirm({
+    title: t('common.warning'),
+    description: t('compose.confirmDelete'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+
   try {
-    await ElMessageBox.confirm(
-      t('compose.confirmDelete'),
-      t('common.warning'),
-      {
-        confirmButtonText: t('common.confirm'),
-        cancelButtonText: t('common.cancel'),
-        type: 'warning',
-      }
-    )
     await composeStore.deleteProject(name)
-    ElMessage.success(t('compose.deleteSuccess'))
+    toast.success(t('compose.deleteSuccess'))
   } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error(
-        error instanceof Error ? error.message : t('compose.deleteFailed')
-      )
-    }
+    toast.error(error instanceof Error ? error.message : t('compose.deleteFailed'))
   }
 }
 
+function validateCreate(): boolean {
+  const val = createForm.name.trim()
+  if (!val) {
+    createError.value = t('compose.nameRequired')
+    return false
+  }
+  if (!namePattern.test(val)) {
+    createError.value = t('compose.nameInvalid')
+    return false
+  }
+  createError.value = ''
+  return true
+}
+
 async function handleCreate() {
-  if (!createFormRef.value) return
+  if (!validateCreate()) return
 
   try {
-    await createFormRef.value.validate()
     creating.value = true
-    await composeStore.createProject(createForm.name)
-    ElMessage.success(t('compose.createSuccess'))
+    await composeStore.createProject(createForm.name.trim())
+    toast.success(t('compose.createSuccess'))
     showCreateDialog.value = false
     resetCreateForm()
   } catch (error) {
-    if (error !== false) {
-      ElMessage.error(
-        error instanceof Error ? error.message : t('compose.createFailed')
-      )
-    }
+    toast.error(error instanceof Error ? error.message : t('compose.createFailed'))
   } finally {
     creating.value = false
   }
@@ -378,24 +172,26 @@ async function handleCreate() {
 
 function resetCreateForm() {
   createForm.name = ''
-  createFormRef.value?.resetFields()
+  createError.value = ''
 }
+
+watch(showCreateDialog, (open) => {
+  if (!open) resetCreateForm()
+})
 
 async function handleSaveFile(content: string) {
   if (!selectedProject.value) return
 
   try {
     await composeStore.saveFileContent(selectedProject.value, content)
-    ElMessage.success(t('compose.saveSuccess'))
+    toast.success(t('compose.saveSuccess'))
   } catch (error) {
-    ElMessage.error(
-      error instanceof Error ? error.message : t('compose.saveFailed')
-    )
+    toast.error(error instanceof Error ? error.message : t('compose.saveFailed'))
   }
 }
 
 function handleFileChange(_content: string) {
-  // Could be used for auto-save or validation
+  // Handled by editor state
 }
 
 async function handleAction(action: 'up' | 'down' | 'restart' | 'pull') {
@@ -407,7 +203,6 @@ function handleClearOutput() {
   composeStore.clearOutput()
 }
 
-// 容器操作函数 - 直接使用容器 ID
 function handleOpenTerminal(containerId: string, containerName: string) {
   selectedContainerId.value = containerId
   selectedContainerName.value = containerName
@@ -426,202 +221,245 @@ function handleOpenLogs(containerId: string, containerName: string) {
   showLogsDialog.value = true
 }
 
-// Watch search query
-function handleSearch() {
+watch(searchQuery, () => {
   composeStore.setSearch(searchQuery.value)
-}
+})
 
-// Lifecycle
 onMounted(async () => {
-  // 清除之前的选中状态，让用户先选择项目
   composeStore.selectProject(null)
   await composeStore.fetchProjects()
 })
-
-// Watch search
-import { watch } from 'vue'
-watch(searchQuery, handleSearch)
 </script>
 
-<style scoped>
-.compose-page {
-  /* 顶栏 60px + 主区域上下内边距 40px，锁在视口内，避免页面再出一条滚动条 */
-  height: calc(100vh - 100px);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
+<template>
+  <div class="h-[calc(100vh-5.25rem)] md:h-[calc(100vh-6.5rem)] flex flex-col gap-4 overflow-hidden">
+    <!-- Page Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
+      <h2 class="text-xl font-semibold tracking-tight">{{ t('compose.title') }}</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button @click="showCreateDialog = true">
+          <Plus />
+          {{ t('compose.create') }}
+        </Button>
+        <Button variant="outline" :disabled="loading" @click="handleRefresh">
+          <RefreshCw :class="{ 'animate-spin': loading }" />
+          {{ t('common.refresh') }}
+        </Button>
+      </div>
+    </div>
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+    <!-- Main Content -->
+    <div class="flex-1 flex flex-col md:flex-row gap-4 min-h-0 overflow-hidden">
+      <!-- Left Panel: Project List -->
+      <div class="w-full md:w-[270px] max-h-[220px] md:max-h-none shrink-0 flex flex-col min-h-0 rounded-lg border bg-card shadow-2xs overflow-hidden">
+        <div class="p-3 border-b space-y-2">
+          <div class="text-sm font-medium">{{ t('compose.projects') }}</div>
+          <div class="relative">
+            <Search class="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              v-model="searchQuery"
+              :placeholder="t('common.search')"
+              class="h-8 pl-8 text-xs"
+            />
+          </div>
+        </div>
 
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
+        <div class="relative flex-1 overflow-y-auto p-2 space-y-1">
+          <LoadingOverlay :loading="loading" />
+          <div
+            v-for="project in filteredProjects"
+            :key="project.name"
+            class="group flex items-center justify-between gap-2 px-3 py-2 rounded-md border cursor-pointer transition-colors"
+            :class="selectedProject === project.name
+              ? 'bg-accent border-ring/40 text-accent-foreground'
+              : 'border-transparent hover:bg-muted/60'"
+            @click="handleSelectProject(project.name)"
+          >
+            <div class="min-w-0 space-y-1">
+              <div class="text-sm font-medium truncate">{{ project.name }}</div>
+              <Badge :variant="getStatusVariant(project.status)">
+                {{ getStatusText(project.status) }}
+              </Badge>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              class="text-destructive hover:text-destructive opacity-80 group-hover:opacity-100 shrink-0"
+              @click.stop="handleDeleteProject(project.name)"
+            >
+              <Trash2 class="size-3.5" />
+            </Button>
+          </div>
 
-.header-actions {
-  display: flex;
-  gap: 12px;
-}
+          <div
+            v-if="!loading && filteredProjects.length === 0"
+            class="py-10 text-center text-xs text-muted-foreground"
+          >
+            {{ t('compose.noProjects') }}
+          </div>
+        </div>
+      </div>
 
-.compose-content {
-  flex: 1;
-  display: flex;
-  gap: 20px;
-  min-height: 0;
-  overflow: hidden;
-}
+      <!-- Right Panel: Editor and Actions -->
+      <div class="flex-1 flex flex-col gap-4 min-w-0 min-h-0 overflow-hidden">
+        <template v-if="selectedProject">
+          <!-- Container Status -->
+          <div
+            v-if="currentProject?.containers?.length"
+            class="shrink-0 rounded-lg border bg-card shadow-2xs overflow-hidden"
+          >
+            <div class="flex items-center gap-2 px-3.5 py-2.5 bg-muted/40 border-b text-sm font-medium">
+              <Box class="size-4 text-muted-foreground" />
+              <span>{{ t('compose.containers') }}</span>
+            </div>
+            <div class="max-h-[200px] overflow-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>{{ t('compose.service') }}</TableHead>
+                    <TableHead>{{ t('common.name') }}</TableHead>
+                    <TableHead>{{ t('common.status') }}</TableHead>
+                    <TableHead class="hidden lg:table-cell">{{ t('compose.statusDetail') }}</TableHead>
+                    <TableHead class="hidden xl:table-cell">{{ t('container.ports') }}</TableHead>
+                    <TableHead class="text-right">{{ t('common.actions') }}</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  <TableRow v-for="row in currentProject.containers" :key="row.id">
+                    <TableCell class="font-medium text-xs">{{ row.service }}</TableCell>
+                    <TableCell class="font-mono text-xs">{{ row.name }}</TableCell>
+                    <TableCell>
+                      <Badge :variant="row.state === 'running' ? 'success' : 'info'">
+                        {{ row.state }}
+                      </Badge>
+                    </TableCell>
+                    <TableCell class="hidden lg:table-cell text-xs text-muted-foreground">
+                      {{ row.status }}
+                    </TableCell>
+                    <TableCell class="hidden xl:table-cell font-mono text-xs text-muted-foreground">
+                      {{ row.ports || '-' }}
+                    </TableCell>
+                    <TableCell class="text-right">
+                      <div class="inline-flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          :disabled="row.state !== 'running'"
+                          @click="handleOpenTerminal(row.id, row.name)"
+                        >
+                          <Terminal class="size-3.5" />
+                          {{ t('container.terminal') }}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          :disabled="row.state !== 'running'"
+                          @click="handleOpenFiles(row.id, row.name)"
+                        >
+                          <FolderOpen class="size-3.5" />
+                          {{ t('container.files') }}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          @click="handleOpenLogs(row.id, row.name)"
+                        >
+                          <FileText class="size-3.5" />
+                          {{ t('container.logs') }}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+          </div>
 
-/* Left Panel */
-.project-list-panel {
-  width: 280px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  background: var(--el-bg-color);
-}
+          <!-- Actions -->
+          <ComposeActions
+            :project-name="selectedProject"
+            :output="actionOutput"
+            :loading="actionLoading"
+            :status="currentProject?.status"
+            @action="handleAction"
+            @clear="handleClearOutput"
+          />
 
-.panel-header {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border-bottom: 1px solid var(--el-border-color-light);
-}
+          <!-- Editor -->
+          <div class="flex-1 flex flex-col rounded-lg border bg-card shadow-2xs overflow-hidden min-h-0">
+            <div class="flex items-center gap-2 px-3.5 py-2.5 bg-muted/40 border-b text-sm font-medium">
+              <FileCode2 class="size-4 text-muted-foreground" />
+              <span>{{ t('compose.editor') }}</span>
+            </div>
+            <ComposeEditor
+              ref="editorRef"
+              :project-name="selectedProject"
+              :content="fileContent"
+              :loading="fileLoading"
+              @save="handleSaveFile"
+              @change="handleFileChange"
+            />
+          </div>
+        </template>
 
-.panel-title {
-  font-weight: 500;
-  font-size: 14px;
-}
+        <div
+          v-else
+          class="flex-1 rounded-lg border border-dashed bg-card flex flex-col items-center justify-center gap-3 text-center p-8"
+        >
+          <div class="size-11 rounded-full bg-muted flex items-center justify-center text-muted-foreground">
+            <Layers class="size-5" />
+          </div>
+          <p class="text-sm text-muted-foreground">{{ t('compose.selectProject') }}</p>
+        </div>
+      </div>
+    </div>
 
-.search-input {
-  width: 100%;
-}
+    <!-- Create Project Dialog -->
+    <Dialog v-model:open="showCreateDialog">
+      <DialogContent class="sm:max-w-[420px]">
+        <DialogHeader>
+          <DialogTitle>{{ t('compose.create') }}</DialogTitle>
+        </DialogHeader>
+        <form class="space-y-4 py-1" @submit.prevent="handleCreate">
+          <div class="space-y-1.5">
+            <Label for="compose-project-name">
+              {{ t('compose.projectName') }} <span class="text-destructive">*</span>
+            </Label>
+            <Input
+              id="compose-project-name"
+              v-model="createForm.name"
+              :placeholder="t('compose.projectNamePlaceholder')"
+              @input="createError = ''"
+            />
+            <p v-if="createError" class="text-xs text-destructive">{{ createError }}</p>
+          </div>
+          <DialogFooter class="gap-2">
+            <Button type="button" variant="outline" @click="showCreateDialog = false">
+              {{ t('common.cancel') }}
+            </Button>
+            <Button type="submit" :disabled="creating">
+              <Loader2 v-if="creating" class="animate-spin" />
+              {{ t('common.create') }}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
 
-.project-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px;
-}
-
-.project-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  margin-bottom: 4px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 1px solid transparent;
-}
-
-.project-item:hover {
-  background: var(--el-fill-color-light);
-}
-
-.project-item.active {
-  background: var(--el-color-primary-light-9);
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px var(--el-color-primary-light-5);
-}
-
-.project-item.active .project-name {
-  color: var(--el-color-primary);
-  font-weight: 600;
-}
-
-.project-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.project-name {
-  font-weight: 500;
-  font-size: 14px;
-}
-
-/* Right Panel */
-.editor-panel {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.container-status {
-  flex-shrink: 0;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.status-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-light);
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.editor-section {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 4px;
-  overflow: hidden;
-  min-height: 0;
-}
-
-.section-header {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color-light);
-  font-weight: 500;
-  font-size: 14px;
-}
-
-.empty-state {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-  .compose-page {
-    height: calc(100vh - 84px);
-  }
-
-  .compose-content {
-    flex-direction: column;
-  }
-
-  .project-list-panel {
-    width: 100%;
-    max-height: 200px;
-  }
-}
-</style>
+    <ContainerLogsDialog
+      v-model:visible="showLogsDialog"
+      :container-id="selectedContainerId"
+      :container-name="selectedContainerName"
+    />
+    <ContainerTerminal
+      v-model:visible="showTerminalDialog"
+      :container-id="selectedContainerId"
+      :container-name="selectedContainerName"
+    />
+    <FileExplorer
+      v-model:visible="showFilesDialog"
+      :container-id="selectedContainerId"
+      :container-name="selectedContainerName"
+    />
+  </div>
+</template>

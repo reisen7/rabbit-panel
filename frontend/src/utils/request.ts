@@ -1,5 +1,5 @@
 import axios, { type AxiosError, type AxiosInstance, type AxiosResponse, type InternalAxiosRequestConfig } from 'axios'
-import { ElMessage } from 'element-plus'
+import { toast } from '@/composables/useToast'
 import router from '@/router'
 import { getTargetNodeId } from '@/utils/targetNode'
 
@@ -76,30 +76,30 @@ request.interceptors.response.use(
       // Token expired or invalid
       removeToken()
       router.push('/login')
-      ElMessage.error('登录已过期，请重新登录')
+      toast.error('登录已过期，请重新登录')
     } else if (status === 403) {
       // Check if password change is required
       if (typeof data === 'object' && data !== null && 'need_change_password' in data) {
         // This will be handled by the auth store
         return Promise.reject({ ...error, needChangePassword: true })
       }
-      ElMessage.error('没有权限执行此操作')
+      toast.error('没有权限执行此操作')
     } else if (status && status >= 500) {
       // 尝试获取后端返回的错误信息
       const errorMsg = getErrorMessage(data)
-      ElMessage.error(errorMsg || '服务器错误，请稍后重试')
+      toast.error(errorMsg || '服务器错误，请稍后重试')
     } else if (status === 400 || status === 404 || status === 409) {
       // 客户端错误，显示后端返回的具体信息
       const errorMsg = getErrorMessage(data)
       if (errorMsg) {
-        ElMessage.error(errorMsg)
+        toast.error(errorMsg)
       }
     } else {
       const errorMsg = getErrorMessage(data)
       if (errorMsg) {
-        ElMessage.error(errorMsg)
+        toast.error(errorMsg)
       } else if (error.message) {
-        ElMessage.error(error.message)
+        toast.error(error.message)
       }
     }
 

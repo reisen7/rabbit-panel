@@ -1,91 +1,21 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('image.build')"
-    width="700px"
-    :close-on-click-modal="false"
-    @close="handleClose"
-  >
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      :disabled="building"
-    >
-      <el-form-item :label="t('image.imageName')" prop="name">
-        <el-input
-          v-model="form.name"
-          :placeholder="t('image.nameRequired')"
-        />
-      </el-form-item>
-
-      <el-form-item :label="t('image.imageTag')" prop="tag">
-        <el-input
-          v-model="form.tag"
-          placeholder="latest"
-        />
-      </el-form-item>
-
-      <el-form-item :label="t('image.dockerfile')" prop="dockerfile">
-        <el-input
-          v-model="form.dockerfile"
-          type="textarea"
-          :rows="12"
-          :placeholder="dockerfilePlaceholder"
-          class="dockerfile-editor"
-        />
-      </el-form-item>
-    </el-form>
-
-    <!-- Build Logs -->
-    <div v-if="buildLogs.length > 0" class="build-logs">
-      <div class="logs-header">
-        <span>{{ t('image.buildLogs') }}</span>
-        <el-tag v-if="building" type="warning" size="small">
-          {{ t('image.building') }}
-        </el-tag>
-        <el-tag v-else-if="buildSuccess" type="success" size="small">
-          {{ t('image.buildSuccess') }}
-        </el-tag>
-        <el-tag v-else-if="buildError" type="danger" size="small">
-          {{ t('image.buildFailed') }}
-        </el-tag>
-      </div>
-      <div ref="logsContainer" class="logs-content">
-        <div
-          v-for="(log, index) in buildLogs"
-          :key="index"
-          :class="['log-line', log.type]"
-        >
-          {{ log.message }}
-        </div>
-      </div>
-    </div>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="handleClose" :disabled="building">
-          {{ t('common.cancel') }}
-        </el-button>
-        <el-button
-          type="primary"
-          :loading="building"
-          @click="handleBuild"
-        >
-          {{ building ? t('image.building') : t('image.build') }}
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, watch, nextTick } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, watch, nextTick } from 'vue'
+import { Loader2 } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
 import { imageApi } from '@/api/images'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 const props = defineProps<{
   visible: boolean
@@ -97,42 +27,34 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const toast = useToast()
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (value) => emit('update:visible', value),
+  set: (value) => {
+    if (!value && building.value) return
+    emit('update:visible', value)
+  },
 })
 
-// Form
-const formRef = ref<FormInstance>()
-const form = ref({
+const form = reactive({
   name: '',
   tag: 'latest',
   dockerfile: '',
 })
 
-// Validation rules
-const rules = computed<FormRules>(() => ({
-  name: [
-    { required: true, message: t('image.nameRequired'), trigger: 'blur' },
-  ],
-  tag: [
-    { required: true, message: t('image.tagRequired'), trigger: 'blur' },
-  ],
-  dockerfile: [
-    { required: true, message: t('image.dockerfileRequired'), trigger: 'blur' },
-  ],
-}))
+const errors = reactive({
+  name: '',
+  tag: '',
+  dockerfile: '',
+})
 
-// Build state
 const building = ref(false)
 const buildSuccess = ref(false)
 const buildError = ref(false)
 const buildLogs = ref<Array<{ type: string; message: string }>>([])
 const logsContainer = ref<HTMLElement>()
 
-// Dockerfile placeholder
 const dockerfilePlaceholder = `FROM node:18-alpine
 WORKDIR /app
 COPY package*.json ./
@@ -141,42 +63,45 @@ COPY . .
 EXPOSE 3000
 CMD ["npm", "start"]`
 
-// Auto-scroll logs
-watch(buildLogs, () => {
-  nextTick(() => {
-    if (logsContainer.value) {
-      logsContainer.value.scrollTop = logsContainer.value.scrollHeight
-    }
-  })
-}, { deep: true })
+watch(
+  buildLogs,
+  () => {
+    nextTick(() => {
+      if (logsContainer.value) {
+        logsContainer.value.scrollTop = logsContainer.value.scrollHeight
+      }
+    })
+  },
+  { deep: true }
+)
 
-// Handlers
 function handleClose() {
   if (building.value) return
   resetForm()
-  dialogVisible.value = false
+  emit('update:visible', false)
 }
 
 function resetForm() {
-  form.value = {
-    name: '',
-    tag: 'latest',
-    dockerfile: '',
-  }
+  form.name = ''
+  form.tag = 'latest'
+  form.dockerfile = ''
+  errors.name = ''
+  errors.tag = ''
+  errors.dockerfile = ''
   buildLogs.value = []
   buildSuccess.value = false
   buildError.value = false
-  formRef.value?.resetFields()
+}
+
+function validate(): boolean {
+  errors.name = form.name.trim() ? '' : t('image.nameRequired')
+  errors.tag = form.tag.trim() ? '' : t('image.tagRequired')
+  errors.dockerfile = form.dockerfile.trim() ? '' : t('image.dockerfileRequired')
+  return !errors.name && !errors.tag && !errors.dockerfile
 }
 
 async function handleBuild() {
-  if (!formRef.value) return
-
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
+  if (!validate()) return
 
   building.value = true
   buildSuccess.value = false
@@ -185,10 +110,9 @@ async function handleBuild() {
 
   try {
     await imageApi.build(
-      form.value.name,
-      form.value.tag,
-      form.value.dockerfile,
-      // onMessage
+      form.name.trim(),
+      form.tag.trim(),
+      form.dockerfile,
       (data) => {
         if (data.message) {
           buildLogs.value.push({
@@ -204,7 +128,6 @@ async function handleBuild() {
           buildError.value = true
         }
       },
-      // onError
       (error) => {
         buildLogs.value.push({
           type: 'error',
@@ -212,79 +135,120 @@ async function handleBuild() {
         })
         buildError.value = true
         building.value = false
-        ElMessage.error(t('image.buildFailed'))
+        toast.error(t('image.buildFailed'))
       },
-      // onComplete
       () => {
         building.value = false
         if (!buildError.value) {
           buildSuccess.value = true
-          ElMessage.success(t('image.buildSuccess'))
+          toast.success(t('image.buildSuccess'))
           emit('built')
         }
       }
     )
-  } catch (error) {
+  } catch {
     building.value = false
     buildError.value = true
-    ElMessage.error(t('image.buildFailed'))
+    toast.error(t('image.buildFailed'))
   }
 }
 </script>
 
-<style scoped>
-.dockerfile-editor :deep(textarea) {
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 13px;
-  line-height: 1.5;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent
+      class="sm:max-w-[700px] max-h-[90vh] flex flex-col"
+      :show-close-button="!building"
+      @interact-outside.prevent
+      @escape-key-down="(e) => { if (building) e.preventDefault() }"
+    >
+      <DialogHeader>
+        <DialogTitle>{{ t('image.build') }}</DialogTitle>
+      </DialogHeader>
 
-.build-logs {
-  margin-top: 20px;
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-}
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1 py-1">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div class="sm:col-span-2 space-y-1.5">
+            <Label for="build-img-name">
+              {{ t('image.imageName') }} <span class="text-destructive">*</span>
+            </Label>
+            <Input
+              id="build-img-name"
+              v-model="form.name"
+              :placeholder="t('image.nameRequired')"
+              :disabled="building"
+              @input="errors.name = ''"
+            />
+            <p v-if="errors.name" class="text-xs text-destructive">{{ errors.name }}</p>
+          </div>
 
-.logs-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 15px;
-  background-color: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color);
-  font-weight: 500;
-}
+          <div class="space-y-1.5">
+            <Label for="build-img-tag">
+              {{ t('image.imageTag') }} <span class="text-destructive">*</span>
+            </Label>
+            <Input
+              id="build-img-tag"
+              v-model="form.tag"
+              placeholder="latest"
+              :disabled="building"
+              @input="errors.tag = ''"
+            />
+            <p v-if="errors.tag" class="text-xs text-destructive">{{ errors.tag }}</p>
+          </div>
+        </div>
 
-.logs-content {
-  max-height: 300px;
-  overflow-y: auto;
-  padding: 10px 15px;
-  background-color: var(--el-bg-color);
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
-  font-size: 12px;
-  line-height: 1.6;
-}
+        <div class="space-y-1.5">
+          <Label for="build-dockerfile">
+            {{ t('image.dockerfile') }} <span class="text-destructive">*</span>
+          </Label>
+          <Textarea
+            id="build-dockerfile"
+            v-model="form.dockerfile"
+            rows="11"
+            :placeholder="dockerfilePlaceholder"
+            :disabled="building"
+            class="font-mono text-xs leading-relaxed min-h-[220px]"
+            @input="errors.dockerfile = ''"
+          />
+          <p v-if="errors.dockerfile" class="text-xs text-destructive">{{ errors.dockerfile }}</p>
+        </div>
 
-.log-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-}
+        <div v-if="buildLogs.length > 0" class="rounded-lg border overflow-hidden">
+          <div class="flex items-center justify-between px-3.5 py-2 bg-muted/50 border-b text-xs font-medium">
+            <span>{{ t('image.buildLogs') }}</span>
+            <Badge v-if="building" variant="warning">{{ t('image.building') }}</Badge>
+            <Badge v-else-if="buildSuccess" variant="success">{{ t('image.buildSuccess') }}</Badge>
+            <Badge v-else-if="buildError" variant="destructive">{{ t('image.buildFailed') }}</Badge>
+          </div>
+          <div
+            ref="logsContainer"
+            class="max-h-[240px] overflow-y-auto p-3 bg-zinc-950 text-zinc-100 font-mono text-xs leading-relaxed space-y-0.5"
+          >
+            <div
+              v-for="(log, index) in buildLogs"
+              :key="index"
+              class="whitespace-pre-wrap break-all"
+              :class="{
+                'text-red-400': log.type === 'error',
+                'text-amber-400': log.type === 'warning',
+                'text-emerald-400': log.type === 'success',
+              }"
+            >
+              {{ log.message }}
+            </div>
+          </div>
+        </div>
+      </div>
 
-.log-line.error {
-  color: var(--el-color-danger);
-}
-
-.log-line.warning {
-  color: var(--el-color-warning);
-}
-
-.log-line.success {
-  color: var(--el-color-success);
-}
-
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
-</style>
+      <DialogFooter class="gap-2 pt-2">
+        <Button type="button" variant="outline" :disabled="building" @click="handleClose">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button :disabled="building" @click="handleBuild">
+          <Loader2 v-if="building" class="animate-spin" />
+          {{ building ? t('image.building') : t('image.build') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

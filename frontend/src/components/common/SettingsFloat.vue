@@ -1,61 +1,68 @@
 <script setup lang="ts">
 import { ref, watch, onMounted } from 'vue'
-import { Setting } from '@element-plus/icons-vue'
+import { Check, Settings, X } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
 
+const { t } = useI18n()
 const SETTINGS_KEY = 'rabbit_panel_settings'
+const DEFAULT_COLOR = 'neutral'
 
-// 设置面板显示状态
 const showPanel = ref(false)
 
-// 设置项
 const settings = ref({
   fontSize: 14,
-  sidebarWidth: 200,
-  primaryColor: '#409EFF',
+  sidebarWidth: 220,
+  primaryColor: DEFAULT_COLOR,
 })
 
-// 预设主题色
 const colorOptions = [
-  { label: '默认蓝', value: '#409EFF' },
-  { label: '翠绿', value: '#67C23A' },
-  { label: '橙色', value: '#E6A23C' },
-  { label: '红色', value: '#F56C6C' },
-  { label: '紫色', value: '#9B59B6' },
-  { label: '青色', value: '#00BCD4' },
+  { label: 'Neutral', value: 'neutral', swatch: '#18181b' },
+  { label: 'Blue', value: '#2563eb', swatch: '#2563eb' },
+  { label: 'Emerald', value: '#16a34a', swatch: '#16a34a' },
+  { label: 'Amber', value: '#d97706', swatch: '#d97706' },
+  { label: 'Rose', value: '#e11d48', swatch: '#e11d48' },
+  { label: 'Violet', value: '#7c3aed', swatch: '#7c3aed' },
 ]
 
-// 应用设置
 function applySettings() {
-  document.documentElement.style.setProperty('--rp-font-size', `${settings.value.fontSize}px`)
-  document.documentElement.style.setProperty('--rp-sidebar-width', `${settings.value.sidebarWidth}px`)
-  document.documentElement.style.setProperty('--el-color-primary', settings.value.primaryColor)
-  
-  // 保存到 localStorage
+  const root = document.documentElement
+  root.style.setProperty('--rp-font-size', `${settings.value.fontSize}px`)
+  root.style.setProperty('--rp-sidebar-width', `${settings.value.sidebarWidth}px`)
+  if (!settings.value.primaryColor || settings.value.primaryColor === 'neutral') {
+    root.style.removeProperty('--primary')
+    root.style.removeProperty('--primary-foreground')
+  } else {
+    root.style.setProperty('--primary', settings.value.primaryColor)
+    root.style.setProperty('--primary-foreground', '#ffffff')
+  }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings.value))
 }
 
-// 重置设置
 function resetSettings() {
   settings.value = {
     fontSize: 14,
-    sidebarWidth: 200,
-    primaryColor: '#409EFF',
+    sidebarWidth: 220,
+    primaryColor: DEFAULT_COLOR,
   }
   applySettings()
 }
 
-// 确认并刷新页面
 function confirmAndRefresh() {
   applySettings()
   window.location.reload()
 }
 
-// 监听设置变化
-watch(settings, () => {
-  applySettings()
-}, { deep: true })
+watch(
+  settings,
+  () => {
+    applySettings()
+  },
+  { deep: true }
+)
 
-// 初始化加载设置
 onMounted(() => {
   const saved = localStorage.getItem(SETTINGS_KEY)
   if (saved) {
@@ -71,76 +78,77 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="settings-float">
-    <!-- 悬浮按钮 -->
-    <el-button
-      class="float-btn"
-      type="primary"
-      circle
-      size="large"
-      :icon="Setting"
+  <div class="fixed right-5 bottom-5 z-50">
+    <Button
+      size="icon"
+      class="size-12 rounded-full shadow-lg"
       @click="showPanel = !showPanel"
-    />
+    >
+      <Settings class="size-5" />
+    </Button>
 
-    <!-- 设置面板 -->
     <transition name="slide">
-      <div v-show="showPanel" class="settings-panel">
-        <div class="panel-header">
-          <span>页面设置</span>
-          <el-button text size="small" @click="showPanel = false">×</el-button>
+      <div
+        v-show="showPanel"
+        class="absolute right-0 bottom-15 w-72 rounded-xl border bg-popover text-popover-foreground shadow-xl overflow-hidden"
+      >
+        <div class="flex items-center justify-between px-4 py-3 border-b">
+          <span class="text-sm font-semibold">{{ t('settings.pageSettings') }}</span>
+          <Button variant="ghost" size="icon-sm" @click="showPanel = false">
+            <X class="size-4" />
+          </Button>
         </div>
-        
-        <div class="panel-content">
-          <!-- 字体大小 -->
-          <div class="setting-item">
-            <label>字体大小</label>
-            <div class="setting-control">
-              <el-slider
-                v-model="settings.fontSize"
-                :min="12"
-                :max="18"
-                :step="1"
-                :show-tooltip="false"
-              />
-              <span class="value">{{ settings.fontSize }}px</span>
+
+        <div class="p-4 space-y-4">
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <Label class="text-xs">{{ t('settings.fontSize') }}</Label>
+              <span class="text-xs font-mono tabular-nums text-muted-foreground">{{ settings.fontSize }}px</span>
             </div>
+            <Slider
+              :model-value="[settings.fontSize]"
+              :min="12"
+              :max="18"
+              :step="1"
+              @update:model-value="(v) => { if (v?.length) settings.fontSize = v[0]! }"
+            />
           </div>
 
-          <!-- 侧边栏宽度 -->
-          <div class="setting-item">
-            <label>侧边栏宽度</label>
-            <div class="setting-control">
-              <el-slider
-                v-model="settings.sidebarWidth"
-                :min="180"
-                :max="280"
-                :step="10"
-                :show-tooltip="false"
-              />
-              <span class="value">{{ settings.sidebarWidth }}px</span>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <Label class="text-xs">{{ t('settings.sidebarWidth') }}</Label>
+              <span class="text-xs font-mono tabular-nums text-muted-foreground">{{ settings.sidebarWidth }}px</span>
             </div>
+            <Slider
+              :model-value="[settings.sidebarWidth]"
+              :min="180"
+              :max="280"
+              :step="10"
+              @update:model-value="(v) => { if (v?.length) settings.sidebarWidth = v[0]! }"
+            />
           </div>
 
-          <!-- 主题色 -->
-          <div class="setting-item">
-            <label>主题色</label>
-            <div class="color-options">
-              <div
+          <div class="space-y-2">
+            <Label class="text-xs">{{ t('settings.themeColor') }}</Label>
+            <div class="flex flex-wrap gap-2">
+              <button
                 v-for="color in colorOptions"
                 :key="color.value"
-                class="color-item"
-                :class="{ active: settings.primaryColor === color.value }"
-                :style="{ backgroundColor: color.value }"
+                type="button"
                 :title="color.label"
+                class="size-7 rounded-md border flex items-center justify-center transition-transform hover:scale-105"
+                :class="settings.primaryColor === color.value ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : 'border-border'"
+                :style="{ backgroundColor: color.swatch }"
                 @click="settings.primaryColor = color.value"
-              />
+              >
+                <Check v-if="settings.primaryColor === color.value" class="size-3.5 text-white" />
+              </button>
             </div>
           </div>
 
-          <!-- 重置按钮 -->
-          <div class="setting-item buttons">
-            <el-button size="small" @click="resetSettings">恢复默认</el-button>
-            <el-button size="small" type="primary" @click="confirmAndRefresh">确认刷新</el-button>
+          <div class="flex justify-end gap-2 pt-1">
+            <Button variant="outline" size="sm" @click="resetSettings">{{ t('settings.reset') }}</Button>
+            <Button size="sm" @click="confirmAndRefresh">{{ t('settings.confirmRefresh') }}</Button>
           </div>
         </div>
       </div>
@@ -149,115 +157,14 @@ onMounted(() => {
 </template>
 
 <style scoped>
-.settings-float {
-  position: fixed;
-  right: 20px;
-  bottom: 20px;
-  z-index: 2000;
-}
-
-.float-btn {
-  width: 50px;
-  height: 50px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.settings-panel {
-  position: absolute;
-  right: 0;
-  bottom: 60px;
-  width: 280px;
-  background: var(--el-bg-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  border: 1px solid var(--el-border-color);
-  overflow: hidden;
-}
-
-.panel-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--el-border-color);
-  font-weight: 600;
-}
-
-.panel-content {
-  padding: 16px;
-}
-
-.setting-item {
-  margin-bottom: 16px;
-}
-
-.setting-item:last-child {
-  margin-bottom: 0;
-}
-
-.setting-item label {
-  display: block;
-  font-size: 13px;
-  color: var(--el-text-color-regular);
-  margin-bottom: 8px;
-}
-
-.setting-control {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.setting-control .el-slider {
-  flex: 1;
-}
-
-.setting-control .value {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  min-width: 45px;
-  text-align: right;
-}
-
-.color-options {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.color-item {
-  width: 28px;
-  height: 28px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  border: 2px solid transparent;
-}
-
-.color-item:hover {
-  transform: scale(1.1);
-}
-
-.color-item.active {
-  border-color: var(--el-text-color-primary);
-  box-shadow: 0 0 0 2px var(--el-bg-color);
-}
-
-.setting-item.buttons {
-  display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-}
-
-/* 动画 */
 .slide-enter-active,
 .slide-leave-active {
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
 }
 
 .slide-enter-from,
 .slide-leave-to {
   opacity: 0;
-  transform: translateY(10px);
+  transform: translateY(8px);
 }
 </style>

@@ -2,139 +2,73 @@
 import { onMounted, onUnmounted } from 'vue'
 import { useSystemStore } from '@/stores/system'
 import { useI18n } from '@/composables/useI18n'
+import { Progress } from '@/components/ui/progress'
 
 const systemStore = useSystemStore()
 const { t } = useI18n()
 
-// Start polling on mount
 onMounted(() => {
   systemStore.startPolling()
 })
 
-// Stop polling on unmount
 onUnmounted(() => {
   systemStore.stopPolling()
 })
 
-// Get progress bar color based on usage percentage
-function getProgressColor(percent: number): string {
-  if (percent >= 90) return '#F56C6C'
-  if (percent >= 70) return '#E6A23C'
-  return '#67C23A'
+function getProgressClass(percent: number): string {
+  if (percent >= 90) return 'bg-destructive'
+  if (percent >= 70) return 'bg-amber-500'
+  return 'bg-emerald-500'
 }
 </script>
 
 <template>
-  <div class="system-monitor">
+  <div class="hidden md:flex items-center gap-4 lg:gap-6">
     <!-- CPU -->
-    <div class="monitor-item">
-      <span class="monitor-label">{{ t('system.cpu') }}</span>
-      <el-progress
-        :percentage="systemStore.stats.cpu"
-        :stroke-width="8"
-        :color="getProgressColor(systemStore.stats.cpu)"
-        :show-text="false"
-        class="monitor-progress"
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ t('system.cpu') }}</span>
+      <Progress
+        :model-value="systemStore.stats.cpu"
+        class="h-1.5 w-14 lg:w-20"
+        :indicator-class="getProgressClass(systemStore.stats.cpu)"
       />
-      <span class="monitor-value">{{ systemStore.stats.cpu.toFixed(1) }}%</span>
+      <span class="text-xs font-medium tabular-nums text-foreground min-w-[42px] text-right">
+        {{ systemStore.stats.cpu.toFixed(1) }}%
+      </span>
     </div>
-    
+
     <!-- Memory -->
-    <div class="monitor-item">
-      <span class="monitor-label">{{ t('system.memory') }}</span>
-      <el-progress
-        :percentage="systemStore.stats.memory"
-        :stroke-width="8"
-        :color="getProgressColor(systemStore.stats.memory)"
-        :show-text="false"
-        class="monitor-progress"
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ t('system.memory') }}</span>
+      <Progress
+        :model-value="systemStore.stats.memory"
+        class="h-1.5 w-14 lg:w-20"
+        :indicator-class="getProgressClass(systemStore.stats.memory)"
       />
-      <span class="monitor-value">{{ systemStore.stats.memory.toFixed(1) }}%</span>
+      <span class="text-xs font-medium tabular-nums text-foreground min-w-[42px] text-right">
+        {{ systemStore.stats.memory.toFixed(1) }}%
+      </span>
     </div>
-    
+
     <!-- Disk -->
-    <div class="monitor-item">
-      <span class="monitor-label">{{ t('system.disk') }}</span>
-      <el-progress
-        :percentage="systemStore.stats.disk"
-        :stroke-width="8"
-        :color="getProgressColor(systemStore.stats.disk)"
-        :show-text="false"
-        class="monitor-progress"
+    <div class="flex items-center gap-2">
+      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ t('system.disk') }}</span>
+      <Progress
+        :model-value="systemStore.stats.disk"
+        class="h-1.5 w-14 lg:w-20"
+        :indicator-class="getProgressClass(systemStore.stats.disk)"
       />
-      <span class="monitor-value">{{ systemStore.stats.disk.toFixed(1) }}%</span>
+      <span class="text-xs font-medium tabular-nums text-foreground min-w-[42px] text-right">
+        {{ systemStore.stats.disk.toFixed(1) }}%
+      </span>
     </div>
-    
+
     <!-- Server Time -->
-    <div class="monitor-item time-item">
-      <span class="monitor-label">{{ t('system.serverTime') }}</span>
-      <span class="monitor-time">{{ systemStore.stats.time || '--:--:--' }}</span>
+    <div class="hidden xl:flex items-center gap-2 pl-2 border-l border-border">
+      <span class="text-xs text-muted-foreground whitespace-nowrap">{{ t('system.serverTime') }}</span>
+      <span class="text-xs font-medium font-mono tabular-nums text-foreground">
+        {{ systemStore.stats.time || '--:--:--' }}
+      </span>
     </div>
   </div>
 </template>
-
-<style scoped>
-.system-monitor {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.monitor-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.monitor-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-}
-
-.monitor-progress {
-  width: 80px;
-}
-
-.monitor-value {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-  min-width: 45px;
-  text-align: right;
-}
-
-.time-item {
-  margin-left: 8px;
-}
-
-.monitor-time {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--el-text-color-primary);
-  font-family: 'Courier New', monospace;
-}
-
-/* Responsive: hide on smaller screens */
-@media (max-width: 1200px) {
-  .time-item {
-    display: none;
-  }
-}
-
-@media (max-width: 900px) {
-  .system-monitor {
-    gap: 16px;
-  }
-  
-  .monitor-progress {
-    width: 60px;
-  }
-}
-
-@media (max-width: 768px) {
-  .system-monitor {
-    display: none;
-  }
-}
-</style>

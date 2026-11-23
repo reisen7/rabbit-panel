@@ -1,51 +1,19 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('container.terminal') + ' - ' + containerName"
-    width="80%"
-    :close-on-click-modal="false"
-    :close-on-press-escape="false"
-    destroy-on-close
-    class="terminal-dialog"
-    @open="handleOpen"
-    @close="handleClose"
-  >
-    <div class="terminal-container">
-      <div ref="terminalRef" class="terminal-wrapper"></div>
-      <div v-if="connectionStatus !== 'connected'" class="terminal-overlay">
-        <div class="overlay-content">
-          <el-icon v-if="connectionStatus === 'connecting'" class="is-loading" :size="32">
-            <Loading />
-          </el-icon>
-          <el-icon v-else-if="connectionStatus === 'disconnected'" :size="32">
-            <CircleClose />
-          </el-icon>
-          <el-icon v-else-if="connectionStatus === 'error'" :size="32" color="#f56c6c">
-            <WarningFilled />
-          </el-icon>
-          <p class="status-text">{{ statusText }}</p>
-          <el-button
-            v-if="connectionStatus === 'disconnected' || connectionStatus === 'error'"
-            type="primary"
-            @click="reconnect"
-          >
-            {{ t('container.reconnect') }}
-          </el-button>
-        </div>
-      </div>
-    </div>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
-import { Loading, CircleClose, WarningFilled } from '@element-plus/icons-vue'
+import { AlertTriangle, Loader2, XCircle } from 'lucide-vue-next'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { useI18n } from '@/composables/useI18n'
 import { containerApi } from '@/api/containers'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 type ConnectionStatus = 'idle' | 'connecting' | 'connected' | 'disconnected' | 'error'
 
@@ -61,24 +29,20 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
 })
 
-// Terminal refs
 const terminalRef = ref<HTMLElement | null>(null)
 let terminal: Terminal | null = null
 let fitAddon: FitAddon | null = null
 let ws: WebSocket | null = null
 let resizeObserver: ResizeObserver | null = null
 
-// Connection status
 const connectionStatus = ref<ConnectionStatus>('idle')
 const errorMessage = ref('')
 
-// Status text
 const statusText = computed(() => {
   switch (connectionStatus.value) {
     case 'connecting':
@@ -92,7 +56,6 @@ const statusText = computed(() => {
   }
 })
 
-// Initialize terminal
 function initTerminal() {
   if (!terminalRef.value) return
 
@@ -134,22 +97,18 @@ function initTerminal() {
   terminal.open(terminalRef.value)
   fitAddon.fit()
 
-  // Handle terminal input
   terminal.onData((data) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
-      // 直接发送原始输入数据，不包装成 JSON
       ws.send(data)
     }
   })
 
-  // Handle terminal resize
   terminal.onResize(({ cols, rows }) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: 'resize', cols, rows }))
     }
   })
 
-  // Setup resize observer
   resizeObserver = new ResizeObserver(() => {
     if (fitAddon) {
       fitAddon.fit()
@@ -158,7 +117,6 @@ function initTerminal() {
   resizeObserver.observe(terminalRef.value)
 }
 
-// Connect to WebSocket
 function connect() {
   if (!props.containerId) return
 
@@ -171,27 +129,26 @@ function connect() {
   ws.onopen = () => {
     connectionStatus.value = 'connected'
     terminal?.focus()
-    
-    // 延迟发送 resize，等待后端完成 exec attach
+
     setTimeout(() => {
       if (terminal && ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'resize',
-          cols: terminal.cols,
-          rows: terminal.rows,
-        }))
+        ws.send(
+          JSON.stringify({
+            type: 'resize',
+            cols: terminal.cols,
+            rows: terminal.rows,
+          })
+        )
       }
     }, 100)
   }
 
   ws.onmessage = (event) => {
-    // 后端发送的是二进制数据，直接写入终端
     if (event.data instanceof Blob) {
-      event.data.text().then(text => {
+      event.data.text().then((text) => {
         terminal?.write(text)
       })
     } else if (typeof event.data === 'string') {
-      // 尝试解析 JSON 错误消息
       try {
         const message = JSON.parse(event.data)
         if (message.type === 'error') {
@@ -200,7 +157,7 @@ function connect() {
           return
         }
       } catch {
-        // 不是 JSON，当作普通文本输出
+        // Not JSON, treat as plain text output
       }
       terminal?.write(event.data)
     }
@@ -224,7 +181,6 @@ function connect() {
   }
 }
 
-// Disconnect WebSocket
 function disconnect() {
   if (ws) {
     ws.close()
@@ -232,112 +188,106 @@ function disconnect() {
   }
 }
 
-// Reconnect
 function reconnect() {
   disconnect()
   terminal?.clear()
   connect()
 }
 
-// Handle dialog open
 async function handleOpen() {
   await nextTick()
   initTerminal()
   connect()
 }
 
-// Handle dialog close
-function handleClose() {
+function cleanupTerminal() {
   disconnect()
-  
+
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
   }
-  
+
   if (terminal) {
     terminal.dispose()
     terminal = null
   }
-  
+
   fitAddon = null
   connectionStatus.value = 'idle'
 }
 
-// Watch for container ID changes
-watch(() => props.containerId, (newId, oldId) => {
-  if (newId !== oldId && props.visible) {
-    disconnect()
-    terminal?.clear()
-    connect()
-  }
-})
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      handleOpen()
+    } else {
+      cleanupTerminal()
+    }
+  },
+  { immediate: true }
+)
 
-// Cleanup on unmount
+watch(
+  () => props.containerId,
+  (newId, oldId) => {
+    if (newId !== oldId && props.visible) {
+      disconnect()
+      terminal?.clear()
+      connect()
+    }
+  }
+)
+
 onUnmounted(() => {
-  handleClose()
+  cleanupTerminal()
 })
 </script>
 
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent
+      class="sm:max-w-[85vw] max-w-[1100px] p-0 overflow-hidden gap-0"
+      @interact-outside.prevent
+      @escape-key-down.prevent
+    >
+      <DialogHeader class="px-5 py-3.5 border-b">
+        <DialogTitle>{{ t('container.terminal') + ' - ' + containerName }}</DialogTitle>
+      </DialogHeader>
+
+      <div class="relative h-[520px] bg-[#1e1e1e]">
+        <div ref="terminalRef" class="size-full p-2.5 box-border terminal-wrapper" />
+
+        <div
+          v-if="connectionStatus !== 'connected'"
+          class="absolute inset-0 bg-[#1e1e1e]/90 flex items-center justify-center z-10"
+        >
+          <div class="flex flex-col items-center gap-3 text-center text-zinc-200 px-6">
+            <Loader2 v-if="connectionStatus === 'connecting'" class="size-8 animate-spin text-zinc-300" />
+            <XCircle v-else-if="connectionStatus === 'disconnected'" class="size-8 text-zinc-400" />
+            <AlertTriangle v-else-if="connectionStatus === 'error'" class="size-8 text-red-400" />
+            <p class="text-sm text-zinc-300">{{ statusText }}</p>
+            <Button
+              v-if="connectionStatus === 'disconnected' || connectionStatus === 'error'"
+              size="sm"
+              @click="reconnect"
+            >
+              {{ t('container.reconnect') }}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </DialogContent>
+  </Dialog>
+</template>
+
 <style scoped>
-.terminal-dialog :deep(.el-dialog__body) {
-  padding: 0;
-}
-
-.terminal-container {
-  position: relative;
-  height: 500px;
-  background: #1e1e1e;
-}
-
-.terminal-wrapper {
-  width: 100%;
-  height: 100%;
-  padding: 10px;
-  box-sizing: border-box;
-}
-
 .terminal-wrapper :deep(.xterm) {
   height: 100%;
 }
 
 .terminal-wrapper :deep(.xterm-viewport) {
   overflow-y: auto !important;
-}
-
-.terminal-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(30, 30, 30, 0.9);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10;
-}
-
-.overlay-content {
-  text-align: center;
-  color: #d4d4d4;
-}
-
-.status-text {
-  margin: 15px 0;
-  font-size: 14px;
-}
-
-.is-loading {
-  animation: rotating 2s linear infinite;
-}
-
-@keyframes rotating {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

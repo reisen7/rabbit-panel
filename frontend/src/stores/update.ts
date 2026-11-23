@@ -13,6 +13,7 @@ export const useUpdateStore = defineStore('update', () => {
   const bannerDismissedVersion = ref('')
   let pollingTimer: ReturnType<typeof setInterval> | null = null
   let autoHideTimer: ReturnType<typeof setTimeout> | null = null
+  let updateInfoInflight: Promise<void> | null = null
 
   const shouldShowIndicator = computed(() => {
     if (taskStatus.value?.status === 'running' || taskStatus.value?.status === 'downloaded' || taskStatus.value?.status === 'failed' || taskStatus.value?.status === 'applying') {
@@ -28,10 +29,10 @@ export const useUpdateStore = defineStore('update', () => {
     return bannerDismissedVersion.value !== info.value.latest_version
   })
 
-  async function loadUpdateInfo(options?: { includeTaskStatus?: boolean }): Promise<void> {
+  async function loadUpdateInfo(options?: { includeTaskStatus?: boolean; force?: boolean }): Promise<void> {
     try {
       const previousVersion = info.value?.latest_version || ''
-      info.value = await systemApi.checkUpdate()
+      info.value = await systemApi.checkUpdate(options?.force ?? false)
       if (previousVersion !== info.value.latest_version) {
         bannerDismissedVersion.value = ''
       }
@@ -46,14 +47,18 @@ export const useUpdateStore = defineStore('update', () => {
     }
   }
 
-  async function fetchUpdateInfo(): Promise<void> {
+  async function fetchUpdateInfo(options?: { force?: boolean }): Promise<void> {
+    if (updateInfoInflight) {
+      return updateInfoInflight
+    }
     loading.value = true
     error.value = null
-    try {
-      await loadUpdateInfo({ includeTaskStatus: true })
-    } finally {
-      loading.value = false
-    }
+    updateInfoInflight = loadUpdateInfo({ includeTaskStatus: true, force: options?.force })
+      .finally(() => {
+        loading.value = false
+        updateInfoInflight = null
+      })
+    return updateInfoInflight
   }
 
   async function runUpdate(): Promise<string> {

@@ -1,191 +1,28 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('container.create')"
-    width="1100px"
-    :close-on-click-modal="false"
-    :before-close="handleBeforeClose"
-    @close="handleClose"
-  >
-    <div class="create-container-layout">
-      <div class="form-panel">
-        <el-form
-          ref="formRef"
-          :model="form"
-          :rules="rules"
-          label-width="120px"
-          label-position="right"
-        >
-          <!-- Image -->
-          <el-form-item :label="t('container.image')" prop="image">
-            <el-input v-model="form.image" placeholder="nginx:latest" />
-          </el-form-item>
-
-          <!-- Container Name -->
-          <el-form-item :label="t('container.containerName')" prop="name">
-            <el-input v-model="form.name" placeholder="my-container" />
-          </el-form-item>
-
-          <!-- Restart Policy -->
-          <el-form-item :label="t('container.restartPolicy')" prop="restart">
-            <el-select v-model="form.restart" style="width: 100%">
-              <el-option value="no" :label="t('container.restartPolicies.no')" />
-              <el-option value="always" :label="t('container.restartPolicies.always')" />
-              <el-option value="on-failure" :label="t('container.restartPolicies.onFailure')" />
-              <el-option value="unless-stopped" :label="t('container.restartPolicies.unlessStopped')" />
-            </el-select>
-          </el-form-item>
-
-          <!-- Network -->
-          <el-form-item :label="t('container.network')" prop="network">
-            <el-input v-model="form.network" placeholder="bridge" />
-          </el-form-item>
-
-          <!-- Port Mappings -->
-          <el-form-item :label="t('container.ports')">
-            <div class="dynamic-list">
-              <div v-for="(port, index) in form.ports" :key="index" class="dynamic-item">
-                <el-input
-                  v-model="port.host"
-                  :placeholder="t('container.hostPort')"
-                  style="width: 120px"
-                />
-                <span class="separator">:</span>
-                <el-input
-                  v-model="port.container"
-                  :placeholder="t('container.containerPort')"
-                  style="width: 120px"
-                />
-                <el-button
-                  type="danger"
-                  :icon="Delete"
-                  circle
-                  size="small"
-                  @click="removePort(index)"
-                />
-              </div>
-              <el-button type="primary" text @click="addPort">
-                <el-icon><Plus /></el-icon>
-                {{ t('container.addPort') }}
-              </el-button>
-            </div>
-          </el-form-item>
-
-          <!-- Volume Mappings -->
-          <el-form-item :label="t('container.volumes')">
-            <div class="dynamic-list">
-              <div v-for="(volume, index) in form.volumes" :key="index" class="dynamic-item">
-                <el-input
-                  v-model="volume.host"
-                  :placeholder="t('container.hostPath')"
-                  style="width: 180px"
-                />
-                <span class="separator">:</span>
-                <el-input
-                  v-model="volume.container"
-                  :placeholder="t('container.containerPath')"
-                  style="width: 180px"
-                />
-                <el-button
-                  type="danger"
-                  :icon="Delete"
-                  circle
-                  size="small"
-                  @click="removeVolume(index)"
-                />
-              </div>
-              <el-button type="primary" text @click="addVolume">
-                <el-icon><Plus /></el-icon>
-                {{ t('container.addVolume') }}
-              </el-button>
-            </div>
-          </el-form-item>
-
-          <!-- Environment Variables -->
-          <el-form-item :label="t('container.envVars')">
-            <div class="dynamic-list">
-              <div v-for="(env, index) in form.envs" :key="index" class="dynamic-item">
-                <el-input
-                  v-model="env.key"
-                  :placeholder="t('container.key')"
-                  style="width: 150px"
-                />
-                <span class="separator">=</span>
-                <el-input
-                  v-model="env.value"
-                  :placeholder="t('container.value')"
-                  style="width: 200px"
-                />
-                <el-button
-                  type="danger"
-                  :icon="Delete"
-                  circle
-                  size="small"
-                  @click="removeEnv(index)"
-                />
-              </div>
-              <el-button type="primary" text @click="addEnv">
-                <el-icon><Plus /></el-icon>
-                {{ t('container.addEnv') }}
-              </el-button>
-            </div>
-          </el-form-item>
-        </el-form>
-      </div>
-
-      <div class="log-panel">
-        <div class="log-header">
-          <span>{{ t('container.output') }}</span>
-          <span class="log-status">{{ isStreaming ? t('container.building') : '-' }}</span>
-        </div>
-        <div ref="logPanelRef" class="log-content">
-          <div v-if="streamLogs.length === 0" class="log-empty">
-            {{ t('container.output') }}
-          </div>
-          <div
-            v-for="(line, index) in streamLogs"
-            :key="index"
-            :class="['log-line', line.type]"
-          >
-            {{ line.message }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <template #footer>
-      <el-button v-if="loading || isStreaming" @click="handleMinimize">{{ t('update.minimize') }}</el-button>
-      <el-button v-if="loading || isStreaming" type="danger" @click="handleCancelTask">{{ t('container.cancelTask') }}</el-button>
-      <el-button v-else @click="handleClose">{{ t('common.close') }}</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">
-        {{ t('common.confirm') }}
-      </el-button>
-    </template>
-  </el-dialog>
-
-  <transition name="fade">
-    <div v-if="minimized && hasTaskState" class="mini-create-task" @click="restoreDialog">
-      <div class="mini-header">
-        <strong>{{ t('container.create') }}</strong>
-        <span>{{ isStreaming ? t('container.building') : t('common.refresh') }}</span>
-      </div>
-      <div class="mini-body">
-        <div class="mini-log">{{ latestLogLine }}</div>
-      </div>
-      <button v-if="loading || isStreaming" class="mini-cancel" @click.stop="handleCancelTask">×</button>
-    </div>
-  </transition>
-</template>
-
 <script setup lang="ts">
 import { ref, reactive, computed, watch, nextTick } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Loader2, Plus, Trash2 } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
-import { containerApi } from '@/api/containers'
+import { useContainerCreateStore } from '@/stores/containerCreate'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const { t } = useI18n()
+const store = useContainerCreateStore()
 
 const props = defineProps<{
   visible: boolean
@@ -198,17 +35,17 @@ const emit = defineEmits<{
 
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val),
+  set: (val) => {
+    if (!val && (store.loading || store.isStreaming)) {
+      handleMinimize()
+      return
+    }
+    emit('update:visible', val)
+  },
 })
 
-const formRef = ref<FormInstance>()
-const loading = ref(false)
-const isStreaming = ref(false)
-const streamLogs = ref<Array<{ type: string; message: string }>>([])
 const logPanelRef = ref<HTMLElement | null>(null)
-const minimized = ref(false)
-const restoringFromMinimize = ref(false)
-const abortController = ref<AbortController | null>(null)
+const imageError = ref('')
 
 interface PortMapping {
   host: string
@@ -247,41 +84,44 @@ const initialForm = (): FormData => ({
 
 const form = reactive<FormData>(initialForm())
 
-const hasTaskState = computed(() => loading.value || isStreaming.value || streamLogs.value.length > 0)
-const latestLogLine = computed(() => {
-  if (streamLogs.value.length === 0) return t('container.output')
-  return streamLogs.value[streamLogs.value.length - 1]?.message || t('container.output')
-})
-
-const rules: FormRules = {
-  image: [
-    { required: true, message: () => t('container.image') + ' is required', trigger: 'blur' },
-  ],
-}
-
-// Reset form when dialog opens
-watch(() => props.visible, (val) => {
-  if (val) {
-    if (restoringFromMinimize.value) {
-      restoringFromMinimize.value = false
-      return
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      if (store.consumeRestore()) {
+        if (store.lastForm) {
+          Object.assign(form, store.lastForm)
+        }
+        imageError.value = ''
+        return
+      }
+      if (!store.loading && !store.isStreaming) {
+        store.reset()
+        Object.assign(form, initialForm())
+        imageError.value = ''
+      }
     }
-    Object.assign(form, initialForm())
-    formRef.value?.resetFields()
-    streamLogs.value = []
-    isStreaming.value = false
-    minimized.value = false
   }
-})
+)
 
-watch(streamLogs, async () => {
-  await nextTick()
-  if (logPanelRef.value) {
-    logPanelRef.value.scrollTop = logPanelRef.value.scrollHeight
+watch(
+  () => store.createdSignal,
+  () => {
+    emit('created')
   }
-}, { deep: true })
+)
 
-// Port mapping methods
+watch(
+  () => store.streamLogs,
+  async () => {
+    await nextTick()
+    if (logPanelRef.value) {
+      logPanelRef.value.scrollTop = logPanelRef.value.scrollHeight
+    }
+  },
+  { deep: true }
+)
+
 function addPort() {
   form.ports.push({ host: '', container: '' })
 }
@@ -290,7 +130,6 @@ function removePort(index: number) {
   form.ports.splice(index, 1)
 }
 
-// Volume mapping methods
 function addVolume() {
   form.volumes.push({ host: '', container: '' })
 }
@@ -299,7 +138,6 @@ function removeVolume(index: number) {
   form.volumes.splice(index, 1)
 }
 
-// Environment variable methods
 function addEnv() {
   form.envs.push({ key: '', value: '' })
 }
@@ -308,246 +146,213 @@ function removeEnv(index: number) {
   form.envs.splice(index, 1)
 }
 
-function handleBeforeClose(done: () => void) {
-  if (loading.value || isStreaming.value) {
-    handleMinimize()
-    done()
-    return
-  }
-  done()
-}
-
 function handleMinimize() {
-  minimized.value = true
-  dialogVisible.value = false
+  store.minimize()
+  emit('update:visible', false)
 }
 
 function handleCancelTask() {
-  abortController.value?.abort()
-  abortController.value = null
-  streamLogs.value.push({ type: 'error', message: '已取消创建任务' })
-  loading.value = false
-  isStreaming.value = false
-}
-
-function restoreDialog() {
-  restoringFromMinimize.value = true
-  minimized.value = false
-  dialogVisible.value = true
+  store.cancel()
 }
 
 function handleClose() {
-  if (loading.value || isStreaming.value) {
+  if (store.loading || store.isStreaming) {
     handleMinimize()
     return
   }
-  dialogVisible.value = false
+  emit('update:visible', false)
 }
 
-async function handleSubmit() {
-  if (!formRef.value) return
-
-  try {
-    await formRef.value.validate()
-  } catch {
+function handleSubmit() {
+  if (!form.image.trim()) {
+    imageError.value = `${t('container.image')} is required`
     return
   }
+  imageError.value = ''
 
-  loading.value = true
-  isStreaming.value = true
-  streamLogs.value = []
+  const ports = form.ports.filter((p) => p.host && p.container)
+  const volumes = form.volumes.filter((v) => v.host && v.container)
+  const envs = form.envs.filter((e) => e.key)
 
-  try {
-    // Filter out empty entries
-    const ports = form.ports.filter((p) => p.host && p.container)
-    const volumes = form.volumes.filter((v) => v.host && v.container)
-    const envs = form.envs.filter((e) => e.key)
-
-    abortController.value = new AbortController()
-    await containerApi.createStream({
-      image: form.image,
-      name: form.name,
-      restart: form.restart,
-      network: form.network,
-      ports,
-      volumes,
-      env: envs,
-    }, (entry) => {
-      streamLogs.value.push(entry)
-    }, abortController.value.signal)
-    ElMessage.success(t('container.createSuccess'))
-    minimized.value = false
-
-    emit('created')
-    handleClose()
-  } catch (error: any) {
-    if (error?.name === 'AbortError') {
-      // cancelled by user
-    }
-  } finally {
-    abortController.value = null
-    loading.value = false
-    isStreaming.value = false
-  }
+  store.start(form, {
+    image: form.image.trim(),
+    name: form.name.trim(),
+    restart: form.restart,
+    network: form.network.trim(),
+    ports,
+    volumes,
+    env: envs,
+  })
 }
 </script>
 
-<style scoped>
-.create-container-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 420px;
-  gap: 16px;
-  align-items: stretch;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent
+      class="sm:max-w-[1080px] max-h-[90vh] flex flex-col"
+      @interact-outside.prevent
+    >
+      <DialogHeader>
+        <DialogTitle>{{ t('container.create') }}</DialogTitle>
+      </DialogHeader>
 
-.form-panel {
-  min-width: 0;
-}
+      <div class="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_400px] gap-5 flex-1 min-h-0 overflow-y-auto pr-1">
+        <div class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="space-y-1.5">
+              <Label for="create-img">
+                {{ t('container.image') }} <span class="text-destructive">*</span>
+              </Label>
+              <Input
+                id="create-img"
+                v-model="form.image"
+                placeholder="nginx:latest"
+                @input="imageError = ''"
+              />
+              <p v-if="imageError" class="text-xs text-destructive">{{ imageError }}</p>
+            </div>
 
-.log-panel {
-  display: flex;
-  flex-direction: column;
-  min-height: 100%;
-  border: 1px solid var(--el-border-color);
-  border-radius: 6px;
-  overflow: hidden;
-  background: #111;
-}
+            <div class="space-y-1.5">
+              <Label for="create-name">{{ t('container.containerName') }}</Label>
+              <Input id="create-name" v-model="form.name" placeholder="my-container" />
+            </div>
 
-.log-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 12px;
-  background: var(--el-fill-color-light);
-  border-bottom: 1px solid var(--el-border-color);
-  font-weight: 500;
-}
+            <div class="space-y-1.5">
+              <Label>{{ t('container.restartPolicy') }}</Label>
+              <Select v-model="form.restart">
+                <SelectTrigger class="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no">{{ t('container.restartPolicies.no') }}</SelectItem>
+                  <SelectItem value="always">{{ t('container.restartPolicies.always') }}</SelectItem>
+                  <SelectItem value="on-failure">{{ t('container.restartPolicies.onFailure') }}</SelectItem>
+                  <SelectItem value="unless-stopped">{{ t('container.restartPolicies.unlessStopped') }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
-.log-status {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
+            <div class="space-y-1.5">
+              <Label for="create-network">{{ t('container.network') }}</Label>
+              <Input id="create-network" v-model="form.network" placeholder="bridge" />
+            </div>
+          </div>
 
-.log-content {
-  flex: 1;
-  min-height: 520px;
-  max-height: 520px;
-  overflow-y: auto;
-  padding: 12px;
-  background: #111;
-  color: #d4d4d4;
-  font-family: Consolas, Monaco, 'Courier New', monospace;
-  font-size: 12px;
-  line-height: 1.5;
-}
+          <!-- Ports -->
+          <div class="space-y-2">
+            <Label>{{ t('container.ports') }}</Label>
+            <div class="space-y-2">
+              <div v-for="(port, index) in form.ports" :key="index" class="flex items-center gap-2">
+                <Input v-model="port.host" :placeholder="t('container.hostPort')" class="flex-1 font-mono" />
+                <span class="text-muted-foreground font-mono">:</span>
+                <Input v-model="port.container" :placeholder="t('container.containerPort')" class="flex-1 font-mono" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-destructive shrink-0"
+                  @click="removePort(index)"
+                >
+                  <Trash2 class="size-4" />
+                </Button>
+              </div>
+              <Button type="button" variant="outline" size="sm" @click="addPort">
+                <Plus />
+                {{ t('container.addPort') }}
+              </Button>
+            </div>
+          </div>
 
-.log-empty {
-  color: #888;
-}
+          <!-- Volumes -->
+          <div class="space-y-2">
+            <Label>{{ t('container.volumes') }}</Label>
+            <div class="space-y-2">
+              <div v-for="(volume, index) in form.volumes" :key="index" class="flex items-center gap-2">
+                <Input v-model="volume.host" :placeholder="t('container.hostPath')" class="flex-1 font-mono" />
+                <span class="text-muted-foreground font-mono">:</span>
+                <Input v-model="volume.container" :placeholder="t('container.containerPath')" class="flex-1 font-mono" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-destructive shrink-0"
+                  @click="removeVolume(index)"
+                >
+                  <Trash2 class="size-4" />
+                </Button>
+              </div>
+              <Button type="button" variant="outline" size="sm" @click="addVolume">
+                <Plus />
+                {{ t('container.addVolume') }}
+              </Button>
+            </div>
+          </div>
 
-.log-line {
-  white-space: pre-wrap;
-  word-break: break-all;
-  margin-bottom: 4px;
-}
+          <!-- Env Vars -->
+          <div class="space-y-2">
+            <Label>{{ t('container.envVars') }}</Label>
+            <div class="space-y-2">
+              <div v-for="(env, index) in form.envs" :key="index" class="flex items-center gap-2">
+                <Input v-model="env.key" :placeholder="t('container.key')" class="flex-1 font-mono" />
+                <span class="text-muted-foreground font-mono">=</span>
+                <Input v-model="env.value" :placeholder="t('container.value')" class="flex-[1.3] font-mono" />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  class="text-destructive shrink-0"
+                  @click="removeEnv(index)"
+                >
+                  <Trash2 class="size-4" />
+                </Button>
+              </div>
+              <Button type="button" variant="outline" size="sm" @click="addEnv">
+                <Plus />
+                {{ t('container.addEnv') }}
+              </Button>
+            </div>
+          </div>
+        </div>
 
-.log-line.error {
-  color: #f56c6c;
-}
+        <!-- Output Panel -->
+        <div class="flex flex-col rounded-lg border overflow-hidden bg-zinc-950 min-h-[260px] lg:min-h-[480px]">
+          <div class="flex items-center justify-between px-3.5 py-2.5 bg-muted/50 border-b text-xs font-medium text-foreground">
+            <span>{{ t('container.output') }}</span>
+            <span class="text-muted-foreground">{{ store.isStreaming ? t('container.building') : '-' }}</span>
+          </div>
+          <div
+            ref="logPanelRef"
+            class="flex-1 max-h-[500px] overflow-y-auto p-3 font-mono text-xs leading-relaxed text-zinc-200 space-y-1"
+          >
+            <div v-if="store.streamLogs.length === 0" class="text-zinc-500">
+              {{ t('container.output') }}
+            </div>
+            <div
+              v-for="(line, index) in store.streamLogs"
+              :key="index"
+              class="whitespace-pre-wrap break-all"
+              :class="{
+                'text-red-400': line.type === 'error',
+                'text-emerald-400': line.type === 'success',
+              }"
+            >
+              {{ line.message }}
+            </div>
+          </div>
+        </div>
+      </div>
 
-.log-line.success {
-  color: #67c23a;
-}
-
-.dynamic-list {
-  width: 100%;
-}
-
-.dynamic-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.separator {
-  color: var(--el-text-color-secondary);
-  font-weight: bold;
-}
-
-.mini-create-task {
-  position: fixed;
-  right: 24px;
-  bottom: 96px;
-  width: 360px;
-  z-index: 2200;
-  padding: 14px 44px 14px 16px;
-  border-radius: 16px;
-  background: rgba(18, 22, 33, 0.94);
-  color: #fff;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.24);
-  cursor: pointer;
-  backdrop-filter: blur(12px);
-}
-
-.mini-cancel {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 22px;
-  height: 22px;
-  border: 0;
-  border-radius: 999px;
-  background: rgba(255,255,255,0.14);
-  color: #fff;
-  cursor: pointer;
-}
-
-.mini-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 8px;
-  padding-right: 8px;
-}
-
-.mini-body {
-  font-size: 12px;
-  color: rgba(255,255,255,0.78);
-  padding-right: 8px;
-}
-
-.mini-log {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.fade-enter-active, .fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from, .fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 1200px) {
-  .create-container-layout {
-    grid-template-columns: 1fr;
-  }
-
-  .log-content {
-    min-height: 220px;
-    max-height: 220px;
-  }
-
-  .mini-create-task {
-    right: 16px;
-    left: 16px;
-    width: auto;
-    bottom: 96px;
-  }
-}
-</style>
+      <DialogFooter class="gap-2 pt-2">
+        <template v-if="store.loading || store.isStreaming">
+          <Button variant="outline" @click="handleMinimize">{{ t('update.minimize') }}</Button>
+          <Button variant="destructive" @click="handleCancelTask">{{ t('container.cancelTask') }}</Button>
+        </template>
+        <Button v-else variant="outline" @click="handleClose">{{ t('common.close') }}</Button>
+        <Button :disabled="store.loading" @click="handleSubmit">
+          <Loader2 v-if="store.loading" class="animate-spin" />
+          {{ t('common.confirm') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

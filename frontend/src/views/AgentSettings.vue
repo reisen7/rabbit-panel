@@ -1,143 +1,55 @@
-<template>
-  <div class="agent-settings">
-    <div class="settings-grid">
-      <el-card>
-        <template #header>
-          <div class="card-header">
-            <span>{{ t('agent.settingsTitle') }}</span>
-          </div>
-        </template>
-
-        <el-form :model="form" label-position="top" v-loading="loading">
-          <el-form-item :label="t('agent.enable')">
-            <el-switch v-model="form.enabled" />
-          </el-form-item>
-
-          <el-form-item :label="t('agent.apiUrl')">
-            <el-input v-model="form.api_url" placeholder="https://api.openai.com/v1" />
-            <div class="form-tip">{{ t('agent.apiTip') }}</div>
-          </el-form-item>
-
-          <el-form-item :label="t('agent.format')">
-            <el-select v-model="form.api_format" class="full-control">
-              <el-option value="openai_chat" :label="t('agent.formatOpenAIChat')" />
-              <el-option value="openai_responses" :label="t('agent.formatOpenAIResponses')" />
-              <el-option value="anthropic" :label="t('agent.formatAnthropic')" />
-            </el-select>
-          </el-form-item>
-
-          <el-form-item :label="t('agent.apiKey')">
-            <div class="key-row">
-              <span class="key-mask">{{ displayApiKey }}</span>
-              <el-button @click="showKeyDialog = true">{{ t('agent.changeKey') }}</el-button>
-            </div>
-          </el-form-item>
-
-          <el-form-item :label="t('agent.model')">
-            <div class="model-row">
-              <el-select
-                v-model="form.model"
-                class="model-select"
-                filterable
-                allow-create
-                default-first-option
-                :placeholder="t('agent.modelPlaceholder')"
-              >
-                <el-option v-for="name in modelChoices" :key="name" :label="name" :value="name" />
-              </el-select>
-              <el-tooltip :content="t('agent.loadModels')" placement="top">
-                <el-button :loading="modelsLoading" @click="handleLoadModels">
-                  <el-icon><Refresh /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
-          </el-form-item>
-
-          <el-form-item :label="t('agent.thinkingSwitch')">
-            <el-switch v-model="form.thinking" />
-            <div class="form-tip">{{ t('agent.thinkingTip') }}</div>
-          </el-form-item>
-
-          <el-form-item :label="t('agent.thinkingEffort')">
-            <el-select v-model="form.thinking_effort" class="full-control" :disabled="!form.thinking">
-              <el-option value="low" :label="t('agent.effortLow')" />
-              <el-option value="medium" :label="t('agent.effortMedium')" />
-              <el-option value="high" :label="t('agent.effortHigh')" />
-              <el-option value="xhigh" :label="t('agent.effortXHigh')" />
-            </el-select>
-          </el-form-item>
-
-          <el-form-item>
-            <div class="action-row">
-              <el-button :loading="testing" :disabled="loading" @click="handleTest">{{ t('agent.test') }}</el-button>
-              <el-button type="primary" :disabled="testing" @click="handleSave">{{ t('agent.save') }}</el-button>
-            </div>
-          </el-form-item>
-        </el-form>
-      </el-card>
-
-      <el-card>
-        <template #header>
-          <div class="card-header">
-            <span>{{ t('agent.wechat.title') }}</span>
-          </div>
-        </template>
-
-        <el-alert class="wechat-alert" type="info" :closable="false" show-icon :title="t('agent.wechat.notice')" />
-
-        <div v-loading="wechatLoading">
-          <div v-if="wechat.linked" class="bind-list">
-            <div class="bind-row">
-              <div>
-                <div class="bind-label">{{ t('agent.wechat.boundToken') }}</div>
-                <div class="key-mask">{{ wechat.token_mask || t('agent.notSet') }}</div>
-                <div v-if="wechat.account_id" class="form-tip">{{ t('agent.wechat.account') }} {{ wechat.account_id }}</div>
-                <div v-if="wechat.saved_at" class="form-tip">{{ t('agent.wechat.savedAt') }} {{ wechat.saved_at }}</div>
-              </div>
-              <el-button type="danger" plain @click="handleUnbind">{{ t('agent.wechat.unbind') }}</el-button>
-            </div>
-            <p class="form-tip section-tip">{{ t('agent.wechat.rebindTip') }}</p>
-          </div>
-          <template v-else-if="wechatLoaded">
-            <el-alert
-              v-if="wechat.session_expired"
-              class="wechat-alert"
-              type="warning"
-              :closable="false"
-              show-icon
-              :title="t('agent.wechat.sessionExpired')"
-            />
-            <p class="form-tip section-tip">{{ t('agent.wechat.bindTip') }}</p>
-            <WeChatQRPanel :initial="wechat.qr" @linked="loadWeChat" />
-          </template>
-        </div>
-      </el-card>
-    </div>
-
-    <el-dialog v-model="showKeyDialog" :title="t('agent.changeKey')" width="460px">
-      <el-form label-width="100px">
-        <el-form-item :label="t('agent.apiKey')">
-          <el-input v-model="newApiKey" type="password" show-password placeholder="sk-..." />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="handleCancelKeyDialog">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" @click="handleConfirmKeyChange">{{ t('common.confirm') }}</el-button>
-      </template>
-    </el-dialog>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { Refresh } from '@element-plus/icons-vue'
-import { getAgentConfig, listAgentModels, saveAgentConfig, testAgentConnection, type AgentConfig } from '@/api/agent'
+import { AlertTriangle, ChevronDown, Eye, EyeOff, Info, Loader2, RefreshCw } from 'lucide-vue-next'
+import {
+  getAgentConfig,
+  listAgentModels,
+  saveAgentConfig,
+  testAgentConnection,
+  type AgentConfig,
+} from '@/api/agent'
 import { getWeChatStatus, unbindWeChat, type WeChatStatus } from '@/api/wechat'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import WeChatQRPanel from '@/components/common/WeChatQRPanel.vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Alert, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
 
 const loading = ref(false)
 const testing = ref(false)
@@ -154,6 +66,7 @@ const form = ref<AgentConfig>({
 })
 const showKeyDialog = ref(false)
 const newApiKey = ref('')
+const showNewKey = ref(false)
 
 const wechatLoading = ref(false)
 const wechatLoaded = ref(false)
@@ -217,7 +130,7 @@ const handleSave = async () => {
       api_key: '',
     })
     await loadConfig()
-    ElMessage.success(t('agent.saveSuccess'))
+    toast.success(t('agent.saveSuccess'))
   } catch (error) {
     console.error(error)
   } finally {
@@ -231,7 +144,7 @@ const handleTest = async () => {
   const model = form.value.model.trim()
   const key = newApiKey.value.trim() || form.value.api_key.trim()
   if (!url || !format || !key || !model) {
-    ElMessage.warning(t('agent.testNeed'))
+    toast.warning(t('agent.testNeed'))
     return
   }
   testing.value = true
@@ -244,9 +157,9 @@ const handleTest = async () => {
     })
     const reply = (res.data.reply || '').trim()
     if (reply) {
-      ElMessage.success(t('agent.testSuccessReply', { reply }))
+      toast.success(t('agent.testSuccessReply', { reply }))
     } else {
-      ElMessage.success(t('agent.testSuccess'))
+      toast.success(t('agent.testSuccess'))
     }
   } catch (error) {
     console.error(error)
@@ -262,7 +175,7 @@ const handleLoadModels = async () => {
   const savedKey = form.value.api_key.trim()
   const key = typedKey || savedKey
   if (!url || !format || !key) {
-    ElMessage.warning(t('agent.loadModelsNeed'))
+    toast.warning(t('agent.loadModelsNeed'))
     return
   }
   modelsLoading.value = true
@@ -275,10 +188,10 @@ const handleLoadModels = async () => {
     const models = res.data.models || []
     modelOptions.value = models
     if (models.length === 0) {
-      ElMessage.warning(t('agent.loadModelsEmpty'))
+      toast.warning(t('agent.loadModelsEmpty'))
       return
     }
-    ElMessage.success(t('agent.loadModelsSuccess'))
+    toast.success(t('agent.loadModelsSuccess'))
   } catch (error) {
     console.error(error)
   } finally {
@@ -289,13 +202,12 @@ const handleLoadModels = async () => {
 const handleCancelKeyDialog = () => {
   showKeyDialog.value = false
   newApiKey.value = ''
+  showNewKey.value = false
 }
 
 const handleConfirmKeyChange = async () => {
   const key = newApiKey.value.trim()
-  if (!key) {
-    return
-  }
+  if (!key) return
   loading.value = true
   try {
     await saveAgentConfig({
@@ -305,7 +217,8 @@ const handleConfirmKeyChange = async () => {
     await loadConfig()
     showKeyDialog.value = false
     newApiKey.value = ''
-    ElMessage.success(t('agent.saveSuccess'))
+    showNewKey.value = false
+    toast.success(t('agent.saveSuccess'))
   } catch (error) {
     console.error(error)
   } finally {
@@ -314,15 +227,19 @@ const handleConfirmKeyChange = async () => {
 }
 
 const handleUnbind = async () => {
-  try {
-    await ElMessageBox.confirm(t('agent.wechat.unbindConfirm'), t('common.confirm'))
-  } catch {
-    return
-  }
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('agent.wechat.unbindConfirm'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+
   try {
     await unbindWeChat()
     await loadWeChat()
-    ElMessage.success(t('agent.wechat.unbound'))
+    toast.success(t('agent.wechat.unbound'))
   } catch (error) {
     console.error(error)
   }
@@ -347,87 +264,214 @@ onUnmounted(() => {
 })
 </script>
 
-<style scoped>
-.agent-settings {
-  max-width: 1180px;
-  margin: 0 auto;
-}
-.settings-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-  gap: 16px;
-  align-items: start;
-}
-.form-tip {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-top: 4px;
-  line-height: 1.5;
-}
-.full-control {
-  width: 100%;
-}
-.action-row {
-  display: flex;
-  gap: 8px;
-}
-.model-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.model-select {
-  flex: 1;
-  min-width: 0;
-}
-.key-row {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.key-mask {
-  color: var(--el-text-color-regular);
-  font-family: monospace;
-  word-break: break-all;
-}
-.wechat-alert {
-  margin-bottom: 16px;
-}
-.section-tip {
-  margin: 0 0 12px;
-}
-.bind-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.bind-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 8px;
-}
-.bind-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  margin-bottom: 4px;
-}
-@media (max-width: 960px) {
-  .settings-grid {
-    grid-template-columns: 1fr;
-  }
-}
-@media (max-width: 768px) {
-  .key-row,
-  .bind-row {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-}
-</style>
+<template>
+  <TooltipProvider>
+    <div class="max-w-[1180px] mx-auto">
+      <div class="grid grid-cols-1 lg:grid-cols-[1.15fr_0.85fr] gap-5 items-start">
+        <!-- Agent Config Card -->
+        <Card class="relative">
+          <LoadingOverlay :loading="loading" />
+          <CardHeader>
+            <CardTitle class="text-base">{{ t('agent.settingsTitle') }}</CardTitle>
+          </CardHeader>
+
+          <CardContent class="space-y-5">
+            <div class="flex items-center justify-between rounded-lg border p-3.5">
+              <Label for="agent-enable">{{ t('agent.enable') }}</Label>
+              <Switch id="agent-enable" v-model="form.enabled" />
+            </div>
+
+            <div class="space-y-1.5">
+              <Label for="agent-api-url">{{ t('agent.apiUrl') }}</Label>
+              <Input
+                id="agent-api-url"
+                v-model="form.api_url"
+                placeholder="https://api.openai.com/v1"
+                class="font-mono text-xs"
+              />
+              <p class="text-xs text-muted-foreground leading-relaxed">{{ t('agent.apiTip') }}</p>
+            </div>
+
+            <div class="space-y-1.5">
+              <Label>{{ t('agent.format') }}</Label>
+              <Select v-model="form.api_format">
+                <SelectTrigger class="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="openai_chat">{{ t('agent.formatOpenAIChat') }}</SelectItem>
+                  <SelectItem value="openai_responses">{{ t('agent.formatOpenAIResponses') }}</SelectItem>
+                  <SelectItem value="anthropic">{{ t('agent.formatAnthropic') }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="space-y-1.5">
+              <Label>{{ t('agent.apiKey') }}</Label>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+                <span class="font-mono text-xs break-all text-foreground">{{ displayApiKey }}</span>
+                <Button variant="outline" size="sm" @click="showKeyDialog = true">
+                  {{ t('agent.changeKey') }}
+                </Button>
+              </div>
+            </div>
+
+            <div class="space-y-1.5">
+              <Label for="agent-model">{{ t('agent.model') }}</Label>
+              <div class="flex items-center gap-2">
+                <Input
+                  id="agent-model"
+                  v-model="form.model"
+                  :placeholder="t('agent.modelPlaceholder')"
+                  class="flex-1 font-mono text-xs"
+                />
+                <DropdownMenu v-if="modelChoices.length > 0">
+                  <DropdownMenuTrigger as-child>
+                    <Button variant="outline" size="icon" title="Select model">
+                      <ChevronDown class="size-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" class="max-h-64 overflow-y-auto">
+                    <DropdownMenuItem
+                      v-for="name in modelChoices"
+                      :key="name"
+                      class="font-mono text-xs"
+                      @click="form.model = name"
+                    >
+                      {{ name }}
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger as-child>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      :disabled="modelsLoading"
+                      @click="handleLoadModels"
+                    >
+                      <RefreshCw :class="{ 'animate-spin': modelsLoading }" class="size-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{{ t('agent.loadModels') }}</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-4 rounded-lg border p-3.5">
+              <div class="space-y-0.5">
+                <Label for="agent-thinking">{{ t('agent.thinkingSwitch') }}</Label>
+                <p class="text-xs text-muted-foreground">{{ t('agent.thinkingTip') }}</p>
+              </div>
+              <Switch id="agent-thinking" v-model="form.thinking" />
+            </div>
+
+            <div class="space-y-1.5">
+              <Label>{{ t('agent.thinkingEffort') }}</Label>
+              <Select v-model="form.thinking_effort" :disabled="!form.thinking">
+                <SelectTrigger class="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">{{ t('agent.effortLow') }}</SelectItem>
+                  <SelectItem value="medium">{{ t('agent.effortMedium') }}</SelectItem>
+                  <SelectItem value="high">{{ t('agent.effortHigh') }}</SelectItem>
+                  <SelectItem value="xhigh">{{ t('agent.effortXHigh') }}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div class="flex flex-wrap gap-2 pt-1">
+              <Button variant="outline" :disabled="loading || testing" @click="handleTest">
+                <Loader2 v-if="testing" class="animate-spin" />
+                {{ t('agent.test') }}
+              </Button>
+              <Button :disabled="testing || loading" @click="handleSave">
+                {{ t('agent.save') }}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <!-- WeChat Card -->
+        <Card>
+          <CardHeader>
+            <CardTitle class="text-base">{{ t('agent.wechat.title') }}</CardTitle>
+          </CardHeader>
+
+          <CardContent class="space-y-4">
+            <Alert variant="info">
+              <Info class="size-4" />
+              <AlertTitle>{{ t('agent.wechat.notice') }}</AlertTitle>
+            </Alert>
+
+            <div class="relative min-h-[120px]">
+              <LoadingOverlay :loading="wechatLoading" />
+
+              <div v-if="wechat.linked" class="space-y-3">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-lg border p-3.5">
+                  <div class="space-y-1">
+                    <div class="text-xs text-muted-foreground">{{ t('agent.wechat.boundToken') }}</div>
+                    <div class="font-mono text-xs break-all">{{ wechat.token_mask || t('agent.notSet') }}</div>
+                    <div v-if="wechat.account_id" class="text-xs text-muted-foreground">
+                      {{ t('agent.wechat.account') }} {{ wechat.account_id }}
+                    </div>
+                    <div v-if="wechat.saved_at" class="text-xs text-muted-foreground">
+                      {{ t('agent.wechat.savedAt') }} {{ wechat.saved_at }}
+                    </div>
+                  </div>
+                  <Button variant="outline" class="text-destructive border-destructive/40 hover:bg-destructive/10" @click="handleUnbind">
+                    {{ t('agent.wechat.unbind') }}
+                  </Button>
+                </div>
+                <p class="text-xs text-muted-foreground">{{ t('agent.wechat.rebindTip') }}</p>
+              </div>
+
+              <div v-else-if="wechatLoaded" class="space-y-3">
+                <Alert v-if="wechat.session_expired" variant="warning">
+                  <AlertTriangle class="size-4" />
+                  <AlertTitle>{{ t('agent.wechat.sessionExpired') }}</AlertTitle>
+                </Alert>
+                <p class="text-xs text-muted-foreground">{{ t('agent.wechat.bindTip') }}</p>
+                <WeChatQRPanel :initial="wechat.qr" @linked="loadWeChat" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <!-- Change API Key Dialog -->
+      <Dialog v-model:open="showKeyDialog">
+        <DialogContent class="sm:max-w-[460px]">
+          <DialogHeader>
+            <DialogTitle>{{ t('agent.changeKey') }}</DialogTitle>
+          </DialogHeader>
+          <div class="space-y-1.5 py-2">
+            <Label for="new-api-key">{{ t('agent.apiKey') }}</Label>
+            <div class="relative">
+              <Input
+                id="new-api-key"
+                v-model="newApiKey"
+                :type="showNewKey ? 'text' : 'password'"
+                placeholder="sk-..."
+                class="pr-9 font-mono"
+              />
+              <button
+                type="button"
+                class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                @click="showNewKey = !showNewKey"
+              >
+                <EyeOff v-if="showNewKey" class="size-4" />
+                <Eye v-else class="size-4" />
+              </button>
+            </div>
+          </div>
+          <DialogFooter class="gap-2">
+            <Button variant="outline" @click="handleCancelKeyDialog">{{ t('common.cancel') }}</Button>
+            <Button @click="handleConfirmKeyChange">{{ t('common.confirm') }}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  </TooltipProvider>
+</template>

@@ -1,116 +1,26 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('volumes.create')"
-    width="600px"
-    :close-on-click-modal="false"
-    @close="handleClose"
-  >
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      label-position="right"
-    >
-      <el-form-item :label="t('volumes.name')" prop="name">
-        <el-input
-          v-model="form.name"
-          :placeholder="t('volumes.namePlaceholder')"
-          clearable
-        />
-      </el-form-item>
-
-      <el-form-item :label="t('volumes.driver')" prop="driver">
-        <el-select v-model="form.driver" style="width: 100%" :placeholder="t('volumes.driverPlaceholder')">
-          <el-option
-            v-for="driver in driverOptions"
-            :key="driver.value"
-            :label="driver.label"
-            :value="driver.value"
-          />
-        </el-select>
-      </el-form-item>
-
-      <!-- Driver Options -->
-      <el-form-item :label="t('volumes.driverOpts')">
-        <div class="dynamic-list">
-          <div v-for="(opt, index) in form.driverOpts" :key="index" class="dynamic-item">
-            <el-input
-              v-model="opt.key"
-              :placeholder="t('volumes.optKey')"
-              style="width: 150px"
-            />
-            <span class="separator">=</span>
-            <el-input
-              v-model="opt.value"
-              :placeholder="t('volumes.optValue')"
-              style="width: 200px"
-            />
-            <el-button
-              type="danger"
-              :icon="Delete"
-              circle
-              size="small"
-              @click="removeDriverOpt(index)"
-            />
-          </div>
-          <el-button type="primary" text size="small" @click="addDriverOpt">
-            <el-icon><Plus /></el-icon>
-            {{ t('volumes.addDriverOpt') }}
-          </el-button>
-        </div>
-      </el-form-item>
-
-      <!-- Labels -->
-      <el-form-item :label="t('volumes.labels')">
-        <div class="dynamic-list">
-          <div v-for="(label, index) in form.labels" :key="index" class="dynamic-item">
-            <el-input
-              v-model="label.key"
-              :placeholder="t('volumes.labelKey')"
-              style="width: 150px"
-            />
-            <span class="separator">=</span>
-            <el-input
-              v-model="label.value"
-              :placeholder="t('volumes.labelValue')"
-              style="width: 200px"
-            />
-            <el-button
-              type="danger"
-              :icon="Delete"
-              circle
-              size="small"
-              @click="removeLabel(index)"
-            />
-          </div>
-          <el-button type="primary" text size="small" @click="addLabel">
-            <el-icon><Plus /></el-icon>
-            {{ t('volumes.addLabel') }}
-          </el-button>
-        </div>
-      </el-form-item>
-    </el-form>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">
-          {{ t('common.create') }}
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { ref, reactive, computed, watch } from 'vue'
+import { Loader2, Plus, Trash2 } from 'lucide-vue-next'
 import { useVolumeStore } from '@/stores/volumes'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 const props = defineProps<{
   visible: boolean
@@ -122,16 +32,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const toast = useToast()
 const volumeStore = useVolumeStore()
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
 })
 
-// Form state
-const formRef = ref<FormInstance>()
 const loading = ref(false)
 
 interface KeyValue {
@@ -139,128 +47,190 @@ interface KeyValue {
   value: string
 }
 
-const form = ref({
+const form = reactive({
   name: '',
   driver: 'local',
   driverOpts: [] as KeyValue[],
   labels: [] as KeyValue[],
 })
 
-// Driver options
+const nameError = ref('')
+const namePattern = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
+
 const driverOptions = [
   { value: 'local', label: 'local' },
 ]
 
-// Form validation rules
-const rules = computed<FormRules>(() => ({
-  name: [
-    { required: true, message: t('volumes.nameRequired'), trigger: 'blur' },
-    {
-      pattern: /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/,
-      message: 'Volume name must start with alphanumeric and contain only alphanumeric, underscore, period, or hyphen',
-      trigger: 'blur',
-    },
-  ],
-}))
-
-// Driver options management
 function addDriverOpt() {
-  form.value.driverOpts.push({ key: '', value: '' })
+  form.driverOpts.push({ key: '', value: '' })
 }
 
 function removeDriverOpt(index: number) {
-  form.value.driverOpts.splice(index, 1)
+  form.driverOpts.splice(index, 1)
 }
 
-// Labels management
 function addLabel() {
-  form.value.labels.push({ key: '', value: '' })
+  form.labels.push({ key: '', value: '' })
 }
 
 function removeLabel(index: number) {
-  form.value.labels.splice(index, 1)
+  form.labels.splice(index, 1)
 }
 
-// Reset form when dialog opens
 watch(
   () => props.visible,
   (newVal) => {
     if (newVal) {
-      form.value = {
-        name: '',
-        driver: 'local',
-        driverOpts: [],
-        labels: [],
-      }
-      formRef.value?.clearValidate()
+      form.name = ''
+      form.driver = 'local'
+      form.driverOpts = []
+      form.labels = []
+      nameError.value = ''
     }
   }
 )
 
-// Handlers
+function validate(): boolean {
+  const val = form.name.trim()
+  if (!val) {
+    nameError.value = t('volumes.nameRequired')
+    return false
+  }
+  if (!namePattern.test(val)) {
+    nameError.value = 'Volume name must start with alphanumeric and contain only alphanumeric, underscore, period, or hyphen'
+    return false
+  }
+  nameError.value = ''
+  return true
+}
+
 function handleClose() {
   dialogVisible.value = false
 }
 
 async function handleSubmit() {
-  if (!formRef.value) return
+  if (!validate()) return
 
+  loading.value = true
   try {
-    await formRef.value.validate()
-    loading.value = true
-
-    // Convert arrays to objects
     const driverOpts: Record<string, string> = {}
-    form.value.driverOpts.forEach((opt) => {
-      if (opt.key) {
-        driverOpts[opt.key] = opt.value
-      }
+    form.driverOpts.forEach((opt) => {
+      if (opt.key) driverOpts[opt.key] = opt.value
     })
 
     const labels: Record<string, string> = {}
-    form.value.labels.forEach((label) => {
-      if (label.key) {
-        labels[label.key] = label.value
-      }
+    form.labels.forEach((label) => {
+      if (label.key) labels[label.key] = label.value
     })
 
     await volumeStore.createVolume({
-      name: form.value.name,
-      driver: form.value.driver,
+      name: form.name.trim(),
+      driver: form.driver,
       driverOpts: Object.keys(driverOpts).length > 0 ? driverOpts : undefined,
       labels: Object.keys(labels).length > 0 ? labels : undefined,
     })
-    ElMessage.success(t('volumes.createSuccess'))
+    toast.success(t('volumes.createSuccess'))
     emit('created')
     handleClose()
   } catch {
-    // Validation error or API error (handled by interceptor)
+    // Error handled by interceptor
   } finally {
     loading.value = false
   }
 }
 </script>
 
-<style scoped>
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent class="sm:max-w-[580px] max-h-[88vh] flex flex-col" @interact-outside.prevent>
+      <DialogHeader>
+        <DialogTitle>{{ t('volumes.create') }}</DialogTitle>
+      </DialogHeader>
 
-.dynamic-list {
-  width: 100%;
-}
+      <form class="flex-1 overflow-y-auto space-y-4 pr-1 py-1" @submit.prevent="handleSubmit">
+        <div class="space-y-1.5">
+          <Label for="volume-name">
+            {{ t('volumes.name') }} <span class="text-destructive">*</span>
+          </Label>
+          <Input
+            id="volume-name"
+            v-model="form.name"
+            :placeholder="t('volumes.namePlaceholder')"
+            @input="nameError = ''"
+          />
+          <p v-if="nameError" class="text-xs text-destructive">{{ nameError }}</p>
+        </div>
 
-.dynamic-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
-}
+        <div class="space-y-1.5">
+          <Label>{{ t('volumes.driver') }}</Label>
+          <Select v-model="form.driver">
+            <SelectTrigger class="w-full">
+              <SelectValue :placeholder="t('volumes.driverPlaceholder')" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="driver in driverOptions" :key="driver.value" :value="driver.value">
+                {{ driver.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-.separator {
-  color: var(--el-text-color-secondary);
-  font-weight: bold;
-}
-</style>
+        <div class="space-y-2">
+          <Label>{{ t('volumes.driverOpts') }}</Label>
+          <div class="space-y-2">
+            <div v-for="(opt, index) in form.driverOpts" :key="index" class="flex items-center gap-2">
+              <Input v-model="opt.key" :placeholder="t('volumes.optKey')" class="flex-1" />
+              <span class="text-muted-foreground font-mono">=</span>
+              <Input v-model="opt.value" :placeholder="t('volumes.optValue')" class="flex-[1.3]" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                class="text-destructive shrink-0"
+                @click="removeDriverOpt(index)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </div>
+            <Button type="button" variant="outline" size="sm" @click="addDriverOpt">
+              <Plus />
+              {{ t('volumes.addDriverOpt') }}
+            </Button>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <Label>{{ t('volumes.labels') }}</Label>
+          <div class="space-y-2">
+            <div v-for="(label, index) in form.labels" :key="index" class="flex items-center gap-2">
+              <Input v-model="label.key" :placeholder="t('volumes.labelKey')" class="flex-1" />
+              <span class="text-muted-foreground font-mono">=</span>
+              <Input v-model="label.value" :placeholder="t('volumes.labelValue')" class="flex-[1.3]" />
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                class="text-destructive shrink-0"
+                @click="removeLabel(index)"
+              >
+                <Trash2 class="size-4" />
+              </Button>
+            </div>
+            <Button type="button" variant="outline" size="sm" @click="addLabel">
+              <Plus />
+              {{ t('volumes.addLabel') }}
+            </Button>
+          </div>
+        </div>
+
+        <DialogFooter class="gap-2 pt-2">
+          <Button type="button" variant="outline" @click="handleClose">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="loading">
+            <Loader2 v-if="loading" class="animate-spin" />
+            {{ t('common.create') }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+</template>

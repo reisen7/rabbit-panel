@@ -6,6 +6,8 @@ import { useUpdateStore } from '@/stores/update'
 import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import { Sonner } from '@/components/ui/sonner'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -77,6 +79,8 @@ function handlePasswordChangeSuccess() {
     :forced="authStore.needChangePassword"
     @success="handlePasswordChangeSuccess"
   />
+  <Sonner position="top-center" rich-colors />
+  <ConfirmDialog />
 </template>
 
 <style>

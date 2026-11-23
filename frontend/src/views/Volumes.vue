@@ -1,223 +1,51 @@
-<template>
-  <div class="volumes-page">
-    <!-- Header with title and actions -->
-    <div class="page-header">
-      <h2>{{ t('volumes.title') }}</h2>
-      <div class="header-actions">
-        <el-button type="primary" @click="showCreateDialog = true">
-          <el-icon><Plus /></el-icon>
-          {{ t('volumes.create') }}
-        </el-button>
-        <el-popconfirm
-          :title="t('volumes.pruneConfirm')"
-          :confirm-button-text="t('common.confirm')"
-          :cancel-button-text="t('common.cancel')"
-          @confirm="handlePrune"
-        >
-          <template #reference>
-            <el-button type="warning" :disabled="volumeStore.unusedCount === 0">
-              <el-icon><Delete /></el-icon>
-              {{ t('volumes.prune') }} ({{ volumeStore.unusedCount }})
-            </el-button>
-          </template>
-        </el-popconfirm>
-        <el-button :loading="volumeStore.loading" @click="handleRefresh">
-          <el-icon><Refresh /></el-icon>
-          {{ t('common.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <!-- Search bar -->
-    <div class="filter-bar">
-      <el-input
-        v-model="searchInput"
-        :placeholder="t('common.search')"
-        clearable
-        style="width: 300px"
-        @input="handleSearch"
-      >
-        <template #prefix>
-          <el-icon><Search /></el-icon>
-        </template>
-      </el-input>
-    </div>
-
-    <!-- Volume table -->
-    <el-table
-      v-loading="volumeStore.loading"
-      :data="volumeStore.paginatedVolumes"
-      stripe
-      style="width: 100%"
-      @sort-change="handleSortChange"
-    >
-      <el-table-column
-        prop="name"
-        :label="t('volumes.name')"
-        min-width="200"
-        sortable="custom"
-      >
-        <template #default="{ row }">
-          <span class="volume-name">{{ row.name }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="driver"
-        :label="t('volumes.driver')"
-        width="120"
-        sortable="custom"
-      >
-        <template #default="{ row }">
-          <el-tag size="small" type="primary">{{ row.driver }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="mountpoint"
-        :label="t('volumes.mountpoint')"
-        min-width="250"
-        class-name="hidden-md-and-down"
-      >
-        <template #default="{ row }">
-          <span class="mountpoint">{{ row.mountpoint }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="containers"
-        :label="t('volumes.usedBy')"
-        width="150"
-        class-name="hidden-sm-and-down"
-      >
-        <template #default="{ row }">
-          <template v-if="row.containers && row.containers.length > 0">
-            <el-tooltip
-              :content="row.containers.join(', ')"
-              placement="top"
-            >
-              <el-tag size="small" type="success">
-                {{ row.containers.length }} {{ t('volumes.containers') }}
-              </el-tag>
-            </el-tooltip>
-          </template>
-          <el-tag v-else size="small" type="info">
-            {{ t('volumes.unused') }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="created"
-        :label="t('common.createdAt')"
-        width="180"
-        sortable="custom"
-        class-name="hidden-xs-only"
-      >
-        <template #default="{ row }">
-          <span>{{ formatDate(row.created) }}</span>
-        </template>
-      </el-table-column>
-      <el-table-column
-        prop="in_use"
-        label="Usage"
-        width="140"
-        align="center"
-      >
-        <template #default="{ row }">
-          <el-tooltip v-if="row.containers && row.containers.length > 0" :content="row.containers.join(', ')" placement="top">
-            <el-tag type="success" size="small">
-              In Use
-            </el-tag>
-          </el-tooltip>
-          <el-tag v-else type="info" size="small">
-            Unused
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column
-        :label="t('common.actions')"
-        width="120"
-        fixed="right"
-      >
-        <template #default="{ row }">
-          <el-popconfirm
-            v-if="!row.containers || row.containers.length === 0"
-            :title="t('volumes.confirmRemove')"
-            :confirm-button-text="t('common.confirm')"
-            :cancel-button-text="t('common.cancel')"
-            @confirm="handleRemove(row.name)"
-          >
-            <template #reference>
-              <el-button type="danger" size="small" link>
-                <el-icon><Delete /></el-icon>
-                {{ t('common.delete') }}
-              </el-button>
-            </template>
-          </el-popconfirm>
-          <el-tooltip
-            v-else
-            :content="t('volumes.inUse')"
-            placement="top"
-          >
-            <el-button type="info" size="small" link disabled>
-              <el-icon><Delete /></el-icon>
-              {{ t('common.delete') }}
-            </el-button>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <!-- Pagination -->
-    <div class="pagination-wrapper">
-      <el-pagination
-        v-model:current-page="currentPageValue"
-        v-model:page-size="pageSizeValue"
-        :page-sizes="[10, 20, 50, 100]"
-        :total="volumeStore.totalVolumes"
-        layout="total, sizes, prev, pager, next, jumper"
-        @current-change="handlePageChange"
-        @size-change="handlePageSizeChange"
-      />
-    </div>
-
-    <!-- Create Volume Dialog -->
-    <CreateVolumeDialog
-      v-model:visible="showCreateDialog"
-      @created="handleVolumeCreated"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { Refresh, Search, Delete, Plus } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { RefreshCw, Search, Trash2, Plus } from 'lucide-vue-next'
 import { useVolumeStore, type SortField } from '@/stores/volumes'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import CreateVolumeDialog from '@/components/volumes/CreateVolumeDialog.vue'
+import DataPagination from '@/components/common/DataPagination.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import SortableTableHead from '@/components/common/SortableTableHead.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const { t } = useI18n()
 const volumeStore = useVolumeStore()
+const toast = useToast()
+const { confirm } = useConfirm()
 
-// Local state for v-model bindings
 const searchInput = ref('')
 const currentPageValue = ref(volumeStore.currentPage)
 const pageSizeValue = ref(volumeStore.pageSize)
-
-// Dialog visibility
 const showCreateDialog = ref(false)
 
-// Sync local state with store
 watch(() => volumeStore.searchQuery, (val) => { searchInput.value = val })
 watch(() => volumeStore.currentPage, (val) => { currentPageValue.value = val })
 watch(() => volumeStore.pageSize, (val) => { pageSizeValue.value = val })
 
-// Format date helper
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
   return date.toLocaleString()
 }
 
-// Format bytes helper
 function formatBytes(bytes: number): string {
   if (bytes === 0) return '0 B'
   const k = 1024
@@ -226,12 +54,11 @@ function formatBytes(bytes: number): string {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
 }
 
-// Handlers
 function handleSearch(value: string) {
   volumeStore.setSearch(value)
 }
 
-function handleSortChange({ prop, order }: { prop: string; order: string | null }) {
+function handleSortChange(prop: string, order: 'ascending' | 'descending') {
   if (prop && order) {
     const field = prop as SortField
     volumeStore.sortField = field
@@ -251,13 +78,37 @@ async function handleRefresh() {
   await volumeStore.fetchVolumes()
 }
 
+async function confirmRemove(name: string) {
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('volumes.confirmRemove'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+  await handleRemove(name)
+}
+
 async function handleRemove(name: string) {
   try {
     await volumeStore.removeVolume(name)
-    ElMessage.success(t('volumes.removeSuccess'))
+    toast.success(t('volumes.removeSuccess'))
   } catch {
     // Error is handled by request interceptor
   }
+}
+
+async function confirmPrune() {
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('volumes.pruneConfirm'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+  await handlePrune()
 }
 
 async function handlePrune() {
@@ -265,7 +116,7 @@ async function handlePrune() {
     const result = await volumeStore.pruneVolumes()
     const count = result.volumesDeleted?.length || 0
     const size = formatBytes(result.spaceReclaimed || 0)
-    ElMessage.success(t('volumes.pruneSuccess').replace('{count}', String(count)).replace('{size}', size))
+    toast.success(t('volumes.pruneSuccess').replace('{count}', String(count)).replace('{size}', size))
   } catch {
     // Error is handled by request interceptor
   }
@@ -275,109 +126,171 @@ function handleVolumeCreated() {
   volumeStore.fetchVolumes()
 }
 
-// Fetch volumes on mount
 onMounted(() => {
   volumeStore.fetchVolumes()
 })
 </script>
 
-<style scoped>
-.volumes-page {
-  padding: 20px;
-}
+<template>
+  <div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <h2 class="text-xl font-semibold tracking-tight">{{ t('volumes.title') }}</h2>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button @click="showCreateDialog = true">
+          <Plus />
+          {{ t('volumes.create') }}
+        </Button>
+        <Button
+          variant="outline"
+          class="text-amber-600 dark:text-amber-500"
+          :disabled="volumeStore.unusedCount === 0"
+          @click="confirmPrune"
+        >
+          <Trash2 />
+          {{ t('volumes.prune') }} ({{ volumeStore.unusedCount }})
+        </Button>
+        <Button variant="outline" :disabled="volumeStore.loading" @click="handleRefresh">
+          <RefreshCw :class="{ 'animate-spin': volumeStore.loading }" />
+          {{ t('common.refresh') }}
+        </Button>
+      </div>
+    </div>
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+    <!-- Search bar -->
+    <div class="flex flex-col sm:flex-row gap-3">
+      <div class="relative w-full sm:w-[300px]">
+        <Search class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+        <Input
+          v-model="searchInput"
+          :placeholder="t('common.search')"
+          class="pl-9 bg-background"
+          @input="handleSearch(searchInput)"
+        />
+      </div>
+    </div>
 
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
+    <!-- Volume table -->
+    <div class="relative rounded-lg border bg-card shadow-2xs overflow-hidden">
+      <LoadingOverlay :loading="volumeStore.loading" />
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <SortableTableHead
+              prop="name"
+              :sort-field="volumeStore.sortField"
+              :sort-order="volumeStore.sortOrder"
+              @sort="handleSortChange"
+            >
+              {{ t('volumes.name') }}
+            </SortableTableHead>
+            <SortableTableHead
+              prop="driver"
+              :sort-field="volumeStore.sortField"
+              :sort-order="volumeStore.sortOrder"
+              @sort="handleSortChange"
+            >
+              {{ t('volumes.driver') }}
+            </SortableTableHead>
+            <TableHead class="max-[1199px]:hidden">{{ t('volumes.mountpoint') }}</TableHead>
+            <TableHead class="max-[991px]:hidden">{{ t('volumes.usedBy') }}</TableHead>
+            <SortableTableHead
+              prop="created"
+              :sort-field="volumeStore.sortField"
+              :sort-order="volumeStore.sortOrder"
+              class="max-[767px]:hidden"
+              @sort="handleSortChange"
+            >
+              {{ t('common.createdAt') }}
+            </SortableTableHead>
+            <TableHead class="text-center">Usage</TableHead>
+            <TableHead class="text-right">{{ t('common.actions') }}</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          <TableRow v-if="volumeStore.paginatedVolumes.length === 0">
+            <TableCell colspan="7" class="h-24 text-center text-muted-foreground">
+              {{ t('common.none') }}
+            </TableCell>
+          </TableRow>
+          <TableRow v-for="row in volumeStore.paginatedVolumes" :key="row.name">
+            <TableCell>
+              <span class="font-mono text-xs font-medium">{{ row.name }}</span>
+            </TableCell>
+            <TableCell>
+              <Badge variant="secondary">{{ row.driver }}</Badge>
+            </TableCell>
+            <TableCell class="max-[1199px]:hidden">
+              <span class="font-mono text-xs text-muted-foreground break-all">{{ row.mountpoint }}</span>
+            </TableCell>
+            <TableCell class="max-[991px]:hidden">
+              <Tooltip v-if="row.containers && row.containers.length > 0">
+                <TooltipTrigger as-child>
+                  <span>
+                    <Badge variant="success">
+                      {{ row.containers.length }} {{ t('volumes.containers') }}
+                    </Badge>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{{ row.containers.join(', ') }}</TooltipContent>
+              </Tooltip>
+              <Badge v-else variant="info">
+                {{ t('volumes.unused') }}
+              </Badge>
+            </TableCell>
+            <TableCell class="max-[767px]:hidden text-xs text-muted-foreground tabular-nums">
+              {{ formatDate(row.created) }}
+            </TableCell>
+            <TableCell class="text-center">
+              <Tooltip v-if="row.containers && row.containers.length > 0">
+                <TooltipTrigger as-child>
+                  <span>
+                    <Badge variant="success">In Use</Badge>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{{ row.containers.join(', ') }}</TooltipContent>
+              </Tooltip>
+              <Badge v-else variant="info">Unused</Badge>
+            </TableCell>
+            <TableCell class="text-right">
+              <Button
+                v-if="!row.containers || row.containers.length === 0"
+                variant="ghost"
+                size="sm"
+                class="text-destructive hover:text-destructive"
+                @click="confirmRemove(row.name)"
+              >
+                <Trash2 />
+                {{ t('common.delete') }}
+              </Button>
+              <Tooltip v-else>
+                <TooltipTrigger as-child>
+                  <span>
+                    <Button variant="ghost" size="sm" disabled>
+                      <Trash2 />
+                      {{ t('common.delete') }}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>{{ t('volumes.inUse') }}</TooltipContent>
+              </Tooltip>
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </div>
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
+    <!-- Pagination -->
+    <div class="flex justify-center md:justify-end">
+      <DataPagination
+        v-model:current-page="currentPageValue"
+        v-model:page-size="pageSizeValue"
+        :total="volumeStore.totalVolumes"
+        @current-change="handlePageChange"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
 
-.filter-bar {
-  display: flex;
-  gap: 15px;
-  margin-bottom: 20px;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.volume-name {
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.mountpoint {
-  font-family: monospace;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-}
-
-/* Responsive styles */
-@media (max-width: 767px) {
-  .volumes-page {
-    padding: 12px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .header-actions .el-button {
-    flex: 1;
-    min-width: 80px;
-  }
-
-  .filter-bar {
-    flex-direction: column;
-  }
-
-  .filter-bar .el-input {
-    width: 100% !important;
-  }
-
-  .pagination-wrapper {
-    justify-content: center;
-  }
-}
-
-/* Hide columns on smaller screens */
-:deep(.hidden-xs-only) {
-  @media (max-width: 767px) {
-    display: none !important;
-  }
-}
-
-:deep(.hidden-sm-and-down) {
-  @media (max-width: 991px) {
-    display: none !important;
-  }
-}
-
-:deep(.hidden-md-and-down) {
-  @media (max-width: 1199px) {
-    display: none !important;
-  }
-}
-</style>
+    <CreateVolumeDialog v-model:visible="showCreateDialog" @created="handleVolumeCreated" />
+  </div>
+</template>

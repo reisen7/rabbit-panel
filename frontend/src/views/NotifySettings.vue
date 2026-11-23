@@ -1,179 +1,51 @@
-<template>
-  <div class="notify-page" v-loading="loading">
-    <!-- 顶部：标题 / 简介 / 总开关 / 教程入口 -->
-    <section class="notify-hero">
-      <div class="hero-main">
-        <div class="hero-icon">
-          <el-icon><Bell /></el-icon>
-        </div>
-        <div class="hero-copy">
-          <h1>{{ t('notify.title') }}</h1>
-          <p>{{ t('notify.pageIntro') }}</p>
-        </div>
-      </div>
-
-      <div class="hero-side">
-        <div class="hero-switch" :class="{ 'is-on': form.enabled }">
-          <span class="hero-switch-label">{{ t('notify.enabled') }}</span>
-          <el-switch v-model="form.enabled" size="large" />
-        </div>
-        <el-button class="hero-guide" text bg @click="showGuide = true">
-          <el-icon><Reading /></el-icon>
-          <span>{{ t('notify.openGuide') }}</span>
-        </el-button>
-      </div>
-    </section>
-
-    <!-- 推送凭证 -->
-    <section class="section-card">
-      <header class="section-head">
-        <span class="section-icon"><el-icon><Key /></el-icon></span>
-        <div class="section-title">
-          <h2>{{ t('notify.token') }}</h2>
-          <p>{{ t('notify.tokenTip') }}</p>
-        </div>
-      </header>
-
-      <div class="section-body">
-        <el-input
-          v-model="form.token"
-          class="token-input"
-          type="password"
-          show-password
-          size="large"
-          :placeholder="tokenPlaceholder"
-        >
-          <template #prefix>
-            <el-icon><Lock /></el-icon>
-          </template>
-        </el-input>
-
-        <div v-if="saved.has_token" class="token-chip">
-          <el-icon class="chip-icon"><CircleCheck /></el-icon>
-          <span>{{ t('notify.tokenCurrent') }}</span>
-          <code>{{ saved.token_mask }}</code>
-        </div>
-      </div>
-    </section>
-
-    <!-- 推送范围 -->
-    <section class="section-card">
-      <header class="section-head">
-        <span class="section-icon"><el-icon><Aim /></el-icon></span>
-        <div class="section-title">
-          <h2>{{ t('notify.scope') }}</h2>
-          <p>{{ t('notify.containersTip') }}</p>
-        </div>
-      </header>
-
-      <div class="section-body">
-        <el-radio-group v-model="form.all_containers" class="scope-group">
-          <el-radio :value="true" class="scope-option">
-            <span class="option-title">{{ t('notify.allContainers') }}</span>
-          </el-radio>
-          <el-radio :value="false" class="scope-option">
-            <span class="option-title">{{ t('notify.selectedContainers') }}</span>
-          </el-radio>
-        </el-radio-group>
-
-        <el-collapse-transition>
-          <div v-if="!form.all_containers" class="scope-detail">
-            <el-select
-              v-model="form.containers"
-              class="full"
-              multiple
-              filterable
-              allow-create
-              default-first-option
-              :placeholder="t('notify.containersPlaceholder')"
-            >
-              <el-option v-for="name in containerOptions" :key="name" :label="name" :value="name" />
-            </el-select>
-          </div>
-        </el-collapse-transition>
-      </div>
-    </section>
-
-    <!-- 推送规则 -->
-    <section class="section-card">
-      <header class="section-head">
-        <span class="section-icon"><el-icon><Filter /></el-icon></span>
-        <div class="section-title">
-          <h2>{{ t('notify.rules') }}</h2>
-          <p>{{ t('notify.rulesTip') }}</p>
-        </div>
-      </header>
-
-      <div class="section-body">
-        <div class="rule-grid">
-          <el-checkbox v-model="form.exit_nonzero" class="rule-tile">
-            {{ t('notify.ruleExit') }}
-          </el-checkbox>
-          <el-checkbox v-model="form.unhealthy" class="rule-tile">
-            {{ t('notify.ruleUnhealthy') }}
-          </el-checkbox>
-          <el-checkbox v-model="form.restart_storm" class="rule-tile">
-            {{ t('notify.ruleRestart') }}
-          </el-checkbox>
-          <el-checkbox v-model="form.recovery" class="rule-tile">
-            {{ t('notify.ruleRecovery') }}
-          </el-checkbox>
-        </div>
-      </div>
-    </section>
-
-    <!-- 冷却时间 -->
-    <section class="section-card">
-      <header class="section-head">
-        <span class="section-icon"><el-icon><Timer /></el-icon></span>
-        <div class="section-title">
-          <h2>{{ t('notify.cooldown') }}</h2>
-          <p>{{ t('notify.cooldownTip') }}</p>
-        </div>
-      </header>
-
-      <div class="section-body">
-        <el-input-number v-model="form.cooldown_minutes" :min="1" :max="1440" size="large" />
-      </div>
-    </section>
-
-    <!-- 底部操作条 -->
-    <div class="notify-actions">
-      <el-button :loading="testing" :disabled="loading" @click="handleTest">
-        <el-icon><Promotion /></el-icon>
-        <span>{{ t('notify.test') }}</span>
-      </el-button>
-      <el-button type="primary" :loading="saving" :disabled="testing" @click="handleSave">
-        {{ t('common.save') }}
-      </el-button>
-    </div>
-
-    <ShowdocGuideDialog v-model="showGuide" />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Aim, Bell, CircleCheck, Filter, Key, Lock, Promotion, Reading, Timer } from '@element-plus/icons-vue'
+import {
+  Bell,
+  BookOpen,
+  CheckCircle2,
+  Clock,
+  Crosshair,
+  Eye,
+  EyeOff,
+  Filter,
+  KeyRound,
+  Loader2,
+  Lock,
+  Plus,
+  Send,
+  X,
+} from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
 import { containerApi } from '@/api/containers'
 import { getNotifySettings, saveNotifySettings, testNotify, type NotifySettings } from '@/api/notify'
 import ShowdocGuideDialog from '@/components/notify/ShowdocGuideDialog.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
 
 const { t } = useI18n()
+const toast = useToast()
 
 const loading = ref(false)
 const saving = ref(false)
 const testing = ref(false)
 const showGuide = ref(false)
+const showToken = ref(false)
+const customContainerInput = ref('')
 const containerNames = ref<string[]>([])
 const saved = ref<NotifySettings>(emptySettings())
 const form = ref<NotifySettings>(emptySettings())
 
-const tokenPlaceholder = computed(() => (
+const tokenPlaceholder = computed(() =>
   saved.value.has_token ? t('notify.tokenKeep') : t('notify.tokenPlaceholder')
-))
+)
 
 const containerOptions = computed(() => {
   const names = [...containerNames.value]
@@ -204,10 +76,28 @@ function errorText(error: unknown, fallback: string) {
   return data || fallback
 }
 
+function toggleContainer(name: string) {
+  const idx = form.value.containers.indexOf(name)
+  if (idx >= 0) {
+    form.value.containers.splice(idx, 1)
+  } else {
+    form.value.containers.push(name)
+  }
+}
+
+function addCustomContainer() {
+  const name = customContainerInput.value.trim()
+  if (!name) return
+  if (!form.value.containers.includes(name)) {
+    form.value.containers.push(name)
+  }
+  customContainerInput.value = ''
+}
+
 async function loadContainers() {
   try {
     const list = await containerApi.list()
-    containerNames.value = list.map(item => item.name).filter(Boolean)
+    containerNames.value = list.map((item) => item.name).filter(Boolean)
   } catch {
     containerNames.value = []
   }
@@ -218,9 +108,9 @@ async function loadSettings() {
   try {
     const { data } = await getNotifySettings()
     saved.value = { ...emptySettings(), ...data, token: '', containers: data.containers || [] }
-    form.value = { ...saved.value, token: '' }
+    form.value = { ...saved.value, token: '', containers: [...(saved.value.containers || [])] }
   } catch (error) {
-    ElMessage.error(errorText(error, t('notify.loadFailed')))
+    toast.error(errorText(error, t('notify.loadFailed')))
   } finally {
     loading.value = false
   }
@@ -231,10 +121,10 @@ async function handleSave() {
   try {
     const { data } = await saveNotifySettings({ ...form.value, containers: form.value.containers || [] })
     saved.value = { ...emptySettings(), ...data, token: '', containers: data.containers || [] }
-    form.value = { ...saved.value, token: '' }
-    ElMessage.success(t('notify.saved'))
+    form.value = { ...saved.value, token: '', containers: [...(saved.value.containers || [])] }
+    toast.success(t('notify.saved'))
   } catch (error) {
-    ElMessage.error(errorText(error, t('notify.saveFailed')))
+    toast.error(errorText(error, t('notify.saveFailed')))
   } finally {
     saving.value = false
   }
@@ -244,9 +134,9 @@ async function handleTest() {
   testing.value = true
   try {
     await testNotify(form.value.token || '')
-    ElMessage.success(t('notify.testSent'))
+    toast.success(t('notify.testSent'))
   } catch (error) {
-    ElMessage.error(errorText(error, t('notify.testFailed')))
+    toast.error(errorText(error, t('notify.testFailed')))
   } finally {
     testing.value = false
   }
@@ -258,363 +148,248 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.notify-page {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 2px 2px 8px;
-}
+<template>
+  <div class="relative max-w-[920px] mx-auto space-y-5">
+    <LoadingOverlay :loading="loading" />
 
-/* ---------- 顶部 ---------- */
-.notify-hero {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 18px 24px;
-  padding: 20px 22px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  overflow: hidden;
-  background:
-    radial-gradient(110% 150% at 0% 0%, var(--el-color-primary-light-8) 0%, transparent 58%),
-    var(--el-bg-color);
-}
+    <!-- Hero -->
+    <Card>
+      <CardContent class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="flex items-start gap-3.5">
+          <div class="size-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+            <Bell class="size-5" />
+          </div>
+          <div class="space-y-1">
+            <h1 class="text-lg font-semibold tracking-tight">{{ t('notify.title') }}</h1>
+            <p class="text-xs text-muted-foreground leading-relaxed">{{ t('notify.pageIntro') }}</p>
+          </div>
+        </div>
 
-.notify-hero::after {
-  content: '';
-  position: absolute;
-  top: -60px;
-  right: -40px;
-  width: 180px;
-  height: 180px;
-  border-radius: 50%;
-  background: var(--el-color-primary-light-8);
-  opacity: 0.45;
-  filter: blur(28px);
-  pointer-events: none;
-}
+        <div class="flex flex-wrap items-center gap-3 shrink-0">
+          <div class="flex items-center gap-2.5 rounded-lg border px-3 py-1.5 bg-muted/30">
+            <Label for="notify-enabled" class="text-xs font-medium cursor-pointer">{{ t('notify.enabled') }}</Label>
+            <Switch id="notify-enabled" v-model="form.enabled" />
+          </div>
+          <Button variant="outline" size="sm" @click="showGuide = true">
+            <BookOpen />
+            {{ t('notify.openGuide') }}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
 
-.hero-main {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  position: relative;
-  z-index: 1;
-  min-width: 0;
-}
+    <!-- Token -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-start gap-3">
+          <div class="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+            <KeyRound class="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle class="text-base">{{ t('notify.token') }}</CardTitle>
+            <CardDescription class="mt-1">{{ t('notify.tokenTip') }}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-3">
+        <div class="relative max-w-xl">
+          <Lock class="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground pointer-events-none" />
+          <Input
+            v-model="form.token"
+            :type="showToken ? 'text' : 'password'"
+            :placeholder="tokenPlaceholder"
+            class="pl-9 pr-9 font-mono"
+          />
+          <button
+            type="button"
+            class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            @click="showToken = !showToken"
+          >
+            <EyeOff v-if="showToken" class="size-4" />
+            <Eye v-else class="size-4" />
+          </button>
+        </div>
 
-.hero-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  font-size: 20px;
-  color: var(--el-color-primary);
-  background: var(--el-bg-color);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary-light-7);
-}
+        <div v-if="saved.has_token" class="inline-flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-xs">
+          <CheckCircle2 class="size-3.5 text-emerald-600 dark:text-emerald-400" />
+          <span class="text-muted-foreground">{{ t('notify.tokenCurrent') }}</span>
+          <code class="font-mono font-semibold">{{ saved.token_mask }}</code>
+        </div>
+      </CardContent>
+    </Card>
 
-.hero-copy {
-  min-width: 0;
-}
+    <!-- Scope -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-start gap-3">
+          <div class="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+            <Crosshair class="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle class="text-base">{{ t('notify.scope') }}</CardTitle>
+            <CardDescription class="mt-1">{{ t('notify.containersTip') }}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            type="button"
+            class="flex items-center gap-2.5 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-colors cursor-pointer"
+            :class="form.all_containers
+              ? 'border-primary bg-primary/5 text-foreground'
+              : 'hover:bg-muted/50 text-muted-foreground'"
+            @click="form.all_containers = true"
+          >
+            <span
+              class="size-4 rounded-full border flex items-center justify-center shrink-0"
+              :class="form.all_containers ? 'border-primary' : 'border-muted-foreground/40'"
+            >
+              <span v-if="form.all_containers" class="size-2 rounded-full bg-primary" />
+            </span>
+            <span>{{ t('notify.allContainers') }}</span>
+          </button>
 
-.hero-copy h1 {
-  margin: 0;
-  font-size: 17px;
-  font-weight: 600;
-  line-height: 1.45;
-  letter-spacing: 0.2px;
-  color: var(--el-text-color-primary);
-}
+          <button
+            type="button"
+            class="flex items-center gap-2.5 rounded-lg border px-4 py-3 text-left text-sm font-medium transition-colors cursor-pointer"
+            :class="!form.all_containers
+              ? 'border-primary bg-primary/5 text-foreground'
+              : 'hover:bg-muted/50 text-muted-foreground'"
+            @click="form.all_containers = false"
+          >
+            <span
+              class="size-4 rounded-full border flex items-center justify-center shrink-0"
+              :class="!form.all_containers ? 'border-primary' : 'border-muted-foreground/40'"
+            >
+              <span v-if="!form.all_containers" class="size-2 rounded-full bg-primary" />
+            </span>
+            <span>{{ t('notify.selectedContainers') }}</span>
+          </button>
+        </div>
 
-.hero-copy p {
-  margin: 5px 0 0;
-  max-width: 58ch;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--el-text-color-regular);
-}
+        <div v-if="!form.all_containers" class="space-y-3 rounded-lg border bg-muted/20 p-3.5">
+          <div v-if="form.containers.length > 0" class="flex flex-wrap gap-1.5">
+            <Badge
+              v-for="name in form.containers"
+              :key="name"
+              variant="secondary"
+              class="gap-1 font-mono"
+            >
+              {{ name }}
+              <button type="button" class="hover:text-destructive" @click="toggleContainer(name)">
+                <X class="size-3" />
+              </button>
+            </Badge>
+          </div>
 
-.hero-side {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  position: relative;
-  z-index: 1;
-}
+          <div class="flex gap-2">
+            <Input
+              v-model="customContainerInput"
+              :placeholder="t('notify.containersPlaceholder')"
+              class="h-8 text-xs font-mono bg-background"
+              @keyup.enter.prevent="addCustomContainer"
+            />
+            <Button type="button" variant="outline" size="sm" @click="addCustomContainer">
+              <Plus />
+              {{ t('common.create') }}
+            </Button>
+          </div>
 
-.hero-switch {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 14px 6px 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 999px;
-  background: var(--el-bg-color);
-  transition: border-color 0.2s, background-color 0.2s;
-}
+          <div v-if="containerOptions.length > 0" class="flex flex-wrap gap-2 pt-1">
+            <button
+              v-for="name in containerOptions"
+              :key="name"
+              type="button"
+              class="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-mono transition-colors cursor-pointer"
+              :class="form.containers.includes(name)
+                ? 'bg-primary text-primary-foreground border-primary'
+                : 'bg-background hover:bg-muted'"
+              @click="toggleContainer(name)"
+            >
+              {{ name }}
+            </button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
 
-.hero-switch.is-on {
-  border-color: var(--el-color-primary-light-5);
-  background: var(--el-color-primary-light-9);
-}
+    <!-- Rules -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-start gap-3">
+          <div class="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+            <Filter class="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle class="text-base">{{ t('notify.rules') }}</CardTitle>
+            <CardDescription class="mt-1">{{ t('notify.rulesTip') }}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <label class="flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40 transition-colors">
+            <Checkbox v-model="form.exit_nonzero" />
+            <span class="text-sm">{{ t('notify.ruleExit') }}</span>
+          </label>
+          <label class="flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40 transition-colors">
+            <Checkbox v-model="form.unhealthy" />
+            <span class="text-sm">{{ t('notify.ruleUnhealthy') }}</span>
+          </label>
+          <label class="flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40 transition-colors">
+            <Checkbox v-model="form.restart_storm" />
+            <span class="text-sm">{{ t('notify.ruleRestart') }}</span>
+          </label>
+          <label class="flex items-center gap-2.5 rounded-lg border p-3 cursor-pointer hover:bg-muted/40 transition-colors">
+            <Checkbox v-model="form.recovery" />
+            <span class="text-sm">{{ t('notify.ruleRecovery') }}</span>
+          </label>
+        </div>
+      </CardContent>
+    </Card>
 
-.hero-switch-label {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--el-text-color-regular);
-  white-space: nowrap;
-}
+    <!-- Cooldown -->
+    <Card>
+      <CardHeader>
+        <div class="flex items-start gap-3">
+          <div class="size-8 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5">
+            <Clock class="size-4 text-muted-foreground" />
+          </div>
+          <div>
+            <CardTitle class="text-base">{{ t('notify.cooldown') }}</CardTitle>
+            <CardDescription class="mt-1">{{ t('notify.cooldownTip') }}</CardDescription>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div class="flex items-center gap-2.5">
+          <Input
+            type="number"
+            min="1"
+            max="1440"
+            :model-value="form.cooldown_minutes"
+            class="w-32 font-mono tabular-nums"
+            @update:model-value="(v) => form.cooldown_minutes = Math.min(1440, Math.max(1, Number(v) || 1))"
+          />
+          <span class="text-xs text-muted-foreground">min (1 - 1440)</span>
+        </div>
+      </CardContent>
+    </Card>
 
-.hero-switch.is-on .hero-switch-label {
-  color: var(--el-color-primary);
-}
+    <!-- Actions -->
+    <div class="flex flex-wrap justify-end gap-3 pt-1">
+      <Button variant="outline" :disabled="loading || testing" @click="handleTest">
+        <Loader2 v-if="testing" class="animate-spin" />
+        <Send v-else />
+        {{ t('notify.test') }}
+      </Button>
+      <Button :disabled="testing || saving" @click="handleSave">
+        <Loader2 v-if="saving" class="animate-spin" />
+        {{ t('common.save') }}
+      </Button>
+    </div>
 
-.hero-guide {
-  gap: 6px;
-}
-
-/* ---------- 分区卡片 ---------- */
-.section-card {
-  padding: 18px 20px 20px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 14px;
-  background: var(--el-bg-color);
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-
-.section-card:hover {
-  border-color: var(--el-border-color-light);
-  box-shadow: 0 2px 12px -6px var(--el-color-info-light-5);
-}
-
-.section-head {
-  display: flex;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-
-.section-icon {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  font-size: 15px;
-  color: var(--el-color-primary);
-  background: var(--el-fill-color-light);
-}
-
-.section-title {
-  min-width: 0;
-}
-
-.section-title h2 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 1.5;
-  color: var(--el-text-color-primary);
-}
-
-.section-title p {
-  margin: 3px 0 0;
-  font-size: 12px;
-  line-height: 1.65;
-  color: var(--el-text-color-secondary);
-}
-
-.section-body {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-/* ---------- Token ---------- */
-.token-input {
-  max-width: 520px;
-}
-
-.token-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  align-self: flex-start;
-  max-width: 100%;
-  padding: 5px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  color: var(--el-color-success);
-  background: var(--el-color-success-light-9);
-  border: 1px solid var(--el-color-success-light-7);
-}
-
-.chip-icon {
-  font-size: 13px;
-}
-
-.token-chip code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  font-size: 11.5px;
-  letter-spacing: 0.3px;
-  color: var(--el-text-color-regular);
-  overflow-wrap: anywhere;
-}
-
-/* ---------- 范围 ---------- */
-.scope-group {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-  width: 100%;
-}
-
-.scope-option {
-  display: flex;
-  align-items: center;
-  height: auto;
-  margin: 0;
-  padding: 13px 15px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.scope-option:hover {
-  border-color: var(--el-color-primary-light-5);
-}
-
-.scope-option.is-checked {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.scope-option :deep(.el-radio__label) {
-  padding-left: 8px;
-}
-
-.option-title {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--el-text-color-regular);
-}
-
-.scope-option.is-checked .option-title {
-  color: var(--el-color-primary);
-}
-
-.scope-detail {
-  max-width: 520px;
-}
-
-.full {
-  width: 100%;
-}
-
-/* ---------- 规则 ---------- */
-.rule-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  width: 100%;
-}
-
-.rule-tile {
-  display: flex;
-  align-items: center;
-  height: auto;
-  margin: 0;
-  padding: 12px 14px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 10px;
-  background: var(--el-fill-color-blank);
-  transition: border-color 0.2s, background-color 0.2s;
-}
-
-.rule-tile:hover {
-  border-color: var(--el-color-primary-light-5);
-}
-
-.rule-tile.is-checked {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-}
-
-.rule-tile :deep(.el-checkbox__label) {
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--el-text-color-regular);
-  white-space: normal;
-}
-
-.rule-tile.is-checked :deep(.el-checkbox__label) {
-  color: var(--el-color-primary);
-}
-
-/* ---------- 操作条 ---------- */
-.notify-actions {
-  position: sticky;
-  bottom: 12px;
-  z-index: 5;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 2px;
-  padding: 12px 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
-  background: var(--el-bg-color);
-  background: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 6px 20px -12px var(--el-color-info);
-}
-
-/* ---------- 响应式 ---------- */
-@media (max-width: 768px) {
-  .notify-hero {
-    padding: 18px;
-  }
-
-  .notify-hero::after {
-    display: none;
-  }
-
-  .hero-side {
-    width: 100%;
-  }
-
-  .hero-switch {
-    flex: 1 1 auto;
-    justify-content: space-between;
-  }
-
-  .section-card {
-    padding: 16px;
-  }
-
-  .scope-group,
-  .rule-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .token-input,
-  .scope-detail {
-    max-width: none;
-  }
-
-  .notify-actions {
-    bottom: 8px;
-  }
-}
-</style>
+    <ShowdocGuideDialog v-model="showGuide" />
+  </div>
+</template>

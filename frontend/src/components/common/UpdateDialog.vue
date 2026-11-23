@@ -1,98 +1,23 @@
-<template>
-  <div>
-    <el-dialog v-model="visible" :title="t('update.title')" width="760px" top="8vh">
-      <div v-loading="updateStore.loading" class="update-dialog">
-        <template v-if="updateStore.info">
-          <div class="summary-grid">
-            <div class="summary-item"><span class="label">{{ t('update.currentVersion') }}</span><strong>{{ updateStore.info.current_version || 'dev' }}</strong></div>
-            <div class="summary-item"><span class="label">{{ t('update.currentCommit') }}</span><strong>{{ updateStore.info.current_commit || '-' }}</strong></div>
-            <div class="summary-item"><span class="label">{{ t('update.currentBuildTime') }}</span><strong>{{ formatTime(updateStore.info.current_build_time) }}</strong></div>
-            <div class="summary-item"><span class="label">{{ t('update.latestVersion') }}</span><strong>{{ updateStore.info.latest_version || '-' }}</strong></div>
-            <div class="summary-item"><span class="label">{{ t('update.deployMode') }}</span><strong>{{ deployModeLabel }}</strong></div>
-            <div v-if="updateStore.info.deploy_mode === 'docker'" class="summary-item"><span class="label">{{ t('update.imageInfo') }}</span><strong>{{ updateStore.info.image }}:{{ updateStore.info.image_tag }}</strong></div>
-          </div>
-
-          <el-alert :type="updateStore.info.has_update ? 'warning' : 'info'" :closable="false" show-icon>
-            <template #title>{{ updateStore.info.message }}</template>
-            <div>{{ deployDescription }}</div>
-          </el-alert>
-
-          <el-alert v-if="updateStore.info.ignored" type="info" :closable="false" show-icon>
-            <template #title>{{ t('update.ignoredNotice') }}</template>
-          </el-alert>
-
-          <div v-if="updateStore.taskStatus && (updateStore.taskStatus.status || updateStore.taskStatus.log_lines.length)" class="task-panel">
-            <div class="task-header">
-              <strong>{{ t('update.updateProgress') }}</strong>
-              <div class="task-actions">
-                <el-button :disabled="!updateStore.info?.ignored" text size="small" @click="handleClearIgnore">{{ t('update.clearIgnore') }}</el-button>
-                <el-button :disabled="!updateStore.info?.last_update_status" text size="small" @click="handleClearState">{{ t('update.clearState') }}</el-button>
-                <el-button text size="small" @click="minimize">{{ t('update.minimize') }}</el-button>
-                <el-button text size="small" @click="updateStore.fetchTaskStatus()">{{ t('common.refresh') }}</el-button>
-              </div>
-            </div>
-            <el-progress :percentage="displayProgress" :status="progressStatus" :indeterminate="updateStore.taskStatus.status === 'running' && !updateStore.taskStatus.progress_known" :duration="3" />
-            <div class="meta">
-              <span>{{ t('update.currentStage') }}: {{ updateStore.taskStatus.stage || '-' }}</span>
-              <span>{{ t('update.lastUpdateStatus') }}: {{ updateStore.taskStatus.status || '-' }}</span>
-              <span>{{ t('update.lastUpdateTime') }}: {{ formatTime(updateStore.taskStatus.last_update_time) }}</span>
-            </div>
-            <el-alert v-if="updateStore.taskStatus.status === 'downloaded'" type="success" :closable="false" show-icon>
-              <template #title>{{ t('update.downloadReady') }}</template>
-            </el-alert>
-            <el-alert v-if="updateStore.taskStatus.last_error" type="error" :closable="false" show-icon>
-              <template #title>{{ updateStore.taskStatus.last_error }}</template>
-            </el-alert>
-          </div>
-
-          <div class="meta">
-            <span>{{ t('update.lastCheckTime') }}: {{ formatTime(updateStore.info.last_check_time) }}</span>
-            <span>{{ t('update.lastUpdateTime') }}: {{ formatTime(updateStore.info.last_update_time) }}</span>
-            <span>{{ t('update.lastUpdateStatus') }}: {{ updateStore.info.last_update_status || '-' }}</span>
-          </div>
-
-          <el-alert v-if="updateStore.info.last_update_error" type="error" :closable="false" show-icon>
-            <template #title>{{ updateStore.info.last_update_error }}</template>
-          </el-alert>
-        </template>
-      </div>
-
-      <template #footer>
-        <div class="footer-actions">
-          <el-button @click="updateStore.fetchUpdateInfo()">{{ t('update.checkNow') }}</el-button>
-          <el-button type="primary" :disabled="!updateStore.info?.has_update || !updateStore.info?.can_update || updateStore.taskStatus?.status === 'running' || updateStore.taskStatus?.status === 'downloaded' || updateStore.taskStatus?.status === 'applying'" :loading="updateStore.running" @click="handleRunUpdate">
-            {{ t('update.downloadNow') }}
-          </el-button>
-          <el-button type="warning" :disabled="updateStore.taskStatus?.status !== 'downloaded'" :loading="updateStore.running" @click="handleApplyUpdate">
-            {{ t('update.applyNow') }}
-          </el-button>
-          <el-button @click="handleRemindLater">{{ t('update.remindLater') }}</el-button>
-          <el-button :disabled="!updateStore.info?.latest_version" @click="handleIgnore">{{ t('update.ignoreVersion') }}</el-button>
-          <el-button v-if="updateStore.info?.release_url" @click="openRelease">{{ t('update.viewRelease') }}</el-button>
-        </div>
-      </template>
-    </el-dialog>
-
-    <transition name="fade">
-      <div v-if="updateStore.minimized && updateStore.taskStatus && updateStore.taskStatus.status === 'running' && updateStore.taskStatus.stage === 'downloading'" class="mini-progress" @click="restore">
-        <div class="mini-header">
-          <strong>{{ t('update.updatingNow') }}</strong>
-          <span>{{ updateStore.taskStatus.progress_known ? `${updateStore.taskStatus.progress}%` : '...' }}</span>
-        </div>
-        <el-progress :percentage="displayProgress" :show-text="false" :indeterminate="updateStore.taskStatus.status === 'running' && !updateStore.taskStatus.progress_known" :duration="3" />
-        <div class="mini-stage">{{ updateStore.taskStatus.stage }}</div>
-      </div>
-    </transition>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { AlertCircle, AlertTriangle, CheckCircle2, Info, Loader2 } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
 import { useUpdateStore } from '@/stores/update'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Progress } from '@/components/ui/progress'
 
 const { t } = useI18n()
+const toast = useToast()
 const updateStore = useUpdateStore()
 
 const props = defineProps<{ modelValue: boolean }>()
@@ -119,10 +44,13 @@ const deployDescription = computed(() => {
   return t('update.unknownDescription')
 })
 
-const progressStatus = computed(() => {
-  if (updateStore.taskStatus?.status === 'failed') return 'exception'
-  if (updateStore.taskStatus?.status === 'success') return 'success'
-  return undefined
+const progressIndicatorClass = computed(() => {
+  if (updateStore.taskStatus?.status === 'failed') return 'bg-destructive'
+  if (updateStore.taskStatus?.status === 'success') return 'bg-emerald-500'
+  if (updateStore.taskStatus?.status === 'running' && !updateStore.taskStatus.progress_known) {
+    return 'animate-pulse'
+  }
+  return ''
 })
 
 const displayProgress = computed(() => {
@@ -140,7 +68,7 @@ function formatTime(value?: string): string {
 async function handleRunUpdate() {
   try {
     const message = await updateStore.runUpdate()
-    ElMessage.success(message)
+    toast.success(message)
   } catch {
     // handled by interceptor
   }
@@ -149,7 +77,7 @@ async function handleRunUpdate() {
 async function handleApplyUpdate() {
   try {
     const message = await updateStore.applyUpdate()
-    ElMessage.success(message)
+    toast.success(message)
   } catch {
     // handled by interceptor
   }
@@ -157,17 +85,17 @@ async function handleApplyUpdate() {
 
 async function handleIgnore() {
   await updateStore.ignoreVersion()
-  ElMessage.success(t('update.ignoreSuccess'))
+  toast.success(t('update.ignoreSuccess'))
 }
 
 async function handleClearIgnore() {
   await updateStore.clearIgnoredVersion()
-  ElMessage.success(t('update.clearIgnoreSuccess'))
+  toast.success(t('update.clearIgnoreSuccess'))
 }
 
 async function handleClearState() {
   await updateStore.clearUpdateState()
-  ElMessage.success(t('update.clearStateSuccess'))
+  toast.success(t('update.clearStateSuccess'))
 }
 
 function handleRemindLater() {
@@ -192,21 +120,163 @@ function restore() {
 }
 </script>
 
+<template>
+  <div>
+    <Dialog v-model:open="visible">
+      <DialogContent class="sm:max-w-[760px] max-h-[88vh] flex flex-col">
+        <DialogHeader>
+          <DialogTitle>{{ t('update.title') }}</DialogTitle>
+        </DialogHeader>
+
+        <div class="relative flex-1 overflow-y-auto space-y-4 pr-1">
+          <LoadingOverlay :loading="updateStore.loading" />
+          <template v-if="updateStore.info">
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              <div class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.currentVersion') }}</span>
+                <strong class="text-sm font-semibold tabular-nums">{{ updateStore.info.current_version || 'dev' }}</strong>
+              </div>
+              <div class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.currentCommit') }}</span>
+                <strong class="text-sm font-semibold font-mono">{{ updateStore.info.current_commit || '-' }}</strong>
+              </div>
+              <div class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.currentBuildTime') }}</span>
+                <strong class="text-sm font-semibold tabular-nums">{{ formatTime(updateStore.info.current_build_time) }}</strong>
+              </div>
+              <div class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.latestVersion') }}</span>
+                <strong class="text-sm font-semibold tabular-nums">{{ updateStore.info.latest_version || '-' }}</strong>
+              </div>
+              <div class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.deployMode') }}</span>
+                <strong class="text-sm font-semibold">{{ deployModeLabel }}</strong>
+              </div>
+              <div v-if="updateStore.info.deploy_mode === 'docker'" class="rounded-lg border bg-muted/40 p-3.5 flex flex-col gap-1">
+                <span class="text-xs text-muted-foreground">{{ t('update.imageInfo') }}</span>
+                <strong class="text-sm font-semibold font-mono break-all">{{ updateStore.info.image }}:{{ updateStore.info.image_tag }}</strong>
+              </div>
+            </div>
+
+            <Alert :variant="updateStore.info.has_update ? 'warning' : 'info'">
+              <AlertTriangle v-if="updateStore.info.has_update" class="size-4" />
+              <Info v-else class="size-4" />
+              <AlertTitle>{{ updateStore.info.message }}</AlertTitle>
+              <AlertDescription>{{ deployDescription }}</AlertDescription>
+            </Alert>
+
+            <Alert v-if="updateStore.info.ignored" variant="info">
+              <Info class="size-4" />
+              <AlertTitle>{{ t('update.ignoredNotice') }}</AlertTitle>
+            </Alert>
+
+            <div
+              v-if="updateStore.taskStatus && (updateStore.taskStatus.status || updateStore.taskStatus.log_lines.length)"
+              class="rounded-xl border bg-muted/30 p-4 space-y-3"
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <strong class="text-sm font-semibold">{{ t('update.updateProgress') }}</strong>
+                <div class="flex flex-wrap items-center gap-1">
+                  <Button variant="ghost" size="sm" :disabled="!updateStore.info?.ignored" @click="handleClearIgnore">
+                    {{ t('update.clearIgnore') }}
+                  </Button>
+                  <Button variant="ghost" size="sm" :disabled="!updateStore.info?.last_update_status" @click="handleClearState">
+                    {{ t('update.clearState') }}
+                  </Button>
+                  <Button variant="ghost" size="sm" @click="minimize">
+                    {{ t('update.minimize') }}
+                  </Button>
+                  <Button variant="ghost" size="sm" @click="updateStore.fetchTaskStatus()">
+                    {{ t('common.refresh') }}
+                  </Button>
+                </div>
+              </div>
+
+              <Progress :model-value="displayProgress" class="h-2" :indicator-class="progressIndicatorClass" />
+
+              <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span>{{ t('update.currentStage') }}: {{ updateStore.taskStatus.stage || '-' }}</span>
+                <span>{{ t('update.lastUpdateStatus') }}: {{ updateStore.taskStatus.status || '-' }}</span>
+                <span>{{ t('update.lastUpdateTime') }}: {{ formatTime(updateStore.taskStatus.last_update_time) }}</span>
+              </div>
+
+              <Alert v-if="updateStore.taskStatus.status === 'downloaded'" variant="success">
+                <CheckCircle2 class="size-4" />
+                <AlertTitle>{{ t('update.downloadReady') }}</AlertTitle>
+              </Alert>
+              <Alert v-if="updateStore.taskStatus.last_error" variant="destructive">
+                <AlertCircle class="size-4" />
+                <AlertTitle>{{ updateStore.taskStatus.last_error }}</AlertTitle>
+              </Alert>
+            </div>
+
+            <div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+              <span>{{ t('update.lastCheckTime') }}: {{ formatTime(updateStore.info.last_check_time) }}</span>
+              <span>{{ t('update.lastUpdateTime') }}: {{ formatTime(updateStore.info.last_update_time) }}</span>
+              <span>{{ t('update.lastUpdateStatus') }}: {{ updateStore.info.last_update_status || '-' }}</span>
+            </div>
+
+            <Alert v-if="updateStore.info.last_update_error" variant="destructive">
+              <AlertCircle class="size-4" />
+              <AlertTitle>{{ updateStore.info.last_update_error }}</AlertTitle>
+            </Alert>
+          </template>
+        </div>
+
+        <DialogFooter class="sm:justify-start flex-wrap gap-2 pt-2">
+          <Button variant="outline" @click="updateStore.fetchUpdateInfo({ force: true })">
+            {{ t('update.checkNow') }}
+          </Button>
+          <Button
+            :disabled="!updateStore.info?.has_update || !updateStore.info?.can_update || updateStore.taskStatus?.status === 'running' || updateStore.taskStatus?.status === 'downloaded' || updateStore.taskStatus?.status === 'applying' || updateStore.running"
+            @click="handleRunUpdate"
+          >
+            <Loader2 v-if="updateStore.running" class="animate-spin" />
+            {{ t('update.downloadNow') }}
+          </Button>
+          <Button
+            variant="secondary"
+            :disabled="updateStore.taskStatus?.status !== 'downloaded' || updateStore.running"
+            @click="handleApplyUpdate"
+          >
+            <Loader2 v-if="updateStore.running" class="animate-spin" />
+            {{ t('update.applyNow') }}
+          </Button>
+          <Button variant="outline" @click="handleRemindLater">{{ t('update.remindLater') }}</Button>
+          <Button variant="outline" :disabled="!updateStore.info?.latest_version" @click="handleIgnore">
+            {{ t('update.ignoreVersion') }}
+          </Button>
+          <Button v-if="updateStore.info?.release_url" variant="outline" @click="openRelease">
+            {{ t('update.viewRelease') }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <transition name="fade">
+      <div
+        v-if="updateStore.minimized && updateStore.taskStatus && updateStore.taskStatus.status === 'running' && updateStore.taskStatus.stage === 'downloading'"
+        class="fixed right-6 bottom-6 z-50 w-80 rounded-xl border bg-popover text-popover-foreground p-4 shadow-lg cursor-pointer"
+        @click="restore"
+      >
+        <div class="flex items-center justify-between text-sm mb-2">
+          <strong>{{ t('update.updatingNow') }}</strong>
+          <span class="tabular-nums text-muted-foreground">
+            {{ updateStore.taskStatus.progress_known ? `${updateStore.taskStatus.progress}%` : '...' }}
+          </span>
+        </div>
+        <Progress :model-value="displayProgress" class="h-1.5" :indicator-class="progressIndicatorClass" />
+        <div class="mt-2 text-xs text-muted-foreground">{{ updateStore.taskStatus.stage }}</div>
+      </div>
+    </transition>
+  </div>
+</template>
+
 <style scoped>
-.update-dialog { display: flex; flex-direction: column; gap: 16px; }
-.summary-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
-.summary-item { padding: 14px; border-radius: 10px; background: var(--el-fill-color-light); display: flex; flex-direction: column; gap: 6px; }
-.label { font-size: 12px; color: var(--el-text-color-secondary); }
-.meta { display: flex; flex-wrap: wrap; gap: 16px; color: var(--el-text-color-secondary); font-size: 13px; }
-.task-panel { display: flex; flex-direction: column; gap: 12px; padding: 16px; border-radius: 14px; background: linear-gradient(180deg, rgba(64,158,255,0.08), rgba(64,158,255,0.03)); }
-.task-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-.task-actions { display: flex; gap: 6px; }
-.footer-actions { width: 100%; display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
-.notes-card { border-radius: 12px; }
-.notes { margin: 0; white-space: pre-wrap; word-break: break-word; max-height: 240px; overflow: auto; line-height: 1.6; }
-.mini-progress { position: fixed; right: 24px; bottom: 24px; width: 320px; z-index: 2200; padding: 14px 16px; border-radius: 16px; background: rgba(18, 22, 33, 0.92); color: #fff; box-shadow: 0 16px 40px rgba(0,0,0,0.24); cursor: pointer; backdrop-filter: blur(12px); }
-.mini-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.mini-stage { margin-top: 8px; font-size: 12px; color: rgba(255,255,255,0.72); }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
 </style>

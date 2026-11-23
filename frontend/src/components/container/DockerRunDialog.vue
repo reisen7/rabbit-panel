@@ -1,102 +1,22 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('container.dockerRun')"
-    width="700px"
-    :close-on-click-modal="false"
-    @close="handleClose"
-  >
-    <div class="docker-run-dialog">
-      <!-- Command Input -->
-      <el-form label-position="top">
-        <el-form-item>
-          <el-input
-            v-model="command"
-            type="textarea"
-            :rows="4"
-            :placeholder="t('container.commandPlaceholder')"
-            :disabled="isExecuting"
-          />
-        </el-form-item>
-        <el-form-item>
-          <div class="help-text">{{ t('container.commandHelp') }}</div>
-        </el-form-item>
-      </el-form>
-
-      <!-- Parsed Preview -->
-      <el-collapse v-if="parsedCommand" v-model="activeCollapse">
-        <el-collapse-item title="Preview" name="preview">
-          <div class="parsed-preview">
-            <div v-if="parsedCommand.image" class="preview-item">
-              <span class="label">{{ t('container.image') }}:</span>
-              <span class="value">{{ parsedCommand.image }}</span>
-            </div>
-            <div v-if="parsedCommand.name" class="preview-item">
-              <span class="label">{{ t('container.containerName') }}:</span>
-              <span class="value">{{ parsedCommand.name }}</span>
-            </div>
-            <div v-if="parsedCommand.ports.length" class="preview-item">
-              <span class="label">{{ t('container.ports') }}:</span>
-              <span class="value">{{ parsedCommand.ports.map(p => `${p.host}:${p.container}`).join(', ') }}</span>
-            </div>
-            <div v-if="parsedCommand.volumes.length" class="preview-item">
-              <span class="label">{{ t('container.volumes') }}:</span>
-              <span class="value">{{ parsedCommand.volumes.map(v => `${v.host}:${v.container}`).join(', ') }}</span>
-            </div>
-            <div v-if="parsedCommand.envs.length" class="preview-item">
-              <span class="label">{{ t('container.envVars') }}:</span>
-              <span class="value">{{ parsedCommand.envs.map(e => `${e.key}=${e.value}`).join(', ') }}</span>
-            </div>
-            <div v-if="parsedCommand.restart" class="preview-item">
-              <span class="label">{{ t('container.restartPolicy') }}:</span>
-              <span class="value">{{ parsedCommand.restart }}</span>
-            </div>
-            <div v-if="parsedCommand.network" class="preview-item">
-              <span class="label">{{ t('container.network') }}:</span>
-              <span class="value">{{ parsedCommand.network }}</span>
-            </div>
-          </div>
-        </el-collapse-item>
-      </el-collapse>
-
-      <!-- Output -->
-      <div v-if="output.length > 0" class="output-section">
-        <div class="output-header">{{ t('container.output') }}</div>
-        <div ref="outputRef" class="output-content">
-          <div
-            v-for="(line, index) in output"
-            :key="index"
-            :class="['output-line', line.type]"
-          >
-            {{ line.message }}
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <template #footer>
-      <el-button @click="handleClose" :disabled="isExecuting">
-        {{ t('common.cancel') }}
-      </el-button>
-      <el-button
-        type="primary"
-        :loading="isExecuting"
-        :disabled="!command.trim()"
-        @click="handleExecute"
-      >
-        {{ t('container.execute') }}
-      </el-button>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ChevronDown, ChevronRight, Loader2 } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
 import { containerApi } from '@/api/containers'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 
 const { t } = useI18n()
+const toast = useToast()
 
 const props = defineProps<{
   visible: boolean
@@ -109,14 +29,17 @@ const emit = defineEmits<{
 
 const dialogVisible = computed({
   get: () => props.visible,
-  set: (val) => emit('update:visible', val),
+  set: (val) => {
+    if (!val && isExecuting.value) return
+    emit('update:visible', val)
+  },
 })
 
 const command = ref('')
 const isExecuting = ref(false)
 const output = ref<Array<{ type: string; message: string }>>([])
 const outputRef = ref<HTMLElement>()
-const activeCollapse = ref<string[]>([])
+const previewOpen = ref(false)
 
 interface ParsedCommand {
   image: string
@@ -128,7 +51,6 @@ interface ParsedCommand {
   network: string
 }
 
-// Parse docker run command
 const parsedCommand = computed((): ParsedCommand | null => {
   const cmd = command.value.trim()
   if (!cmd || !cmd.startsWith('docker run')) {
@@ -145,31 +67,28 @@ const parsedCommand = computed((): ParsedCommand | null => {
     network: '',
   }
 
-  // Simple parser for docker run command
   const args = parseCommandArgs(cmd)
-  
-  // Collect all non-flag arguments (potential image name)
   const nonFlagArgs: string[] = []
-  
-  let i = 2 // Skip 'docker' and 'run'
+
+  let i = 2
   while (i < args.length) {
     const arg = args[i]
     if (!arg) {
       i++
       continue
     }
-    
+
     if (arg === '-d' || arg === '--detach' || arg === '-it' || arg === '-i' || arg === '-t' || arg === '--rm') {
       i++
       continue
     }
-    
+
     if (arg === '--name' && i + 1 < args.length) {
       result.name = args[i + 1] || ''
       i += 2
       continue
     }
-    
+
     if ((arg === '-p' || arg === '--publish') && i + 1 < args.length) {
       const portMapping = args[i + 1] || ''
       const parts = portMapping.split(':')
@@ -184,7 +103,7 @@ const parsedCommand = computed((): ParsedCommand | null => {
       i += 2
       continue
     }
-    
+
     if ((arg === '-v' || arg === '--volume') && i + 1 < args.length) {
       const volumeMapping = args[i + 1] || ''
       const parts = volumeMapping.split(':')
@@ -197,7 +116,7 @@ const parsedCommand = computed((): ParsedCommand | null => {
       i += 2
       continue
     }
-    
+
     if ((arg === '-e' || arg === '--env') && i + 1 < args.length) {
       const envVar = args[i + 1] || ''
       const eqIndex = envVar.indexOf('=')
@@ -210,25 +129,24 @@ const parsedCommand = computed((): ParsedCommand | null => {
       i += 2
       continue
     }
-    
+
     if (arg === '--restart' && i + 1 < args.length) {
       result.restart = args[i + 1] || ''
       i += 2
       continue
     }
-    
+
     if ((arg === '--network' || arg === '--net') && i + 1 < args.length) {
       result.network = args[i + 1] || ''
       i += 2
       continue
     }
-    
-    // Handle flags with = syntax (e.g., --name=xxx)
+
     if (arg.startsWith('--') && arg.includes('=')) {
       const eqIndex = arg.indexOf('=')
       const flagName = arg.substring(2, eqIndex)
       const flagValue = arg.substring(eqIndex + 1)
-      
+
       if (flagName === 'name') {
         result.name = flagValue
       } else if (flagName === 'restart') {
@@ -239,34 +157,27 @@ const parsedCommand = computed((): ParsedCommand | null => {
       i++
       continue
     }
-    
-    // Skip other flags with values
+
     const nextArg = args[i + 1]
     if (arg.startsWith('-') && arg.length === 2 && i + 1 < args.length && nextArg && !nextArg.startsWith('-')) {
-      // Short flag with value (e.g., -u root)
       i += 2
       continue
     }
-    
+
     if (arg.startsWith('--') && i + 1 < args.length && nextArg && !nextArg.startsWith('-')) {
-      // Long flag with value
       i += 2
       continue
     }
-    
-    // Skip standalone flags
+
     if (arg.startsWith('-')) {
       i++
       continue
     }
-    
-    // This is a non-flag argument (could be image name or command)
+
     nonFlagArgs.push(arg)
     i++
   }
 
-  // The first non-flag argument is the image name
-  // (subsequent ones would be the command to run in the container)
   if (nonFlagArgs.length > 0) {
     result.image = nonFlagArgs[0] || ''
   }
@@ -274,12 +185,10 @@ const parsedCommand = computed((): ParsedCommand | null => {
   return result.image ? result : null
 })
 
-// Parse command line arguments respecting quotes and line continuations
 function parseCommandArgs(cmd: string): string[] {
-  // First, handle line continuations (backslash followed by newline)
-  let normalizedCmd = cmd
-    .replace(/\\\r?\n/g, ' ')  // Replace backslash + newline with space
-    .replace(/\s+/g, ' ')       // Normalize multiple spaces to single space
+  const normalizedCmd = cmd
+    .replace(/\\\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim()
 
   const args: string[] = []
@@ -316,23 +225,28 @@ function parseCommandArgs(cmd: string): string[] {
   return args
 }
 
-// Reset when dialog opens
-watch(() => props.visible, (val) => {
-  if (val) {
-    command.value = ''
-    output.value = []
-    isExecuting.value = false
-    activeCollapse.value = []
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      command.value = ''
+      output.value = []
+      isExecuting.value = false
+      previewOpen.value = false
+    }
   }
-})
+)
 
-// Auto-scroll output
-watch(output, async () => {
-  await nextTick()
-  if (outputRef.value) {
-    outputRef.value.scrollTop = outputRef.value.scrollHeight
-  }
-}, { deep: true })
+watch(
+  output,
+  async () => {
+    await nextTick()
+    if (outputRef.value) {
+      outputRef.value.scrollTop = outputRef.value.scrollHeight
+    }
+  },
+  { deep: true }
+)
 
 function handleClose() {
   if (!isExecuting.value) {
@@ -345,7 +259,7 @@ async function handleExecute() {
   if (!cmd) return
 
   if (!cmd.startsWith('docker run')) {
-    ElMessage.error('Only docker run commands are supported')
+    toast.error('Only docker run commands are supported')
     return
   }
 
@@ -366,15 +280,10 @@ async function handleExecute() {
       },
       () => {
         isExecuting.value = false
-        // Check if last message was success
         const lastOutput = output.value[output.value.length - 1]
         if (lastOutput?.type === 'success') {
-          ElMessage.success(t('container.createSuccess'))
+          toast.success(t('container.createSuccess'))
           emit('created')
-          // Close dialog after short delay
-          setTimeout(() => {
-            dialogVisible.value = false
-          }, 1000)
         }
       }
     )
@@ -384,77 +293,107 @@ async function handleExecute() {
 }
 </script>
 
-<style scoped>
-.docker-run-dialog {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent class="sm:max-w-[700px] max-h-[88vh] flex flex-col" @interact-outside.prevent>
+      <DialogHeader>
+        <DialogTitle>{{ t('container.dockerRun') }}</DialogTitle>
+      </DialogHeader>
 
-.help-text {
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-}
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1 py-1">
+        <div class="space-y-1.5">
+          <Label for="docker-run-cmd">docker run</Label>
+          <Textarea
+            id="docker-run-cmd"
+            v-model="command"
+            rows="4"
+            :placeholder="t('container.commandPlaceholder')"
+            :disabled="isExecuting"
+            class="font-mono text-xs leading-relaxed"
+          />
+          <p class="text-xs text-muted-foreground">{{ t('container.commandHelp') }}</p>
+        </div>
 
-.parsed-preview {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
+        <div v-if="parsedCommand" class="rounded-lg border overflow-hidden">
+          <button
+            type="button"
+            class="w-full flex items-center justify-between px-3.5 py-2.5 bg-muted/40 text-sm font-medium hover:bg-muted/70 transition-colors"
+            @click="previewOpen = !previewOpen"
+          >
+            <span>Preview</span>
+            <ChevronDown v-if="previewOpen" class="size-4 text-muted-foreground" />
+            <ChevronRight v-else class="size-4 text-muted-foreground" />
+          </button>
+          <div v-if="previewOpen" class="p-3.5 space-y-2 border-t text-xs">
+            <div v-if="parsedCommand.image" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.image') }}:</span>
+              <span class="font-mono break-all">{{ parsedCommand.image }}</span>
+            </div>
+            <div v-if="parsedCommand.name" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.containerName') }}:</span>
+              <span class="font-mono break-all">{{ parsedCommand.name }}</span>
+            </div>
+            <div v-if="parsedCommand.ports.length" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.ports') }}:</span>
+              <span class="font-mono break-all">
+                {{ parsedCommand.ports.map((p) => `${p.host}:${p.container}`).join(', ') }}
+              </span>
+            </div>
+            <div v-if="parsedCommand.volumes.length" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.volumes') }}:</span>
+              <span class="font-mono break-all">
+                {{ parsedCommand.volumes.map((v) => `${v.host}:${v.container}`).join(', ') }}
+              </span>
+            </div>
+            <div v-if="parsedCommand.envs.length" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.envVars') }}:</span>
+              <span class="font-mono break-all">
+                {{ parsedCommand.envs.map((e) => `${e.key}=${e.value}`).join(', ') }}
+              </span>
+            </div>
+            <div v-if="parsedCommand.restart" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.restartPolicy') }}:</span>
+              <span class="font-mono">{{ parsedCommand.restart }}</span>
+            </div>
+            <div v-if="parsedCommand.network" class="flex gap-3">
+              <span class="min-w-[100px] font-medium text-muted-foreground">{{ t('container.network') }}:</span>
+              <span class="font-mono">{{ parsedCommand.network }}</span>
+            </div>
+          </div>
+        </div>
 
-.preview-item {
-  display: flex;
-  gap: 10px;
-}
+        <div v-if="output.length > 0" class="rounded-lg border overflow-hidden">
+          <div class="px-3.5 py-2 bg-muted/40 border-b text-xs font-medium">
+            {{ t('container.output') }}
+          </div>
+          <div
+            ref="outputRef"
+            class="max-h-[220px] overflow-y-auto p-3 bg-zinc-950 text-zinc-200 font-mono text-xs leading-relaxed space-y-0.5"
+          >
+            <div
+              v-for="(line, index) in output"
+              :key="index"
+              class="whitespace-pre-wrap break-all"
+              :class="{
+                'text-red-400': line.type === 'error',
+                'text-emerald-400': line.type === 'success',
+              }"
+            >
+              {{ line.message }}
+            </div>
+          </div>
+        </div>
+      </div>
 
-.preview-item .label {
-  font-weight: 500;
-  color: var(--el-text-color-secondary);
-  min-width: 100px;
-}
-
-.preview-item .value {
-  color: var(--el-text-color-primary);
-  word-break: break-all;
-}
-
-.output-section {
-  border: 1px solid var(--el-border-color);
-  border-radius: 4px;
-  overflow: hidden;
-}
-
-.output-header {
-  background: var(--el-fill-color-light);
-  padding: 8px 12px;
-  font-weight: 500;
-  border-bottom: 1px solid var(--el-border-color);
-}
-
-.output-content {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 10px;
-  background: var(--el-bg-color);
-  font-family: monospace;
-  font-size: 12px;
-}
-
-.output-line {
-  padding: 2px 0;
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.output-line.error {
-  color: var(--el-color-danger);
-}
-
-.output-line.success {
-  color: var(--el-color-success);
-}
-
-.output-line.log {
-  color: var(--el-text-color-regular);
-}
-</style>
+      <DialogFooter class="gap-2 pt-2">
+        <Button type="button" variant="outline" :disabled="isExecuting" @click="handleClose">
+          {{ t('common.cancel') }}
+        </Button>
+        <Button :disabled="!command.trim() || isExecuting" @click="handleExecute">
+          <Loader2 v-if="isExecuting" class="animate-spin" />
+          {{ t('container.execute') }}
+        </Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

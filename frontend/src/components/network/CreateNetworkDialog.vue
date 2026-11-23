@@ -1,80 +1,27 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('network.create')"
-    width="550px"
-    :close-on-click-modal="false"
-    @close="handleClose"
-  >
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="120px"
-      label-position="right"
-    >
-      <el-form-item :label="t('network.networkName')" prop="name">
-        <el-input
-          v-model="form.name"
-          :placeholder="t('network.nameRequired')"
-          clearable
-        />
-      </el-form-item>
-
-      <el-form-item :label="t('network.networkDriver')" prop="driver">
-        <el-select v-model="form.driver" style="width: 100%">
-          <el-option
-            v-for="driver in driverOptions"
-            :key="driver.value"
-            :label="driver.label"
-            :value="driver.value"
-          />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item :label="t('network.subnet')" prop="subnet">
-        <el-input
-          v-model="form.subnet"
-          placeholder="例如: 172.20.0.0/16"
-          clearable
-        />
-        <div class="form-tip">可选，留空则由 Docker 自动分配</div>
-      </el-form-item>
-
-      <el-form-item :label="t('network.gateway')" prop="gateway">
-        <el-input
-          v-model="form.gateway"
-          placeholder="例如: 172.20.0.1"
-          clearable
-          :disabled="!form.subnet"
-        />
-        <div class="form-tip">可选，需要先设置子网</div>
-      </el-form-item>
-
-      <el-form-item :label="t('network.internal')">
-        <el-switch v-model="form.internal" />
-        <span class="switch-label">{{ form.internal ? '是' : '否' }}</span>
-        <div class="form-tip">内部网络不允许外部连接</div>
-      </el-form-item>
-    </el-form>
-
-    <template #footer>
-      <div class="dialog-footer">
-        <el-button @click="handleClose">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="loading" @click="handleSubmit">
-          {{ t('common.create') }}
-        </el-button>
-      </div>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, watch } from 'vue'
+import { Loader2 } from 'lucide-vue-next'
 import { networkApi } from '@/api/networks'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 
 const props = defineProps<{
   visible: boolean
@@ -86,18 +33,16 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const toast = useToast()
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
 })
 
-// Form state
-const formRef = ref<FormInstance>()
 const loading = ref(false)
 
-const form = ref({
+const form = reactive({
   name: '',
   driver: 'bridge',
   subnet: '',
@@ -105,7 +50,12 @@ const form = ref({
   internal: false,
 })
 
-// Driver options
+const errors = reactive({
+  name: '',
+  subnet: '',
+  gateway: '',
+})
+
 const driverOptions = computed(() => [
   { value: 'bridge', label: t('network.drivers.bridge') },
   { value: 'overlay', label: t('network.drivers.overlay') },
@@ -114,117 +64,159 @@ const driverOptions = computed(() => [
   { value: 'none', label: t('network.drivers.none') },
 ])
 
-// CIDR validation regex
 const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/
 const ipRegex = /^(\d{1,3}\.){3}\d{1,3}$/
+const nameRegex = /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/
 
-// Form validation rules
-const rules = computed<FormRules>(() => ({
-  name: [
-    { required: true, message: t('network.nameRequired'), trigger: 'blur' },
-    { 
-      pattern: /^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/, 
-      message: '网络名称必须以字母或数字开头，只能包含字母、数字、下划线、点或连字符',
-      trigger: 'blur' 
-    },
-  ],
-  driver: [
-    { required: true, message: t('network.driverRequired'), trigger: 'change' },
-  ],
-  subnet: [
-    { 
-      validator: (_rule, value, callback) => {
-        if (value && !cidrRegex.test(value)) {
-          callback(new Error('子网格式不正确，例如: 172.20.0.0/16'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    },
-  ],
-  gateway: [
-    { 
-      validator: (_rule, value, callback) => {
-        if (value && !ipRegex.test(value)) {
-          callback(new Error('网关格式不正确，例如: 172.20.0.1'))
-        } else {
-          callback()
-        }
-      },
-      trigger: 'blur'
-    },
-  ],
-}))
+function validate(): boolean {
+  const name = form.name.trim()
+  if (!name) {
+    errors.name = t('network.nameRequired')
+  } else if (!nameRegex.test(name)) {
+    errors.name = '网络名称必须以字母或数字开头，只能包含字母、数字、下划线、点或连字符'
+  } else {
+    errors.name = ''
+  }
 
-// Reset form when dialog opens
+  errors.subnet = form.subnet && !cidrRegex.test(form.subnet.trim())
+    ? '子网格式不正确，例如: 172.20.0.0/16'
+    : ''
+
+  errors.gateway = form.gateway && !ipRegex.test(form.gateway.trim())
+    ? '网关格式不正确，例如: 172.20.0.1'
+    : ''
+
+  return !errors.name && !errors.subnet && !errors.gateway
+}
+
 watch(() => props.visible, (newVal) => {
   if (newVal) {
-    form.value = {
-      name: '',
-      driver: 'bridge',
-      subnet: '',
-      gateway: '',
-      internal: false,
-    }
-    formRef.value?.clearValidate()
+    form.name = ''
+    form.driver = 'bridge'
+    form.subnet = ''
+    form.gateway = ''
+    form.internal = false
+    errors.name = ''
+    errors.subnet = ''
+    errors.gateway = ''
   }
 })
 
-// Clear gateway when subnet is cleared
-watch(() => form.value.subnet, (newVal) => {
+watch(() => form.subnet, (newVal) => {
   if (!newVal) {
-    form.value.gateway = ''
+    form.gateway = ''
+    errors.gateway = ''
   }
 })
 
-// Handlers
 function handleClose() {
   dialogVisible.value = false
 }
 
 async function handleSubmit() {
-  if (!formRef.value) return
+  if (!validate()) return
 
+  loading.value = true
   try {
-    await formRef.value.validate()
-    loading.value = true
-
     await networkApi.createFull({
-      name: form.value.name,
-      driver: form.value.driver,
-      subnet: form.value.subnet || undefined,
-      gateway: form.value.gateway || undefined,
-      internal: form.value.internal,
+      name: form.name.trim(),
+      driver: form.driver,
+      subnet: form.subnet.trim() || undefined,
+      gateway: form.gateway.trim() || undefined,
+      internal: form.internal,
     })
-    ElMessage.success(t('network.createSuccess'))
+    toast.success(t('network.createSuccess'))
     emit('created')
     handleClose()
-  } catch (error) {
-    // Validation error or API error (handled by interceptor)
+  } catch {
+    // Error handled by interceptor
   } finally {
     loading.value = false
   }
 }
 </script>
 
-<style scoped>
-.dialog-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent class="sm:max-w-[520px]" @interact-outside.prevent>
+      <DialogHeader>
+        <DialogTitle>{{ t('network.create') }}</DialogTitle>
+      </DialogHeader>
 
-.form-tip {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.4;
-  margin-top: 4px;
-}
+      <form class="space-y-4 py-1" @submit.prevent="handleSubmit">
+        <div class="space-y-1.5">
+          <Label for="net-name">
+            {{ t('network.networkName') }} <span class="text-destructive">*</span>
+          </Label>
+          <Input
+            id="net-name"
+            v-model="form.name"
+            :placeholder="t('network.nameRequired')"
+            @input="errors.name = ''"
+          />
+          <p v-if="errors.name" class="text-xs text-destructive">{{ errors.name }}</p>
+        </div>
 
-.switch-label {
-  margin-left: 8px;
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-}
-</style>
+        <div class="space-y-1.5">
+          <Label>{{ t('network.networkDriver') }}</Label>
+          <Select v-model="form.driver">
+            <SelectTrigger class="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem v-for="driver in driverOptions" :key="driver.value" :value="driver.value">
+                {{ driver.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div class="space-y-1.5">
+          <Label for="net-subnet">{{ t('network.subnet') }}</Label>
+          <Input
+            id="net-subnet"
+            v-model="form.subnet"
+            placeholder="例如: 172.20.0.0/16"
+            class="font-mono"
+            @input="errors.subnet = ''"
+          />
+          <p v-if="errors.subnet" class="text-xs text-destructive">{{ errors.subnet }}</p>
+          <p class="text-xs text-muted-foreground">可选，留空则由 Docker 自动分配</p>
+        </div>
+
+        <div class="space-y-1.5">
+          <Label for="net-gateway">{{ t('network.gateway') }}</Label>
+          <Input
+            id="net-gateway"
+            v-model="form.gateway"
+            placeholder="例如: 172.20.0.1"
+            class="font-mono"
+            :disabled="!form.subnet"
+            @input="errors.gateway = ''"
+          />
+          <p v-if="errors.gateway" class="text-xs text-destructive">{{ errors.gateway }}</p>
+          <p class="text-xs text-muted-foreground">可选，需要先设置子网</p>
+        </div>
+
+        <div class="flex items-center justify-between rounded-lg border p-3">
+          <div class="space-y-0.5">
+            <Label for="net-internal">{{ t('network.internal') }}</Label>
+            <p class="text-xs text-muted-foreground">内部网络不允许外部连接</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <Switch id="net-internal" v-model="form.internal" />
+            <span class="text-xs text-muted-foreground w-4">{{ form.internal ? '是' : '否' }}</span>
+          </div>
+        </div>
+
+        <DialogFooter class="gap-2 pt-2">
+          <Button type="button" variant="outline" @click="handleClose">{{ t('common.cancel') }}</Button>
+          <Button type="submit" :disabled="loading">
+            <Loader2 v-if="loading" class="animate-spin" />
+            {{ t('common.create') }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+</template>

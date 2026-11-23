@@ -1,45 +1,17 @@
-<template>
-  <el-dialog
-    v-model="visible"
-    :title="t('notify.guideTitle')"
-    width="760px"
-    class="showdoc-guide"
-    align-center
-    append-to-body
-  >
-    <p class="lead">{{ t('notify.guideLead') }}</p>
-
-    <figure class="figure">
-      <img :src="guideImage" :alt="t('notify.figureCaption')" />
-      <figcaption>{{ t('notify.figureCaption') }}</figcaption>
-    </figure>
-
-    <ol class="steps">
-      <li v-for="step in steps" :key="step.title">
-        <strong>{{ step.title }}</strong>
-        <p>{{ step.body }}</p>
-      </li>
-    </ol>
-
-    <el-alert type="warning" :closable="false" show-icon>
-      <template #title>{{ t('notify.notesTitle') }}</template>
-      <ul class="notes">
-        <li>{{ t('notify.note1') }}</li>
-        <li>{{ t('notify.note2') }}</li>
-        <li>{{ t('notify.note3') }}</li>
-      </ul>
-    </el-alert>
-
-    <template #footer>
-      <el-button type="primary" @click="visible = false">{{ t('notify.gotIt') }}</el-button>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { computed } from 'vue'
+import { AlertTriangle } from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
 import guideImage from '@/assets/showdoc-push-guide.png'
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 
 const { t } = useI18n()
 
@@ -65,66 +37,50 @@ const steps = computed(() => [
 ])
 </script>
 
-<style scoped>
-.lead {
-  margin: 0 0 16px;
-  line-height: 1.7;
-  color: var(--el-text-color-regular);
-}
+<template>
+  <Dialog v-model:open="visible">
+    <DialogContent class="sm:max-w-[760px] max-h-[90vh] flex flex-col">
+      <DialogHeader>
+        <DialogTitle>{{ t('notify.guideTitle') }}</DialogTitle>
+      </DialogHeader>
 
-.figure {
-  margin: 0 0 18px;
-}
+      <div class="flex-1 overflow-y-auto space-y-4 pr-1 text-sm">
+        <p class="leading-relaxed text-muted-foreground">{{ t('notify.guideLead') }}</p>
 
-.figure img {
-  display: block;
-  width: 100%;
-  border-radius: 8px;
-  border: 1px solid var(--el-border-color);
-}
+        <figure class="space-y-2">
+          <img
+            :src="guideImage"
+            :alt="t('notify.figureCaption')"
+            class="block w-full rounded-lg border"
+          />
+          <figcaption class="text-xs leading-relaxed text-muted-foreground">
+            {{ t('notify.figureCaption') }}
+          </figcaption>
+        </figure>
 
-.figure figcaption {
-  margin-top: 8px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: var(--el-text-color-secondary);
-}
+        <ol class="space-y-3 list-decimal pl-5">
+          <li v-for="step in steps" :key="step.title" class="space-y-1">
+            <strong class="block font-semibold text-foreground">{{ step.title }}</strong>
+            <p class="leading-relaxed text-muted-foreground">{{ step.body }}</p>
+          </li>
+        </ol>
 
-.steps {
-  margin: 0 0 16px;
-  padding-left: 20px;
-}
+        <Alert variant="warning">
+          <AlertTriangle class="size-4" />
+          <AlertTitle>{{ t('notify.notesTitle') }}</AlertTitle>
+          <AlertDescription>
+            <ul class="mt-1 list-disc pl-4 space-y-1">
+              <li>{{ t('notify.note1') }}</li>
+              <li>{{ t('notify.note2') }}</li>
+              <li>{{ t('notify.note3') }}</li>
+            </ul>
+          </AlertDescription>
+        </Alert>
+      </div>
 
-.steps li + li {
-  margin-top: 12px;
-}
-
-.steps strong {
-  display: block;
-  margin-bottom: 4px;
-}
-
-.steps p {
-  margin: 0;
-  line-height: 1.7;
-  color: var(--el-text-color-regular);
-}
-
-.notes {
-  margin: 8px 0 0;
-  padding-left: 18px;
-  line-height: 1.7;
-}
-</style>
-
-<style>
-.showdoc-guide.el-dialog {
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-}
-
-.showdoc-guide .el-dialog__body {
-  overflow-y: auto;
-}
-</style>
+      <DialogFooter class="pt-2">
+        <Button @click="visible = false">{{ t('notify.gotIt') }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

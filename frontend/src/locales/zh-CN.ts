@@ -27,6 +27,15 @@ export default {
     createdAt: '创建时间',
   },
 
+  // Pagination
+  pagination: {
+    total: '共 {total} 条',
+    itemsPerPage: '条/页',
+    goto: '前往',
+    prev: '上一页',
+    next: '下一页',
+  },
+
   // Navigation
   nav: {
     dashboard: '仪表板',

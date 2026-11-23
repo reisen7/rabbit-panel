@@ -1,68 +1,17 @@
-<template>
-  <el-dialog
-    v-model="visible"
-    :title="t('settings.pageSettings')"
-    width="400px"
-    :close-on-click-modal="true"
-  >
-    <div class="settings-content">
-      <!-- Font Size -->
-      <div class="setting-item">
-        <label>{{ t('settings.fontSize') }}</label>
-        <div class="setting-control">
-          <el-slider
-            v-model="settings.fontSize"
-            :min="12"
-            :max="18"
-            :step="1"
-            :show-tooltip="false"
-          />
-          <span class="value">{{ settings.fontSize }}px</span>
-        </div>
-      </div>
-
-      <!-- Sidebar Width -->
-      <div class="setting-item">
-        <label>{{ t('settings.sidebarWidth') }}</label>
-        <div class="setting-control">
-          <el-slider
-            v-model="settings.sidebarWidth"
-            :min="180"
-            :max="280"
-            :step="10"
-            :show-tooltip="false"
-          />
-          <span class="value">{{ settings.sidebarWidth }}px</span>
-        </div>
-      </div>
-
-      <!-- Theme Color -->
-      <div class="setting-item">
-        <label>{{ t('settings.themeColor') }}</label>
-        <div class="color-options">
-          <div
-            v-for="color in colorOptions"
-            :key="color.value"
-            class="color-item"
-            :class="{ active: settings.primaryColor === color.value }"
-            :style="{ backgroundColor: color.value }"
-            :title="color.label"
-            @click="settings.primaryColor = color.value"
-          />
-        </div>
-      </div>
-    </div>
-
-    <template #footer>
-      <el-button @click="resetSettings">{{ t('settings.reset') }}</el-button>
-      <el-button type="primary" @click="confirmAndRefresh">{{ t('settings.confirmRefresh') }}</el-button>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { ref, watch, onMounted, computed } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { Check } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Slider } from '@/components/ui/slider'
 
 const { t } = useI18n()
 
@@ -76,38 +25,46 @@ const emit = defineEmits<{
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (val) => emit('update:modelValue', val)
+  set: (val) => emit('update:modelValue', val),
 })
 
 const SETTINGS_KEY = 'rabbit_panel_settings'
+const DEFAULT_COLOR = 'neutral'
 
 const settings = ref({
   fontSize: 14,
-  sidebarWidth: 200,
-  primaryColor: '#409EFF',
+  sidebarWidth: 220,
+  primaryColor: DEFAULT_COLOR,
 })
 
 const colorOptions = [
-  { label: '默认蓝', value: '#409EFF' },
-  { label: '翠绿', value: '#67C23A' },
-  { label: '橙色', value: '#E6A23C' },
-  { label: '红色', value: '#F56C6C' },
-  { label: '紫色', value: '#9B59B6' },
-  { label: '青色', value: '#00BCD4' },
+  { label: 'Neutral', value: 'neutral', swatch: '#18181b' },
+  { label: 'Blue', value: '#2563eb', swatch: '#2563eb' },
+  { label: 'Emerald', value: '#16a34a', swatch: '#16a34a' },
+  { label: 'Amber', value: '#d97706', swatch: '#d97706' },
+  { label: 'Rose', value: '#e11d48', swatch: '#e11d48' },
+  { label: 'Violet', value: '#7c3aed', swatch: '#7c3aed' },
 ]
 
 function applySettings() {
-  document.documentElement.style.setProperty('--rp-font-size', `${settings.value.fontSize}px`)
-  document.documentElement.style.setProperty('--rp-sidebar-width', `${settings.value.sidebarWidth}px`)
-  document.documentElement.style.setProperty('--el-color-primary', settings.value.primaryColor)
+  const root = document.documentElement
+  root.style.setProperty('--rp-font-size', `${settings.value.fontSize}px`)
+  root.style.setProperty('--rp-sidebar-width', `${settings.value.sidebarWidth}px`)
+  if (!settings.value.primaryColor || settings.value.primaryColor === 'neutral') {
+    root.style.removeProperty('--primary')
+    root.style.removeProperty('--primary-foreground')
+  } else {
+    root.style.setProperty('--primary', settings.value.primaryColor)
+    root.style.setProperty('--primary-foreground', '#ffffff')
+  }
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings.value))
 }
 
 function resetSettings() {
   settings.value = {
     fontSize: 14,
-    sidebarWidth: 200,
-    primaryColor: '#409EFF',
+    sidebarWidth: 220,
+    primaryColor: DEFAULT_COLOR,
   }
   applySettings()
 }
@@ -117,9 +74,13 @@ function confirmAndRefresh() {
   window.location.reload()
 }
 
-watch(settings, () => {
-  applySettings()
-}, { deep: true })
+watch(
+  settings,
+  () => {
+    applySettings()
+  },
+  { deep: true }
+)
 
 onMounted(() => {
   const saved = localStorage.getItem(SETTINGS_KEY)
@@ -135,64 +96,68 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.settings-content {
-  padding: 8px 0;
-}
+<template>
+  <Dialog v-model:open="visible">
+    <DialogContent class="sm:max-w-[420px]">
+      <DialogHeader>
+        <DialogTitle>{{ t('settings.pageSettings') }}</DialogTitle>
+      </DialogHeader>
 
-.setting-item {
-  margin-bottom: 20px;
-}
+      <div class="space-y-5 py-2">
+        <!-- Font Size -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <Label>{{ t('settings.fontSize') }}</Label>
+            <span class="text-xs font-mono tabular-nums text-muted-foreground">{{ settings.fontSize }}px</span>
+          </div>
+          <Slider
+            :model-value="[settings.fontSize]"
+            :min="14"
+            :max="20"
+            :step="1"
+            @update:model-value="(v) => { if (v?.length) settings.fontSize = v[0]! }"
+          />
+        </div>
 
-.setting-item:last-child {
-  margin-bottom: 0;
-}
+        <!-- Sidebar Width -->
+        <div class="space-y-2.5">
+          <div class="flex items-center justify-between">
+            <Label>{{ t('settings.sidebarWidth') }}</Label>
+            <span class="text-xs font-mono tabular-nums text-muted-foreground">{{ settings.sidebarWidth }}px</span>
+          </div>
+          <Slider
+            :model-value="[settings.sidebarWidth]"
+            :min="180"
+            :max="280"
+            :step="10"
+            @update:model-value="(v) => { if (v?.length) settings.sidebarWidth = v[0]! }"
+          />
+        </div>
 
-.setting-item label {
-  display: block;
-  font-size: 14px;
-  color: var(--el-text-color-regular);
-  margin-bottom: 10px;
-}
+        <!-- Theme Color -->
+        <div class="space-y-2.5">
+          <Label>{{ t('settings.themeColor') }}</Label>
+          <div class="flex flex-wrap gap-2.5">
+            <button
+              v-for="color in colorOptions"
+              :key="color.value"
+              type="button"
+              :title="color.label"
+              class="size-8 rounded-md border flex items-center justify-center transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              :class="settings.primaryColor === color.value ? 'ring-2 ring-foreground ring-offset-2 ring-offset-background' : 'border-border'"
+              :style="{ backgroundColor: color.swatch }"
+              @click="settings.primaryColor = color.value"
+            >
+              <Check v-if="settings.primaryColor === color.value" class="size-4 text-white" />
+            </button>
+          </div>
+        </div>
+      </div>
 
-.setting-control {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.setting-control .el-slider {
-  flex: 1;
-}
-
-.setting-control .value {
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-  min-width: 50px;
-  text-align: right;
-}
-
-.color-options {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.color-item {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
-  border: 2px solid transparent;
-}
-
-.color-item:hover {
-  transform: scale(1.1);
-}
-
-.color-item.active {
-  border-color: var(--el-text-color-primary);
-  box-shadow: 0 0 0 2px var(--el-bg-color);
-}
-</style>
+      <DialogFooter class="gap-2">
+        <Button variant="outline" @click="resetSettings">{{ t('settings.reset') }}</Button>
+        <Button @click="confirmAndRefresh">{{ t('settings.confirmRefresh') }}</Button>
+      </DialogFooter>
+    </DialogContent>
+  </Dialog>
+</template>

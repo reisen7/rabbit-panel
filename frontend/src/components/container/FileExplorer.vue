@@ -1,167 +1,42 @@
-<template>
-  <el-dialog
-    v-model="dialogVisible"
-    :title="t('container.files') + ' - ' + containerName"
-    width="80%"
-    :close-on-click-modal="false"
-    destroy-on-close
-    class="file-explorer-dialog"
-    @open="handleOpen"
-  >
-    <div class="file-explorer">
-      <!-- Toolbar -->
-      <div class="toolbar">
-        <el-breadcrumb separator="/">
-          <el-breadcrumb-item
-            v-for="(segment, index) in pathSegments"
-            :key="index"
-            @click="navigateToSegment(index)"
-          >
-            <span class="breadcrumb-item" :class="{ clickable: index < pathSegments.length - 1 }">
-              {{ segment || '/' }}
-            </span>
-          </el-breadcrumb-item>
-        </el-breadcrumb>
-        <div class="toolbar-actions">
-          <el-button size="small" @click="handleRefresh">
-            <el-icon><Refresh /></el-icon>
-          </el-button>
-          <el-button size="small" type="primary" @click="showCreateDirDialog = true">
-            <el-icon><FolderAdd /></el-icon>
-            {{ t('file.createDir') }}
-          </el-button>
-          <el-button size="small" type="success" @click="triggerUpload">
-            <el-icon><Upload /></el-icon>
-            {{ t('file.upload') }}
-          </el-button>
-          <input
-            ref="fileInputRef"
-            type="file"
-            style="display: none"
-            @change="handleFileSelect"
-          />
-        </div>
-      </div>
-
-      <!-- File table -->
-      <el-table
-        v-loading="loading"
-        :data="files"
-        stripe
-        style="width: 100%"
-        @row-dblclick="handleRowDblClick"
-      >
-        <el-table-column width="50">
-          <template #default="{ row }">
-            <el-icon :size="20" :color="row.is_dir ? '#e6a23c' : '#909399'">
-              <Folder v-if="row.is_dir" />
-              <Document v-else />
-            </el-icon>
-          </template>
-        </el-table-column>
-        <el-table-column prop="name" :label="t('common.name')" min-width="200">
-          <template #default="{ row }">
-            <span class="file-name" @click="handleFileClick(row)">{{ row.name }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column prop="size" :label="t('common.size')" width="120">
-          <template #default="{ row }">
-            {{ row.is_dir ? '-' : formatSize(row.size) }}
-          </template>
-        </el-table-column>
-        <el-table-column prop="mode" :label="t('file.permissions')" width="120" />
-        <el-table-column prop="mod_time" :label="t('file.modTime')" width="180">
-          <template #default="{ row }">
-            {{ formatTime(row.mod_time) }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t('common.actions')" width="150" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              v-if="!row.is_dir"
-              type="primary"
-              size="small"
-              :icon="Download"
-              circle
-              @click="handleDownload(row)"
-            />
-            <el-button
-              v-if="!row.is_dir && isTextFile(row.name)"
-              type="info"
-              size="small"
-              :icon="Edit"
-              circle
-              @click="handleEdit(row)"
-            />
-            <el-popconfirm
-              :title="t('file.confirmDelete')"
-              :confirm-button-text="t('common.confirm')"
-              :cancel-button-text="t('common.cancel')"
-              @confirm="handleDelete(row)"
-            >
-              <template #reference>
-                <el-button
-                  type="danger"
-                  size="small"
-                  :icon="Delete"
-                  circle
-                  :disabled="isProtectedPath(row.path)"
-                />
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-    </div>
-
-    <!-- Create Directory Dialog -->
-    <el-dialog
-      v-model="showCreateDirDialog"
-      :title="t('file.createDir')"
-      width="400px"
-      append-to-body
-    >
-      <el-form @submit.prevent="handleCreateDir">
-        <el-form-item :label="t('file.dirName')">
-          <el-input v-model="newDirName" :placeholder="t('file.dirNamePlaceholder')" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showCreateDirDialog = false">{{ t('common.cancel') }}</el-button>
-        <el-button type="primary" :loading="creating" @click="handleCreateDir">
-          {{ t('common.create') }}
-        </el-button>
-      </template>
-    </el-dialog>
-
-    <!-- File Editor Dialog -->
-    <FileEditor
-      v-model:visible="showEditorDialog"
-      :container-id="containerId"
-      :file-path="editingFilePath"
-      :file-name="editingFileName"
-      @saved="handleRefresh"
-    />
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
 import {
-  Refresh,
-  FolderAdd,
-  Upload,
-  Folder,
-  Document,
+  ChevronRight,
   Download,
-  Edit,
-  Delete,
-} from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+  Edit3,
+  File as FileIcon,
+  Folder,
+  FolderPlus,
+  Loader2,
+  RefreshCw,
+  Trash2,
+  Upload,
+} from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import { containerApi } from '@/api/containers'
 import type { FileInfo } from '@/types'
 import FileEditor from './FileEditor.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024 // 10MB
 
@@ -176,14 +51,14 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const toast = useToast()
+const { confirm } = useConfirm()
 
-// Dialog visibility
 const dialogVisible = computed({
   get: () => props.visible,
   set: (value) => emit('update:visible', value),
 })
 
-// State
 const currentPath = ref('/')
 const files = ref<FileInfo[]>([])
 const loading = ref(false)
@@ -195,30 +70,26 @@ const editingFilePath = ref('')
 const editingFileName = ref('')
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
-// Protected system paths
 const PROTECTED_PATHS = ['/', '/bin', '/sbin', '/usr', '/lib', '/lib64', '/etc', '/var', '/root', '/home']
 
-// Computed
 const pathSegments = computed(() => {
   const segments = currentPath.value.split('/').filter(Boolean)
   return ['', ...segments]
 })
 
-// Methods
 async function fetchFiles() {
   if (!props.containerId) return
-  
+
   loading.value = true
   try {
     files.value = await containerApi.filesList(props.containerId, currentPath.value)
-    // Sort: directories first, then by name
     files.value.sort((a, b) => {
       if (a.is_dir && !b.is_dir) return -1
       if (!a.is_dir && b.is_dir) return 1
       return a.name.localeCompare(b.name)
     })
   } catch {
-    ElMessage.error(t('file.loadError'))
+    toast.error(t('file.loadError'))
   } finally {
     loading.value = false
   }
@@ -226,7 +97,7 @@ async function fetchFiles() {
 
 function navigateToSegment(index: number) {
   if (index >= pathSegments.value.length - 1) return
-  
+
   const newPath = '/' + pathSegments.value.slice(1, index + 1).join('/')
   currentPath.value = newPath || '/'
   fetchFiles()
@@ -254,17 +125,18 @@ function handleRefresh() {
 
 async function handleCreateDir() {
   if (!newDirName.value.trim()) {
-    ElMessage.warning(t('file.dirNameRequired'))
+    toast.warning(t('file.dirNameRequired'))
     return
   }
-  
+
   creating.value = true
   try {
-    const path = currentPath.value === '/' 
-      ? '/' + newDirName.value 
-      : currentPath.value + '/' + newDirName.value
+    const path =
+      currentPath.value === '/'
+        ? '/' + newDirName.value.trim()
+        : currentPath.value + '/' + newDirName.value.trim()
     await containerApi.fileMkdir(props.containerId, path)
-    ElMessage.success(t('file.createSuccess'))
+    toast.success(t('file.createSuccess'))
     showCreateDirDialog.value = false
     newDirName.value = ''
     fetchFiles()
@@ -277,13 +149,22 @@ async function handleCreateDir() {
 
 async function handleDelete(file: FileInfo) {
   if (isProtectedPath(file.path)) {
-    ElMessage.error(t('file.protectedPath'))
+    toast.error(t('file.protectedPath'))
     return
   }
-  
+
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('file.confirmDelete'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+
   try {
     await containerApi.fileDelete(props.containerId, file.path)
-    ElMessage.success(t('file.deleteSuccess'))
+    toast.success(t('file.deleteSuccess'))
     fetchFiles()
   } catch {
     // Error handled by interceptor
@@ -309,20 +190,20 @@ async function handleFileSelect(event: Event) {
   const input = event.target as HTMLInputElement
   const file = input.files?.[0]
   if (!file) return
-  
+
   if (file.size > MAX_UPLOAD_SIZE) {
-    ElMessage.error(t('file.fileTooLarge'))
+    toast.error(t('file.fileTooLarge'))
     input.value = ''
     return
   }
-  
+
   try {
     const reader = new FileReader()
     reader.onload = async () => {
       const result = reader.result as string
       const base64 = result.split(',')[1] || ''
       await containerApi.fileUpload(props.containerId, currentPath.value, file.name, base64)
-      ElMessage.success(t('file.uploadSuccess'))
+      toast.success(t('file.uploadSuccess'))
       fetchFiles()
     }
     reader.readAsDataURL(file)
@@ -349,7 +230,7 @@ function isTextFile(filename: string): boolean {
     '.log', '.csv',
   ]
   const lowerName = filename.toLowerCase()
-  return textExtensions.some(ext => lowerName.endsWith(ext)) || !filename.includes('.')
+  return textExtensions.some((ext) => lowerName.endsWith(ext)) || !filename.includes('.')
 }
 
 function formatSize(bytes: number): string {
@@ -365,59 +246,190 @@ function formatTime(time: string): string {
   return new Date(time).toLocaleString()
 }
 
-function handleOpen() {
-  currentPath.value = '/'
-  fetchFiles()
-}
+watch(
+  () => props.visible,
+  (val) => {
+    if (val) {
+      currentPath.value = '/'
+      fetchFiles()
+    }
+  },
+  { immediate: true }
+)
 
-// Watch for container ID changes
-watch(() => props.containerId, () => {
-  if (props.visible) {
-    currentPath.value = '/'
-    fetchFiles()
+watch(
+  () => props.containerId,
+  () => {
+    if (props.visible) {
+      currentPath.value = '/'
+      fetchFiles()
+    }
   }
-})
+)
 </script>
 
-<style scoped>
-.file-explorer {
-  min-height: 400px;
-}
+<template>
+  <Dialog v-model:open="dialogVisible">
+    <DialogContent class="sm:max-w-[80vw] max-w-[1100px] max-h-[88vh] flex flex-col" @interact-outside.prevent>
+      <DialogHeader>
+        <DialogTitle>{{ t('container.files') + ' - ' + containerName }}</DialogTitle>
+      </DialogHeader>
 
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 15px;
-  padding: 10px;
-  background: var(--el-fill-color-light);
-  border-radius: 4px;
-}
+      <div class="flex flex-col gap-3 flex-1 min-h-0">
+        <!-- Toolbar -->
+        <div class="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+          <nav class="flex flex-wrap items-center gap-1 text-sm">
+            <template v-for="(segment, index) in pathSegments" :key="index">
+              <ChevronRight v-if="index > 0" class="size-3.5 text-muted-foreground" />
+              <button
+                type="button"
+                class="rounded px-1.5 py-0.5 text-xs font-mono transition-colors"
+                :class="index < pathSegments.length - 1
+                  ? 'text-primary hover:bg-accent cursor-pointer'
+                  : 'text-foreground font-semibold cursor-default'"
+                @click="navigateToSegment(index)"
+              >
+                {{ segment || '/' }}
+              </button>
+            </template>
+          </nav>
 
-.toolbar-actions {
-  display: flex;
-  gap: 8px;
-}
+          <div class="flex items-center gap-2">
+            <Button variant="outline" size="icon-sm" @click="handleRefresh">
+              <RefreshCw :class="{ 'animate-spin': loading }" />
+            </Button>
+            <Button size="sm" @click="showCreateDirDialog = true">
+              <FolderPlus />
+              {{ t('file.createDir') }}
+            </Button>
+            <Button variant="outline" size="sm" @click="triggerUpload">
+              <Upload />
+              {{ t('file.upload') }}
+            </Button>
+            <input ref="fileInputRef" type="file" class="hidden" @change="handleFileSelect" />
+          </div>
+        </div>
 
-.breadcrumb-item {
-  cursor: default;
-}
+        <!-- File table -->
+        <div class="relative flex-1 min-h-[340px] max-h-[55vh] overflow-auto rounded-md border">
+          <LoadingOverlay :loading="loading" />
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead class="w-10" />
+                <TableHead>{{ t('common.name') }}</TableHead>
+                <TableHead class="w-28">{{ t('common.size') }}</TableHead>
+                <TableHead class="w-28 hidden sm:table-cell">{{ t('file.permissions') }}</TableHead>
+                <TableHead class="w-44 hidden md:table-cell">{{ t('file.modTime') }}</TableHead>
+                <TableHead class="w-36 text-right">{{ t('common.actions') }}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-if="files.length === 0">
+                <TableCell colspan="6" class="h-24 text-center text-muted-foreground">
+                  {{ t('common.none') }}
+                </TableCell>
+              </TableRow>
+              <TableRow
+                v-for="row in files"
+                :key="row.path"
+                class="cursor-pointer"
+                @dblclick="handleRowDblClick(row)"
+              >
+                <TableCell>
+                  <Folder v-if="row.is_dir" class="size-4 text-amber-500" />
+                  <FileIcon v-else class="size-4 text-muted-foreground" />
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    class="text-left font-medium hover:underline"
+                    :class="row.is_dir ? 'text-primary' : 'text-foreground'"
+                    @click="handleFileClick(row)"
+                  >
+                    {{ row.name }}
+                  </button>
+                </TableCell>
+                <TableCell class="text-xs tabular-nums text-muted-foreground">
+                  {{ row.is_dir ? '-' : formatSize(row.size) }}
+                </TableCell>
+                <TableCell class="hidden sm:table-cell font-mono text-xs text-muted-foreground">
+                  {{ row.mode }}
+                </TableCell>
+                <TableCell class="hidden md:table-cell text-xs text-muted-foreground">
+                  {{ formatTime(row.mod_time) }}
+                </TableCell>
+                <TableCell class="text-right">
+                  <div class="inline-flex items-center gap-1">
+                    <Button
+                      v-if="!row.is_dir"
+                      variant="ghost"
+                      size="icon-sm"
+                      @click.stop="handleDownload(row)"
+                    >
+                      <Download class="size-4" />
+                    </Button>
+                    <Button
+                      v-if="!row.is_dir && isTextFile(row.name)"
+                      variant="ghost"
+                      size="icon-sm"
+                      @click.stop="handleEdit(row)"
+                    >
+                      <Edit3 class="size-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      class="text-destructive hover:text-destructive"
+                      :disabled="isProtectedPath(row.path)"
+                      @click.stop="handleDelete(row)"
+                    >
+                      <Trash2 class="size-4" />
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </div>
 
-.breadcrumb-item.clickable {
-  cursor: pointer;
-  color: var(--el-color-primary);
-}
+      <!-- Create Directory Dialog -->
+      <Dialog v-model:open="showCreateDirDialog">
+        <DialogContent class="sm:max-w-[400px]">
+          <DialogHeader>
+            <DialogTitle>{{ t('file.createDir') }}</DialogTitle>
+          </DialogHeader>
+          <form class="space-y-4 py-1" @submit.prevent="handleCreateDir">
+            <div class="space-y-1.5">
+              <Label for="new-dir-name">{{ t('file.dirName') }}</Label>
+              <Input
+                id="new-dir-name"
+                v-model="newDirName"
+                :placeholder="t('file.dirNamePlaceholder')"
+              />
+            </div>
+            <DialogFooter class="gap-2">
+              <Button type="button" variant="outline" @click="showCreateDirDialog = false">
+                {{ t('common.cancel') }}
+              </Button>
+              <Button type="submit" :disabled="creating">
+                <Loader2 v-if="creating" class="animate-spin" />
+                {{ t('common.create') }}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
-.breadcrumb-item.clickable:hover {
-  text-decoration: underline;
-}
-
-.file-name {
-  cursor: pointer;
-  color: var(--el-color-primary);
-}
-
-.file-name:hover {
-  text-decoration: underline;
-}
-</style>
+      <!-- File Editor Dialog -->
+      <FileEditor
+        v-model:visible="showEditorDialog"
+        :container-id="containerId"
+        :file-path="editingFilePath"
+        :file-name="editingFileName"
+        @saved="handleRefresh"
+      />
+    </DialogContent>
+  </Dialog>
+</template>

@@ -15,8 +15,8 @@ export const systemApi = {
     return response.data
   },
 
-  async checkUpdate(): Promise<SystemUpdateInfo> {
-    const response = await request.get<SystemUpdateInfo>('/system/update/check')
+  async checkUpdate(force = false): Promise<SystemUpdateInfo> {
+    const response = await request.get<SystemUpdateInfo>('/system/update/check', { params: force ? { force: 1 } : undefined, suppressErrorMessage: !force })
     return response.data
   },
 

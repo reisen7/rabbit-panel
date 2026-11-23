@@ -1,24 +1,11 @@
-<template>
-  <div class="wechat-qr">
-    <el-button type="primary" :loading="creating" @click="create">
-      {{ t('agent.wechat.createQR') }}
-    </el-button>
-    <div v-if="qr?.image" class="qr-box">
-      <img class="qr-image" :src="qr.image" :alt="t('agent.wechat.qrAlt')" />
-      <div class="qr-status">{{ statusText }}</div>
-      <div v-if="qr.status === 'verify'" class="verify-row">
-        <el-input v-model="code" :placeholder="t('agent.wechat.verifyPlaceholder')" @keyup.enter="submit" />
-        <el-button type="primary" @click="submit">{{ t('agent.wechat.verifySubmit') }}</el-button>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed, onMounted } from 'vue'
-import { useI18n } from 'vue-i18n'
+import { Loader2, QrCode } from 'lucide-vue-next'
+import { useI18n } from '@/composables/useI18n'
 import type { WeChatQR } from '@/api/wechat'
 import { useWeChatQR } from '@/composables/useWeChatQR'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 
 const props = defineProps<{
   initial?: WeChatQR | null
@@ -55,39 +42,29 @@ onMounted(() => {
 })
 </script>
 
-<style scoped>
-.wechat-qr {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 12px;
-}
-.qr-box {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-}
-.qr-image {
-  width: 220px;
-  height: 220px;
-  padding: 8px;
-  background: #fff;
-  border-radius: 8px;
-  object-fit: contain;
-}
-.qr-status {
-  font-size: 14px;
-}
-.verify-row {
-  display: flex;
-  gap: 8px;
-  width: min(100%, 320px);
-}
-@media (max-width: 768px) {
-  .verify-row {
-    flex-direction: column;
-    width: 100%;
-  }
-}
-</style>
+<template>
+  <div class="flex flex-col items-start gap-3">
+    <Button :disabled="creating" @click="create">
+      <Loader2 v-if="creating" class="animate-spin" />
+      <QrCode v-else />
+      {{ t('agent.wechat.createQR') }}
+    </Button>
+
+    <div v-if="qr?.image" class="flex flex-col items-start gap-2.5">
+      <img
+        class="size-[220px] rounded-lg border bg-white p-2 object-contain shadow-xs"
+        :src="qr.image"
+        :alt="t('agent.wechat.qrAlt')"
+      />
+      <div class="text-sm text-muted-foreground">{{ statusText }}</div>
+      <div v-if="qr.status === 'verify'" class="flex flex-col sm:flex-row gap-2 w-full max-w-[320px]">
+        <Input
+          v-model="code"
+          :placeholder="t('agent.wechat.verifyPlaceholder')"
+          @keyup.enter="submit"
+        />
+        <Button @click="submit">{{ t('agent.wechat.verifySubmit') }}</Button>
+      </div>
+    </div>
+  </div>
+</template>

@@ -1,141 +1,32 @@
-<template>
-  <div class="registry-page">
-    <!-- Header with title and actions -->
-    <div class="page-header">
-      <div>
-        <h2>{{ t('registry.title') }}</h2>
-        <p class="page-desc">{{ t('registry.usage') }}</p>
-      </div>
-      <div class="header-actions">
-        <el-button type="primary" @click="handleAdd">
-          <el-icon><Plus /></el-icon>
-          {{ t('registry.add') }}
-        </el-button>
-        <el-button :loading="registryStore.loading" @click="handleRefresh">
-          <el-icon><Refresh /></el-icon>
-          {{ t('common.refresh') }}
-        </el-button>
-      </div>
-    </div>
-
-    <!-- Registry cards -->
-    <div v-loading="registryStore.loading" class="registry-list">
-      <template v-if="registryStore.registries.length > 0">
-        <el-card
-          v-for="registry in registryStore.registries"
-          :key="registry.id"
-          class="registry-card"
-          shadow="hover"
-        >
-          <template #header>
-            <div class="card-header">
-              <div class="registry-name">
-                <el-icon><OfficeBuilding /></el-icon>
-                <span>{{ registry.name }}</span>
-                <el-tag v-if="registry.isDefault" size="small" type="success">
-                  {{ t('registry.default') }}
-                </el-tag>
-              </div>
-              <div class="card-actions">
-                <el-button
-                  type="primary"
-                  size="small"
-                  link
-                  :loading="testingId === registry.url"
-                  @click="handleTest(registry)"
-                >
-                  <el-icon><Connection /></el-icon>
-                  {{ testingId === registry.url ? t('registry.testing') : t('registry.testConnection') }}
-                </el-button>
-              </div>
-            </div>
-          </template>
-
-          <div class="registry-info">
-            <div class="info-row">
-              <span class="label">{{ t('registry.url') }}:</span>
-              <span class="value url">{{ registry.url }}</span>
-            </div>
-            <div v-if="registry.username" class="info-row">
-              <span class="label">{{ t('registry.username') }}:</span>
-              <span class="value">{{ registry.username }}</span>
-            </div>
-            <div class="info-row">
-              <span class="label">{{ t('common.createdAt') }}:</span>
-              <span class="value">{{ formatDate(registry.createdAt) }}</span>
-            </div>
-          </div>
-
-          <div class="card-footer">
-            <el-button type="primary" size="small" @click="handleEdit(registry)">
-              <el-icon><Edit /></el-icon>
-              {{ t('common.edit') }}
-            </el-button>
-            <el-popconfirm
-              :title="t('registry.confirmRemove')"
-              :confirm-button-text="t('common.confirm')"
-              :cancel-button-text="t('common.cancel')"
-              @confirm="handleRemove(registry.url)"
-            >
-              <template #reference>
-                <el-button type="danger" size="small">
-                  <el-icon><Delete /></el-icon>
-                  {{ t('common.delete') }}
-                </el-button>
-              </template>
-            </el-popconfirm>
-          </div>
-        </el-card>
-      </template>
-
-      <!-- Empty state -->
-      <el-empty
-        v-else-if="!registryStore.loading"
-        :description="t('registry.noRegistries')"
-      >
-        <el-button type="primary" @click="handleAdd">
-          <el-icon><Plus /></el-icon>
-          {{ t('registry.add') }}
-        </el-button>
-      </el-empty>
-    </div>
-
-    <!-- Registry Dialog -->
-    <RegistryDialog
-      v-model:visible="showDialog"
-      :registry="editingRegistry"
-      @saved="handleSaved"
-    />
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Refresh, Plus, Edit, Delete, OfficeBuilding, Connection } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { RefreshCw, Plus, Pencil, Trash2, Building2, Cable, Loader2 } from 'lucide-vue-next'
 import { useRegistryStore } from '@/stores/registry'
 import { useI18n } from '@/composables/useI18n'
+import { useToast } from '@/composables/useToast'
+import { useConfirm } from '@/composables/useConfirm'
 import RegistryDialog from '@/components/registry/RegistryDialog.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card'
 import type { RegistryInfo } from '@/types'
 
 const { t } = useI18n()
 const registryStore = useRegistryStore()
+const toast = useToast()
+const { confirm } = useConfirm()
 
-// Dialog state
 const showDialog = ref(false)
 const editingRegistry = ref<RegistryInfo | null>(null)
-
-// Testing state
 const testingId = ref<string | null>(null)
 
-// Format date helper
 function formatDate(dateStr: string): string {
   if (!dateStr) return '-'
   const date = new Date(dateStr)
   return date.toLocaleString()
 }
 
-// Handlers
 function handleAdd() {
   editingRegistry.value = null
   showDialog.value = true
@@ -146,10 +37,22 @@ function handleEdit(registry: RegistryInfo) {
   showDialog.value = true
 }
 
+async function confirmRemove(id: string) {
+  const ok = await confirm({
+    title: t('common.confirm'),
+    description: t('registry.confirmRemove'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (!ok) return
+  await handleRemove(id)
+}
+
 async function handleRemove(id: string) {
   try {
     await registryStore.removeRegistry(id)
-    ElMessage.success(t('registry.removeSuccess'))
+    toast.success(t('registry.removeSuccess'))
   } catch {
     // Error is handled by request interceptor
   }
@@ -163,12 +66,12 @@ async function handleTest(registry: RegistryInfo) {
       username: registry.username,
     })
     if (result.success) {
-      ElMessage.success(t('registry.testSuccess'))
+      toast.success(t('registry.testSuccess'))
     } else {
-      ElMessage.error(`${t('registry.testFailed')}: ${result.message}`)
+      toast.error(`${t('registry.testFailed')}: ${result.message}`)
     }
   } catch {
-    ElMessage.error(t('registry.testFailed'))
+    toast.error(t('registry.testFailed'))
   } finally {
     testingId.value = null
   }
@@ -182,145 +85,111 @@ function handleSaved() {
   registryStore.fetchRegistries()
 }
 
-// Fetch registries on mount
 onMounted(() => {
   registryStore.fetchRegistries()
 })
 </script>
 
-<style scoped>
-.registry-page {
-  padding: 20px;
-}
+<template>
+  <div class="space-y-5">
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div>
+        <h2 class="text-xl font-semibold tracking-tight">{{ t('registry.title') }}</h2>
+        <p class="mt-1 text-xs text-muted-foreground leading-relaxed">{{ t('registry.usage') }}</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2">
+        <Button @click="handleAdd">
+          <Plus />
+          {{ t('registry.add') }}
+        </Button>
+        <Button variant="outline" :disabled="registryStore.loading" @click="handleRefresh">
+          <RefreshCw :class="{ 'animate-spin': registryStore.loading }" />
+          {{ t('common.refresh') }}
+        </Button>
+      </div>
+    </div>
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
+    <!-- Registry cards -->
+    <div class="relative grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+      <LoadingOverlay :loading="registryStore.loading" />
+      <template v-if="registryStore.registries.length > 0">
+        <Card
+          v-for="registry in registryStore.registries"
+          :key="registry.id"
+          class="transition-shadow hover:shadow-md"
+        >
+          <CardHeader class="pb-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 font-semibold text-base min-w-0">
+                <Building2 class="size-4 text-primary shrink-0" />
+                <span class="truncate">{{ registry.name }}</span>
+                <Badge v-if="registry.isDefault" variant="success">
+                  {{ t('registry.default') }}
+                </Badge>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                class="shrink-0"
+                :disabled="testingId === registry.url"
+                @click="handleTest(registry)"
+              >
+                <Loader2 v-if="testingId === registry.url" class="animate-spin" />
+                <Cable v-else />
+                {{ testingId === registry.url ? t('registry.testing') : t('registry.testConnection') }}
+              </Button>
+            </div>
+          </CardHeader>
 
-.page-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
+          <CardContent class="space-y-2 text-sm">
+            <div class="flex gap-2">
+              <span class="text-muted-foreground min-w-[80px] shrink-0">{{ t('registry.url') }}:</span>
+              <span class="font-mono text-xs break-all text-foreground">{{ registry.url }}</span>
+            </div>
+            <div v-if="registry.username" class="flex gap-2">
+              <span class="text-muted-foreground min-w-[80px] shrink-0">{{ t('registry.username') }}:</span>
+              <span class="break-all">{{ registry.username }}</span>
+            </div>
+            <div class="flex gap-2">
+              <span class="text-muted-foreground min-w-[80px] shrink-0">{{ t('common.createdAt') }}:</span>
+              <span class="text-xs tabular-nums text-muted-foreground">{{ formatDate(registry.createdAt) }}</span>
+            </div>
+          </CardContent>
 
-.page-desc {
-  margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
-  font-size: 13px;
-  line-height: 1.5;
-}
+          <CardFooter class="border-t pt-4 gap-2">
+            <Button size="sm" variant="outline" @click="handleEdit(registry)">
+              <Pencil />
+              {{ t('common.edit') }}
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              @click="confirmRemove(registry.url)"
+            >
+              <Trash2 />
+              {{ t('common.delete') }}
+            </Button>
+          </CardFooter>
+        </Card>
+      </template>
 
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
+      <div
+        v-else-if="!registryStore.loading"
+        class="col-span-full rounded-xl border border-dashed bg-card py-16 flex flex-col items-center justify-center gap-4 text-center"
+      >
+        <p class="text-sm text-muted-foreground">{{ t('registry.noRegistries') }}</p>
+        <Button @click="handleAdd">
+          <Plus />
+          {{ t('registry.add') }}
+        </Button>
+      </div>
+    </div>
 
-.registry-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-  gap: 20px;
-}
-
-.registry-card {
-  transition: transform 0.2s;
-}
-
-.registry-card:hover {
-  transform: translateY(-2px);
-}
-
-.card-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.registry-name {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.registry-name .el-icon {
-  color: var(--el-color-primary);
-}
-
-.card-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.registry-info {
-  margin-bottom: 16px;
-}
-
-.info-row {
-  display: flex;
-  margin-bottom: 8px;
-  font-size: 14px;
-}
-
-.info-row .label {
-  color: var(--el-text-color-secondary);
-  min-width: 80px;
-}
-
-.info-row .value {
-  color: var(--el-text-color-primary);
-  word-break: break-all;
-}
-
-.info-row .value.url {
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.card-footer {
-  display: flex;
-  gap: 10px;
-  padding-top: 12px;
-  border-top: 1px solid var(--el-border-color-lighter);
-}
-
-/* Responsive styles */
-@media (max-width: 767px) {
-  .registry-page {
-    padding: 12px;
-  }
-
-  .page-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .header-actions {
-    width: 100%;
-    flex-wrap: wrap;
-  }
-
-  .header-actions .el-button {
-    flex: 1;
-    min-width: 80px;
-  }
-
-  .registry-list {
-    grid-template-columns: 1fr;
-  }
-
-  .card-header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-
-  .card-footer {
-    flex-wrap: wrap;
-  }
-}
-</style>
+    <RegistryDialog
+      v-model:visible="showDialog"
+      :registry="editingRegistry"
+      @saved="handleSaved"
+    />
+  </div>
+</template>

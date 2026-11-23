@@ -27,6 +27,15 @@ export default {
     createdAt: 'Created At',
   },
 
+  // Pagination
+  pagination: {
+    total: 'Total {total}',
+    itemsPerPage: '/ page',
+    goto: 'Go to',
+    prev: 'Previous',
+    next: 'Next',
+  },
+
   // Navigation
   nav: {
     dashboard: 'Dashboard',

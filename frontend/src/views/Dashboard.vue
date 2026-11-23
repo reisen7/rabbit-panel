@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
-import { Box, Connection, Monitor, Picture } from '@element-plus/icons-vue'
+import { Container, Cpu, HardDrive, MemoryStick } from 'lucide-vue-next'
 import * as echarts from 'echarts'
 import { useSystemStore } from '@/stores/system'
 import { useContainerStore } from '@/stores/containers'
+import { useTheme } from '@/composables/useTheme'
 import { useI18n } from '@/composables/useI18n'
 import UpdateBanner from '@/components/common/UpdateBanner.vue'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Progress } from '@/components/ui/progress'
 
 const { t } = useI18n()
+const { theme } = useTheme()
 const systemStore = useSystemStore()
 const containerStore = useContainerStore()
 
@@ -23,6 +28,18 @@ const memoryHistory = ref<number[]>([])
 const historyLabels = ref<string[]>([])
 const showUpdateDialog = ref(false)
 const maxHistoryLength = 20
+
+const chartPalette = computed(() => {
+  const isDark = theme.value === 'dark'
+  return {
+    text: isDark ? '#a1a1aa' : '#71717a',
+    strongText: isDark ? '#fafafa' : '#18181b',
+    splitLine: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
+    cardBorder: isDark ? '#27272a' : '#ffffff',
+    track: isDark ? 'rgba(255,255,255,0.1)' : '#e4e4e7',
+    empty: isDark ? '#3f3f46' : '#e4e4e7',
+  }
+})
 
 function formatSize(kb: number): string {
   if (kb === 0) return '0 B'
@@ -58,33 +75,51 @@ function initLineChart() {
 
 function updateLineChart() {
   if (!lineChart.value) return
+  const colors = chartPalette.value
   const option: echarts.EChartsOption = {
     tooltip: {
       trigger: 'axis',
-      formatter: (params: any) => {
+      formatter: (params: unknown) => {
         if (!Array.isArray(params)) return ''
-        let result = params[0]?.axisValue || ''
-        params.forEach((item: any) => {
-          result += `<br/>${item.marker}${item.seriesName}: ${item.value.toFixed(1)}%`
+        let result = (params[0] as { axisValue?: string })?.axisValue || ''
+        params.forEach((item: { marker?: string; seriesName?: string; value?: number }) => {
+          result += `<br/>${item.marker}${item.seriesName}: ${(item.value ?? 0).toFixed(1)}%`
         })
         return result
       },
     },
-    legend: { data: ['CPU', t('system.memory')], bottom: 0 },
+    legend: {
+      data: ['CPU', t('system.memory')],
+      bottom: 0,
+      textStyle: { color: colors.text, fontSize: 12 },
+    },
     grid: { left: '3%', right: '4%', bottom: '15%', top: '10%', containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, data: historyLabels.value, axisLabel: { fontSize: 10, rotate: 30 } },
-    yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: historyLabels.value,
+      axisLabel: { fontSize: 10, rotate: 30, color: colors.text },
+      axisLine: { lineStyle: { color: colors.splitLine } },
+    },
+    yAxis: {
+      type: 'value',
+      min: 0,
+      max: 100,
+      axisLabel: { formatter: '{value}%', color: colors.text, fontSize: 11 },
+      splitLine: { lineStyle: { color: colors.splitLine } },
+    },
     series: [
       {
         name: 'CPU',
         type: 'line',
         smooth: true,
+        showSymbol: false,
         data: cpuHistory.value,
-        itemStyle: { color: '#409EFF' },
+        itemStyle: { color: '#3b82f6' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(64,158,255,0.3)' },
-            { offset: 1, color: 'rgba(64,158,255,0.05)' },
+            { offset: 0, color: 'rgba(59,130,246,0.28)' },
+            { offset: 1, color: 'rgba(59,130,246,0.02)' },
           ]),
         },
       },
@@ -92,12 +127,13 @@ function updateLineChart() {
         name: t('system.memory'),
         type: 'line',
         smooth: true,
+        showSymbol: false,
         data: memoryHistory.value,
-        itemStyle: { color: '#67C23A' },
+        itemStyle: { color: '#10b981' },
         areaStyle: {
           color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(103,194,58,0.3)' },
-            { offset: 1, color: 'rgba(103,194,58,0.05)' },
+            { offset: 0, color: 'rgba(16,185,129,0.28)' },
+            { offset: 1, color: 'rgba(16,185,129,0.02)' },
           ]),
         },
       },
@@ -114,32 +150,40 @@ function initPieChart() {
 
 function updatePieChart() {
   if (!pieChart.value) return
+  const colors = chartPalette.value
   const stats = containerStats.value
   const pieData = [
-    { value: stats.running, name: t('container.running'), itemStyle: { color: '#67C23A' } },
-    { value: stats.stopped, name: t('container.stopped'), itemStyle: { color: '#F56C6C' } },
-    { value: stats.paused, name: t('container.paused'), itemStyle: { color: '#E6A23C' } },
+    { value: stats.running, name: t('container.running'), itemStyle: { color: '#10b981' } },
+    { value: stats.stopped, name: t('container.stopped'), itemStyle: { color: '#ef4444' } },
+    { value: stats.paused, name: t('container.paused'), itemStyle: { color: '#f59e0b' } },
   ]
-  const displayData = pieData.filter(item => item.value > 0)
+  const displayData = pieData.filter((item) => item.value > 0)
   if (displayData.length === 0) {
-    displayData.push({ value: 1, name: 'No Containers', itemStyle: { color: '#dcdfe6' } })
+    displayData.push({ value: 1, name: 'No Containers', itemStyle: { color: colors.empty } })
   }
 
   const option: echarts.EChartsOption = {
     tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
-    legend: { bottom: 0, itemWidth: 10, itemHeight: 10, data: pieData.map(item => item.name) },
+    legend: {
+      bottom: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: colors.text, fontSize: 12 },
+      data: pieData.map((item) => item.name),
+    },
     series: [
       {
         type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['50%', '45%'],
-        itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
+        radius: ['45%', '72%'],
+        center: ['50%', '44%'],
+        itemStyle: { borderRadius: 6, borderColor: colors.cardBorder, borderWidth: 2 },
         label: {
           show: true,
           position: 'center',
           formatter: () => `${stats.total}\nContainers`,
-          fontSize: 16,
+          fontSize: 15,
           fontWeight: 'bold',
+          color: colors.strongText,
         },
         data: displayData,
       },
@@ -156,6 +200,7 @@ function initGaugeChart() {
 
 function updateGaugeChart() {
   if (!gaugeChart.value) return
+  const colors = chartPalette.value
   const diskValue = systemStore.stats.disk
   const option: echarts.EChartsOption = {
     series: [
@@ -165,15 +210,22 @@ function updateGaugeChart() {
         endAngle: -20,
         min: 0,
         max: 100,
-        itemStyle: { color: diskValue >= 90 ? '#F56C6C' : diskValue >= 70 ? '#E6A23C' : '#67C23A' },
-        progress: { show: true, width: 20 },
+        itemStyle: { color: diskValue >= 90 ? '#ef4444' : diskValue >= 70 ? '#f59e0b' : '#10b981' },
+        progress: { show: true, width: 18, roundCap: true },
         pointer: { show: false },
-        axisLine: { lineStyle: { width: 20, color: [[1, '#e0e0e0']] } },
+        axisLine: { roundCap: true, lineStyle: { width: 18, color: [[1, colors.track]] } },
         axisTick: { show: false },
         splitLine: { show: false },
         axisLabel: { show: false },
-        title: { show: true, offsetCenter: [0, '30%'], fontSize: 14, color: '#999' },
-        detail: { valueAnimation: true, offsetCenter: [0, '-10%'], fontSize: 28, fontWeight: 'bold', formatter: '{value}%', color: 'inherit' },
+        title: { show: true, offsetCenter: [0, '30%'], fontSize: 13, color: colors.text },
+        detail: {
+          valueAnimation: true,
+          offsetCenter: [0, '-10%'],
+          fontSize: 28,
+          fontWeight: 'bold',
+          formatter: '{value}%',
+          color: colors.strongText,
+        },
         data: [{ value: diskValue, name: `${t('system.disk')} ${t('system.usage')}` }],
       },
     ],
@@ -187,17 +239,17 @@ function handleResize() {
   gaugeChart.value?.resize()
 }
 
-function getProgressColor(percent: number): string {
-  if (percent >= 90) return '#F56C6C'
-  if (percent >= 70) return '#E6A23C'
-  return '#67C23A'
+function getProgressIndicatorClass(percent: number): string {
+  if (percent >= 90) return 'bg-destructive'
+  if (percent >= 70) return 'bg-amber-500'
+  return 'bg-emerald-500'
 }
 
 const containerStats = computed(() => {
   const containers = containerStore.containers
-  const running = containers.filter(c => c.state === 'running').length
-  const paused = containers.filter(c => c.state === 'paused').length
-  const stopped = containers.filter(c => c.state !== 'running' && c.state !== 'paused').length
+  const running = containers.filter((c) => c.state === 'running').length
+  const paused = containers.filter((c) => c.state === 'paused').length
+  const stopped = containers.filter((c) => c.state !== 'running' && c.state !== 'paused').length
   return { total: containers.length, running, stopped, paused }
 })
 
@@ -231,122 +283,182 @@ onUnmounted(() => {
 })
 
 watch(() => containerStore.containers, () => updatePieChart(), { deep: true })
+watch(theme, () => {
+  updateLineChart()
+  updatePieChart()
+  updateGaugeChart()
+})
 </script>
 
 <template>
-  <div class="dashboard">
+  <div class="space-y-5">
     <UpdateBanner @open-dialog="showUpdateDialog = true" />
 
-    <div class="stats-row">
-      <el-card class="stat-card" shadow="hover">
-        <div class="stat-content">
-          <div class="stat-icon cpu"><el-icon :size="32"><Monitor /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ systemStore.stats.cpu.toFixed(1) }}%</div>
-            <div class="stat-label">CPU {{ t('system.usage') }}</div>
+    <!-- KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      <Card class="gap-3 py-5">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-0">
+          <CardTitle class="text-sm font-medium text-muted-foreground">
+            CPU {{ t('system.usage') }}
+          </CardTitle>
+          <div class="size-8 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center">
+            <Cpu class="size-4" />
           </div>
-        </div>
-        <el-progress :percentage="systemStore.stats.cpu" :stroke-width="6" :color="getProgressColor(systemStore.stats.cpu)" :show-text="false" />
-      </el-card>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <div class="text-2xl font-bold tracking-tight tabular-nums">
+            {{ systemStore.stats.cpu.toFixed(1) }}%
+          </div>
+          <Progress
+            :model-value="systemStore.stats.cpu"
+            class="h-1.5"
+            :indicator-class="getProgressIndicatorClass(systemStore.stats.cpu)"
+          />
+        </CardContent>
+      </Card>
 
-      <el-card class="stat-card" shadow="hover">
-        <div class="stat-content">
-          <div class="stat-icon memory"><el-icon :size="32"><Box /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ systemStore.stats.memory.toFixed(1) }}%</div>
-            <div class="stat-label">{{ t('system.memory') }} {{ t('system.usage') }}</div>
-            <div class="stat-detail">{{ formatSize(systemStore.stats.memoryUsed) }} / {{ formatSize(systemStore.stats.memoryTotal) }}</div>
+      <Card class="gap-3 py-5">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-0">
+          <CardTitle class="text-sm font-medium text-muted-foreground">
+            {{ t('system.memory') }} {{ t('system.usage') }}
+          </CardTitle>
+          <div class="size-8 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center">
+            <MemoryStick class="size-4" />
           </div>
-        </div>
-        <el-progress :percentage="systemStore.stats.memory" :stroke-width="6" :color="getProgressColor(systemStore.stats.memory)" :show-text="false" />
-      </el-card>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="text-2xl font-bold tracking-tight tabular-nums">
+              {{ systemStore.stats.memory.toFixed(1) }}%
+            </span>
+            <span class="text-xs text-muted-foreground tabular-nums">
+              {{ formatSize(systemStore.stats.memoryUsed) }} / {{ formatSize(systemStore.stats.memoryTotal) }}
+            </span>
+          </div>
+          <Progress
+            :model-value="systemStore.stats.memory"
+            class="h-1.5"
+            :indicator-class="getProgressIndicatorClass(systemStore.stats.memory)"
+          />
+        </CardContent>
+      </Card>
 
-      <el-card class="stat-card" shadow="hover">
-        <div class="stat-content">
-          <div class="stat-icon disk"><el-icon :size="32"><Picture /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ systemStore.stats.disk.toFixed(1) }}%</div>
-            <div class="stat-label">{{ t('system.disk') }} {{ t('system.usage') }}</div>
-            <div class="stat-detail">{{ formatSize(systemStore.stats.diskUsed) }} / {{ formatSize(systemStore.stats.diskTotal) }}</div>
+      <Card class="gap-3 py-5">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-0">
+          <CardTitle class="text-sm font-medium text-muted-foreground">
+            {{ t('system.disk') }} {{ t('system.usage') }}
+          </CardTitle>
+          <div class="size-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+            <HardDrive class="size-4" />
           </div>
-        </div>
-        <el-progress :percentage="systemStore.stats.disk" :stroke-width="6" :color="getProgressColor(systemStore.stats.disk)" :show-text="false" />
-      </el-card>
+        </CardHeader>
+        <CardContent class="space-y-3">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="text-2xl font-bold tracking-tight tabular-nums">
+              {{ systemStore.stats.disk.toFixed(1) }}%
+            </span>
+            <span class="text-xs text-muted-foreground tabular-nums">
+              {{ formatSize(systemStore.stats.diskUsed) }} / {{ formatSize(systemStore.stats.diskTotal) }}
+            </span>
+          </div>
+          <Progress
+            :model-value="systemStore.stats.disk"
+            class="h-1.5"
+            :indicator-class="getProgressIndicatorClass(systemStore.stats.disk)"
+          />
+        </CardContent>
+      </Card>
 
-      <el-card class="stat-card" shadow="hover">
-        <div class="stat-content">
-          <div class="stat-icon containers"><el-icon :size="32"><Connection /></el-icon></div>
-          <div class="stat-info">
-            <div class="stat-value">{{ containerStats.running }} / {{ containerStats.total }}</div>
-            <div class="stat-label">{{ t('nav.containers') }}</div>
+      <Card class="gap-3 py-5">
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-0">
+          <CardTitle class="text-sm font-medium text-muted-foreground">
+            {{ t('nav.containers') }}
+          </CardTitle>
+          <div class="size-8 rounded-lg bg-muted text-foreground flex items-center justify-center">
+            <Container class="size-4" />
           </div>
-        </div>
-        <div class="container-stats">
-          <el-tag type="success" size="small">{{ t('container.running') }}: {{ containerStats.running }}</el-tag>
-          <el-tag type="danger" size="small">{{ t('container.stopped') }}: {{ containerStats.stopped }}</el-tag>
-        </div>
-      </el-card>
+        </CardHeader>
+        <CardContent class="space-y-2.5">
+          <div class="text-2xl font-bold tracking-tight tabular-nums">
+            {{ containerStats.running }} / {{ containerStats.total }}
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            <Badge variant="success">{{ t('container.running') }}: {{ containerStats.running }}</Badge>
+            <Badge variant="destructive">{{ t('container.stopped') }}: {{ containerStats.stopped }}</Badge>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
-    <div class="charts-row">
-      <el-card class="chart-card" shadow="hover">
-        <template #header><span>CPU / {{ t('system.memory') }} {{ t('system.usage') }}</span></template>
-        <div ref="lineChartRef" class="chart-container"></div>
-      </el-card>
+    <!-- Charts Row 1 -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <Card class="lg:col-span-2">
+        <CardHeader>
+          <CardTitle class="text-base">
+            CPU / {{ t('system.memory') }} {{ t('system.usage') }}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div ref="lineChartRef" class="w-full h-[250px]" />
+        </CardContent>
+      </Card>
 
-      <el-card class="chart-card" shadow="hover">
-        <template #header><span>{{ t('nav.containers') }}</span></template>
-        <div ref="pieChartRef" class="chart-container"></div>
-      </el-card>
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">{{ t('nav.containers') }}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div ref="pieChartRef" class="w-full h-[250px]" />
+        </CardContent>
+      </Card>
     </div>
 
-    <div class="charts-row-2">
-      <el-card class="chart-card" shadow="hover">
-        <template #header><span>{{ t('system.disk') }} {{ t('system.usage') }}</span></template>
-        <div ref="gaugeChartRef" class="chart-container"></div>
-      </el-card>
+    <!-- Charts Row 2 -->
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">
+            {{ t('system.disk') }} {{ t('system.usage') }}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div ref="gaugeChartRef" class="w-full h-[250px]" />
+        </CardContent>
+      </Card>
 
-      <el-card class="info-card" shadow="hover">
-        <template #header><span>Server Info</span></template>
-        <div class="server-info">
-          <div class="info-item"><span class="info-label">{{ t('system.serverTime') }}</span><span class="info-value">{{ systemStore.stats.time || '--' }}</span></div>
-          <div class="info-item"><span class="info-label">Containers</span><span class="info-value">{{ containerStats.total }}</span></div>
-          <div class="info-item"><span class="info-label">Running</span><span class="info-value success">{{ containerStats.running }}</span></div>
-          <div class="info-item"><span class="info-label">Stopped</span><span class="info-value danger">{{ containerStats.stopped }}</span></div>
-        </div>
-      </el-card>
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">Server Info</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="rounded-lg border bg-muted/30 p-4 space-y-1">
+              <div class="text-xs text-muted-foreground">{{ t('system.serverTime') }}</div>
+              <div class="text-lg font-semibold font-mono tabular-nums">
+                {{ systemStore.stats.time || '--' }}
+              </div>
+            </div>
+            <div class="rounded-lg border bg-muted/30 p-4 space-y-1">
+              <div class="text-xs text-muted-foreground">Containers</div>
+              <div class="text-lg font-semibold tabular-nums">{{ containerStats.total }}</div>
+            </div>
+            <div class="rounded-lg border bg-muted/30 p-4 space-y-1">
+              <div class="text-xs text-muted-foreground">Running</div>
+              <div class="text-lg font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {{ containerStats.running }}
+              </div>
+            </div>
+            <div class="rounded-lg border bg-muted/30 p-4 space-y-1">
+              <div class="text-xs text-muted-foreground">Stopped</div>
+              <div class="text-lg font-semibold tabular-nums text-destructive">
+                {{ containerStats.stopped }}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   </div>
 
   <UpdateDialog v-model="showUpdateDialog" />
 </template>
-
-<style scoped>
-.dashboard { padding: 20px; }
-.stats-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 20px; }
-.stat-card { padding: 10px; }
-.stat-content { display: flex; align-items: center; gap: 15px; margin-bottom: 15px; }
-.stat-icon { width: 60px; height: 60px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: white; }
-.stat-icon.cpu { background: linear-gradient(135deg, #409EFF, #66b1ff); }
-.stat-icon.memory { background: linear-gradient(135deg, #67C23A, #85ce61); }
-.stat-icon.disk { background: linear-gradient(135deg, #E6A23C, #ebb563); }
-.stat-icon.containers { background: linear-gradient(135deg, #909399, #a6a9ad); }
-.stat-info { flex: 1; }
-.stat-value { font-size: 28px; font-weight: 600; color: var(--el-text-color-primary); }
-.stat-label { font-size: 14px; color: var(--el-text-color-secondary); margin-top: 4px; }
-.stat-detail { font-size: 12px; color: var(--el-text-color-secondary); margin-top: 2px; }
-.container-stats { display: flex; gap: 8px; margin-top: 10px; }
-.charts-row { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
-.charts-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
-.chart-card { min-height: 300px; }
-.chart-container { width: 100%; height: 250px; }
-.info-card { min-height: 300px; }
-.server-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 30px; padding: 20px; }
-.info-item { display: flex; flex-direction: column; gap: 8px; }
-.info-label { font-size: 14px; color: var(--el-text-color-secondary); }
-.info-value { font-size: 24px; font-weight: 600; color: var(--el-text-color-primary); }
-.info-value.success { color: #67C23A; }
-.info-value.danger { color: #F56C6C; }
-@media (max-width: 1200px) { .stats-row { grid-template-columns: repeat(2, 1fr); } .charts-row, .charts-row-2 { grid-template-columns: 1fr; } }
-@media (max-width: 768px) { .stats-row { grid-template-columns: 1fr; } .server-info { grid-template-columns: 1fr; gap: 20px; } }
-</style>

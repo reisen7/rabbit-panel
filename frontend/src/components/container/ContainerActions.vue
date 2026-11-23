@@ -1,179 +1,49 @@
-<template>
-  <div class="container-actions" :class="{ compact }">
-    <!-- Compact mode: dropdown menu -->
-    <template v-if="compact">
-      <el-dropdown trigger="click" @command="handleCommand">
-        <el-button type="primary" size="small">
-          {{ t('common.actions') }}
-          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-        </el-button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item v-if="container.state !== 'running'" command="start">
-              <el-icon><VideoPlay /></el-icon>
-              {{ t('container.start') }}
-            </el-dropdown-item>
-            <el-dropdown-item v-if="container.state === 'running'" command="stop">
-              <el-icon><VideoPause /></el-icon>
-              {{ t('container.stop') }}
-            </el-dropdown-item>
-            <el-dropdown-item command="restart">
-              <el-icon><RefreshRight /></el-icon>
-              {{ t('container.restart') }}
-            </el-dropdown-item>
-            <el-dropdown-item divided command="logs">
-              <el-icon><Document /></el-icon>
-              {{ t('container.logs') }}
-            </el-dropdown-item>
-            <el-dropdown-item v-if="container.state === 'running'" command="terminal">
-              <el-icon><Monitor /></el-icon>
-              {{ t('container.terminal') }}
-            </el-dropdown-item>
-            <el-dropdown-item v-if="container.state === 'running'" command="files">
-              <el-icon><FolderOpened /></el-icon>
-              {{ t('container.files') }}
-            </el-dropdown-item>
-            <el-dropdown-item command="config">
-              <el-icon><Setting /></el-icon>
-              {{ t('container.config') }}
-            </el-dropdown-item>
-            <el-dropdown-item divided command="remove" class="danger-item">
-              <el-icon><Delete /></el-icon>
-              {{ t('common.delete') }}
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-    </template>
-
-    <!-- Normal mode: icon buttons -->
-    <template v-else>
-      <el-button-group class="action-group">
-        <!-- Start button (disabled when running or action in progress) -->
-        <el-tooltip :content="t('container.start')" placement="top" :disabled="container.state === 'running'">
-          <el-button
-            type="success"
-            size="small"
-            :icon="VideoPlay"
-            :loading="actionLoading === 'start'"
-            :disabled="container.state === 'running' || containerStore.actionInProgress"
-            @click="handleAction('start')"
-          />
-        </el-tooltip>
-
-        <!-- Stop button (disabled when not running or action in progress) -->
-        <el-tooltip :content="t('container.stop')" placement="top" :disabled="container.state !== 'running'">
-          <el-button
-            type="warning"
-            size="small"
-            :icon="VideoPause"
-            :loading="actionLoading === 'stop'"
-            :disabled="container.state !== 'running' || containerStore.actionInProgress"
-            @click="handleAction('stop')"
-          />
-        </el-tooltip>
-
-        <!-- Restart button (disabled when action in progress) -->
-        <el-tooltip :content="t('container.restart')" placement="top">
-          <el-button
-            type="primary"
-            size="small"
-            :icon="RefreshRight"
-            :loading="actionLoading === 'restart'"
-            :disabled="containerStore.actionInProgress"
-            @click="handleAction('restart')"
-          />
-        </el-tooltip>
-
-        <!-- Logs button -->
-        <el-tooltip :content="t('container.logs')" placement="top">
-          <el-button
-            type="info"
-            size="small"
-            :icon="Document"
-            @click="handleViewLogs"
-          />
-        </el-tooltip>
-
-        <!-- Terminal button (disabled when not running) -->
-        <el-tooltip :content="t('container.terminal')" placement="top" :disabled="container.state !== 'running'">
-          <el-button
-            size="small"
-            :icon="Monitor"
-            :disabled="container.state !== 'running'"
-            @click="handleOpenTerminal"
-          />
-        </el-tooltip>
-
-        <!-- Files button (disabled when not running) -->
-        <el-tooltip :content="t('container.files')" placement="top" :disabled="container.state !== 'running'">
-          <el-button
-            size="small"
-            :icon="FolderOpened"
-            :disabled="container.state !== 'running'"
-            @click="handleOpenFiles"
-          />
-        </el-tooltip>
-
-        <!-- Config button -->
-        <el-tooltip :content="t('container.config')" placement="top">
-          <el-button
-            size="small"
-            :icon="Setting"
-            @click="handleOpenConfig"
-          />
-        </el-tooltip>
-
-        <!-- Delete button with confirmation (disabled when action in progress) -->
-        <el-popconfirm
-          :title="t('container.confirmRemove')"
-          :confirm-button-text="t('common.confirm')"
-          :cancel-button-text="t('common.cancel')"
-          :disabled="containerStore.actionInProgress"
-          @confirm="handleAction('remove')"
-        >
-          <template #reference>
-            <el-button
-              type="danger"
-              size="small"
-              :icon="Delete"
-              :loading="actionLoading === 'remove'"
-              :disabled="containerStore.actionInProgress"
-            />
-          </template>
-        </el-popconfirm>
-      </el-button-group>
-    </template>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, watch } from 'vue'
 import {
-  VideoPlay,
-  VideoPause,
-  RefreshRight,
-  Document,
-  Delete,
-  Monitor,
-  FolderOpened,
-  Setting,
-  ArrowDown,
-} from '@element-plus/icons-vue'
-import { ElMessageBox } from 'element-plus'
+  ChevronDown,
+  FileText,
+  FolderOpen,
+  Loader2,
+  Play,
+  RotateCw,
+  Settings,
+  Square,
+  Terminal,
+  Trash2,
+} from 'lucide-vue-next'
 import { useI18n } from '@/composables/useI18n'
+import { useConfirm } from '@/composables/useConfirm'
 import { useContainerStore } from '@/stores/containers'
 import type { ContainerInfo } from '@/types'
+import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip'
 
 const { t } = useI18n()
+const { confirm } = useConfirm()
 const containerStore = useContainerStore()
 
-const props = withDefaults(defineProps<{
-  container: ContainerInfo
-  compact?: boolean
-}>(), {
-  compact: false
-})
+const props = withDefaults(
+  defineProps<{
+    container: ContainerInfo
+    compact?: boolean
+  }>(),
+  {
+    compact: false,
+  }
+)
 
 const emit = defineEmits<{
   action: [id: string, action: 'start' | 'stop' | 'restart' | 'remove']
@@ -185,37 +55,39 @@ const emit = defineEmits<{
 
 const actionLoading = ref<string | null>(null)
 
-// 监听 store 的 actionInProgress 状态，当操作完成时重置 loading
-watch(() => containerStore.actionInProgress, (inProgress) => {
-  if (!inProgress) {
-    actionLoading.value = null
+watch(
+  () => containerStore.actionInProgress,
+  (inProgress) => {
+    if (!inProgress) {
+      actionLoading.value = null
+    }
   }
-})
+)
 
 function handleAction(action: 'start' | 'stop' | 'restart' | 'remove') {
   actionLoading.value = action
   emit('action', props.container.id, action)
 }
 
+async function confirmRemove() {
+  const ok = await confirm({
+    title: t('common.warning'),
+    description: t('container.confirmRemove'),
+    confirmText: t('common.confirm'),
+    cancelText: t('common.cancel'),
+    destructive: true,
+  })
+  if (ok) {
+    handleAction('remove')
+  }
+}
+
 async function handleCommand(command: string) {
   if (command === 'remove') {
-    try {
-      await ElMessageBox.confirm(
-        t('container.confirmRemove'),
-        t('common.warning'),
-        {
-          confirmButtonText: t('common.confirm'),
-          cancelButtonText: t('common.cancel'),
-          type: 'warning',
-        }
-      )
-      handleAction('remove')
-    } catch {
-      // User cancelled
-    }
+    await confirmRemove()
     return
   }
-  
+
   switch (command) {
     case 'start':
     case 'stop':
@@ -254,39 +126,181 @@ function handleOpenConfig() {
 }
 </script>
 
-<style scoped>
-.container-actions {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+<template>
+  <TooltipProvider>
+    <div class="flex items-center justify-center">
+      <!-- Compact mode: dropdown menu -->
+      <DropdownMenu v-if="compact">
+        <DropdownMenuTrigger as-child>
+          <Button variant="outline" size="sm">
+            {{ t('common.actions') }}
+            <ChevronDown class="size-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" class="w-44">
+          <DropdownMenuItem v-if="container.state !== 'running'" @click="handleCommand('start')">
+            <Play />
+            {{ t('container.start') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="container.state === 'running'" @click="handleCommand('stop')">
+            <Square />
+            {{ t('container.stop') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @click="handleCommand('restart')">
+            <RotateCw />
+            {{ t('container.restart') }}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem @click="handleCommand('logs')">
+            <FileText />
+            {{ t('container.logs') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="container.state === 'running'" @click="handleCommand('terminal')">
+            <Terminal />
+            {{ t('container.terminal') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem v-if="container.state === 'running'" @click="handleCommand('files')">
+            <FolderOpen />
+            {{ t('container.files') }}
+          </DropdownMenuItem>
+          <DropdownMenuItem @click="handleCommand('config')">
+            <Settings />
+            {{ t('container.config') }}
+          </DropdownMenuItem>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem class="text-destructive focus:text-destructive" @click="handleCommand('remove')">
+            <Trash2 />
+            {{ t('common.delete') }}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
 
-.container-actions.compact {
-  justify-content: center;
-}
+      <!-- Normal mode: compact segmented icon buttons -->
+      <div v-else class="inline-flex items-center rounded-md border bg-background shadow-2xs divide-x">
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none rounded-l-md text-emerald-600 dark:text-emerald-400"
+                :disabled="container.state === 'running' || containerStore.actionInProgress"
+                @click="handleAction('start')"
+              >
+                <Loader2 v-if="actionLoading === 'start'" class="animate-spin" />
+                <Play v-else />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.start') }}</TooltipContent>
+        </Tooltip>
 
-.container-actions .action-group {
-  display: flex;
-  flex-wrap: nowrap;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none text-amber-600 dark:text-amber-400"
+                :disabled="container.state !== 'running' || containerStore.actionInProgress"
+                @click="handleAction('stop')"
+              >
+                <Loader2 v-if="actionLoading === 'stop'" class="animate-spin" />
+                <Square v-else />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.stop') }}</TooltipContent>
+        </Tooltip>
 
-/* Make icon-only buttons square and consistent */
-.container-actions :deep(.el-button) {
-  padding: 10px 12px;
-  min-width: 42px;
-  height: 42px;
-  font-size: 18px;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none"
+                :disabled="containerStore.actionInProgress"
+                @click="handleAction('restart')"
+              >
+                <Loader2 v-if="actionLoading === 'restart'" class="animate-spin" />
+                <RotateCw v-else />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.restart') }}</TooltipContent>
+        </Tooltip>
 
-.container-actions :deep(.el-button .el-icon) {
-  margin: 0;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="icon-sm" class="rounded-none" @click="handleViewLogs">
+              <FileText />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.logs') }}</TooltipContent>
+        </Tooltip>
 
-:deep(.danger-item) {
-  color: var(--el-color-danger) !important;
-}
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none"
+                :disabled="container.state !== 'running'"
+                @click="handleOpenTerminal"
+              >
+                <Terminal />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.terminal') }}</TooltipContent>
+        </Tooltip>
 
-:deep(.danger-item .el-icon) {
-  color: var(--el-color-danger) !important;
-}
-</style>
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none"
+                :disabled="container.state !== 'running'"
+                @click="handleOpenFiles"
+              >
+                <FolderOpen />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.files') }}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <Button variant="ghost" size="icon-sm" class="rounded-none" @click="handleOpenConfig">
+              <Settings />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('container.config') }}</TooltipContent>
+        </Tooltip>
+
+        <Tooltip>
+          <TooltipTrigger as-child>
+            <span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                class="rounded-none rounded-r-md text-destructive hover:text-destructive"
+                :disabled="containerStore.actionInProgress"
+                @click="confirmRemove"
+              >
+                <Loader2 v-if="actionLoading === 'remove'" class="animate-spin" />
+                <Trash2 v-else />
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>{{ t('common.delete') }}</TooltipContent>
+        </Tooltip>
+      </div>
+    </div>
+  </TooltipProvider>
+</template>

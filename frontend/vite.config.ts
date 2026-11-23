@@ -1,9 +1,9 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 import { resolve } from 'path'
 import AutoImport from 'unplugin-auto-import/vite'
 import Components from 'unplugin-vue-components/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 // 后端默认 HTTP。后端以 TLS_ENABLED=true 启动时，用 RABBIT_DEV_BACKEND=https://localhost:3958 覆盖。
@@ -13,13 +13,12 @@ const wsTarget = backendTarget.replace(/^http/, 'ws')
 export default defineConfig({
   plugins: [
     vue(),
+    tailwindcss(),
     AutoImport({
-      resolvers: [ElementPlusResolver()],
       imports: ['vue', 'vue-router', 'pinia'],
       dts: 'src/auto-imports.d.ts',
     }),
     Components({
-      resolvers: [ElementPlusResolver()],
       dts: 'src/components.d.ts',
     }),
   ],
@@ -53,7 +52,7 @@ export default defineConfig({
         // 分离第三方库，优化缓存
         manualChunks: {
           'vue-vendor': ['vue', 'vue-router', 'pinia'],
-          'element-plus': ['element-plus'],
+          'ui-vendor': ['reka-ui', 'lucide-vue-next', 'vue-sonner'],
           'xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-web-links'],
         },
         // 优化资源文件命名

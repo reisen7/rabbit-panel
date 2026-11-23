@@ -1,106 +1,26 @@
-<template>
-  <el-dialog
-    v-model="visible"
-    :title="isForced ? '首次登录 - 请修改密码' : '修改密码'"
-    width="450px"
-    :close-on-click-modal="!isForced"
-    :close-on-press-escape="!isForced"
-    :show-close="!isForced"
-    @close="handleClose"
-  >
-    <el-alert
-      v-if="isForced"
-      type="warning"
-      :closable="false"
-      show-icon
-      class="mb-4"
-    >
-      首次登录需要修改默认密码以确保账户安全
-    </el-alert>
-
-    <el-form
-      ref="formRef"
-      :model="form"
-      :rules="rules"
-      label-width="100px"
-      @submit.prevent="handleSubmit"
-    >
-      <el-form-item label="旧密码" prop="oldPassword" v-if="!isForced">
-        <el-input
-          v-model="form.oldPassword"
-          type="password"
-          placeholder="请输入旧密码"
-          show-password
-          autocomplete="current-password"
-        />
-      </el-form-item>
-
-      <el-form-item label="新密码" prop="newPassword">
-        <el-input
-          v-model="form.newPassword"
-          type="password"
-          placeholder="请输入新密码"
-          show-password
-          autocomplete="new-password"
-          @input="handlePasswordInput"
-        />
-      </el-form-item>
-
-      <!-- Password strength indicator -->
-      <el-form-item v-if="form.newPassword">
-        <div class="password-strength">
-          <span class="strength-label">密码强度：</span>
-          <el-progress
-            :percentage="strengthPercentage"
-            :color="strengthColor"
-            :stroke-width="8"
-            :show-text="false"
-            class="strength-progress"
-          />
-          <span class="strength-text" :style="{ color: strengthColor }">
-            {{ strengthLabel }}
-          </span>
-        </div>
-        <div v-if="passwordErrors.length > 0" class="password-errors">
-          <div v-for="error in passwordErrors" :key="error" class="error-item">
-            <el-icon><WarningFilled /></el-icon>
-            <span>{{ error }}</span>
-          </div>
-        </div>
-      </el-form-item>
-
-      <el-form-item label="确认密码" prop="confirmPassword">
-        <el-input
-          v-model="form.confirmPassword"
-          type="password"
-          placeholder="请再次输入新密码"
-          show-password
-          autocomplete="new-password"
-          @keyup.enter="handleSubmit"
-        />
-      </el-form-item>
-    </el-form>
-
-    <template #footer>
-      <el-button v-if="!isForced" @click="handleClose">取消</el-button>
-      <el-button type="primary" :loading="loading" @click="handleSubmit">
-        {{ loading ? '提交中...' : '确认修改' }}
-      </el-button>
-    </template>
-  </el-dialog>
-</template>
-
 <script setup lang="ts">
 import { ref, reactive, computed, watch } from 'vue'
-import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { WarningFilled } from '@element-plus/icons-vue'
+import { AlertTriangle, Eye, EyeOff, Loader2 } from 'lucide-vue-next'
 import { useAuthStore } from '@/stores/auth'
+import { useToast } from '@/composables/useToast'
 import {
   validatePassword,
   getStrengthColor,
   getStrengthPercentage,
   getStrengthLabel,
 } from '@/utils/password'
+import { Alert, AlertDescription } from '@/components/ui/alert'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Progress } from '@/components/ui/progress'
 
 interface Props {
   modelValue: boolean
@@ -117,16 +37,21 @@ const emit = defineEmits<{
 }>()
 
 const authStore = useAuthStore()
+const toast = useToast()
 
 const visible = computed({
   get: () => props.modelValue,
-  set: (value) => emit('update:modelValue', value),
+  set: (value) => {
+    if (!value && isForced.value) return
+    emit('update:modelValue', value)
+  },
 })
 
 const isForced = computed(() => props.forced)
-
-const formRef = ref<FormInstance>()
 const loading = ref(false)
+const showOldPassword = ref(false)
+const showNewPassword = ref(false)
+const showConfirmPassword = ref(false)
 
 const form = reactive({
   oldPassword: '',
@@ -134,7 +59,12 @@ const form = reactive({
   confirmPassword: '',
 })
 
-// Password validation state
+const errors = reactive({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: '',
+})
+
 const passwordErrors = ref<string[]>([])
 const passwordStrength = ref<'weak' | 'medium' | 'strong'>('weak')
 
@@ -142,56 +72,8 @@ const strengthColor = computed(() => getStrengthColor(passwordStrength.value))
 const strengthPercentage = computed(() => getStrengthPercentage(passwordStrength.value))
 const strengthLabel = computed(() => getStrengthLabel(passwordStrength.value))
 
-// Custom validator for new password
-const validateNewPassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-  if (!value) {
-    callback(new Error('请输入新密码'))
-    return
-  }
-  
-  const result = validatePassword(value)
-  if (!result.valid) {
-    callback(new Error(result.errors[0]))
-    return
-  }
-  
-  // Also validate confirm password if it's filled
-  if (form.confirmPassword) {
-    formRef.value?.validateField('confirmPassword')
-  }
-  
-  callback()
-}
-
-// Custom validator for confirm password
-const validateConfirmPassword = (_rule: unknown, value: string, callback: (error?: Error) => void) => {
-  if (!value) {
-    callback(new Error('请再次输入新密码'))
-    return
-  }
-  
-  if (value !== form.newPassword) {
-    callback(new Error('两次输入的密码不一致'))
-    return
-  }
-  
-  callback()
-}
-
-const rules: FormRules = {
-  oldPassword: [
-    { required: true, message: '请输入旧密码', trigger: 'blur' },
-  ],
-  newPassword: [
-    { required: true, validator: validateNewPassword, trigger: 'blur' },
-  ],
-  confirmPassword: [
-    { required: true, validator: validateConfirmPassword, trigger: 'blur' },
-  ],
-}
-
-// Update password strength on input
 function handlePasswordInput() {
+  errors.newPassword = ''
   if (form.newPassword) {
     const result = validatePassword(form.newPassword)
     passwordErrors.value = result.errors
@@ -202,29 +84,48 @@ function handlePasswordInput() {
   }
 }
 
-async function handleSubmit() {
-  if (!formRef.value) return
+function validate(): boolean {
+  errors.oldPassword = ''
+  errors.newPassword = ''
+  errors.confirmPassword = ''
 
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
+  if (!isForced.value && !form.oldPassword) {
+    errors.oldPassword = '请输入旧密码'
   }
 
-  loading.value = true
+  if (!form.newPassword) {
+    errors.newPassword = '请输入新密码'
+  } else {
+    const result = validatePassword(form.newPassword)
+    if (!result.valid) {
+      errors.newPassword = result.errors[0] || '密码格式不符合要求'
+    }
+  }
 
+  if (!form.confirmPassword) {
+    errors.confirmPassword = '请再次输入新密码'
+  } else if (form.confirmPassword !== form.newPassword) {
+    errors.confirmPassword = '两次输入的密码不一致'
+  }
+
+  return !errors.oldPassword && !errors.newPassword && !errors.confirmPassword
+}
+
+async function handleSubmit() {
+  if (!validate()) return
+
+  loading.value = true
   try {
     await authStore.changePassword(
       isForced.value ? '' : form.oldPassword,
       form.newPassword
     )
-    
-    ElMessage.success('密码修改成功')
+    toast.success('密码修改成功')
     emit('success')
     handleClose()
   } catch (error: unknown) {
     const err = error as { response?: { data?: { error?: string } } }
-    ElMessage.error(err.response?.data?.error || '密码修改失败')
+    toast.error(err.response?.data?.error || '密码修改失败')
   } finally {
     loading.value = false
   }
@@ -232,7 +133,7 @@ async function handleSubmit() {
 
 function handleClose() {
   if (!isForced.value) {
-    visible.value = false
+    emit('update:modelValue', false)
     resetForm()
   }
 }
@@ -241,12 +142,16 @@ function resetForm() {
   form.oldPassword = ''
   form.newPassword = ''
   form.confirmPassword = ''
+  errors.oldPassword = ''
+  errors.newPassword = ''
+  errors.confirmPassword = ''
   passwordErrors.value = []
   passwordStrength.value = 'weak'
-  formRef.value?.resetFields()
+  showOldPassword.value = false
+  showNewPassword.value = false
+  showConfirmPassword.value = false
 }
 
-// Reset form when dialog opens
 watch(visible, (newVal) => {
   if (newVal) {
     resetForm()
@@ -254,49 +159,129 @@ watch(visible, (newVal) => {
 })
 </script>
 
-<style scoped>
-.mb-4 {
-  margin-bottom: 16px;
-}
+<template>
+  <Dialog v-model:open="visible">
+    <DialogContent
+      class="sm:max-w-[440px]"
+      :show-close-button="!isForced"
+      @interact-outside="(e) => { if (isForced) e.preventDefault() }"
+      @escape-key-down="(e) => { if (isForced) e.preventDefault() }"
+    >
+      <DialogHeader>
+        <DialogTitle>{{ isForced ? '首次登录 - 请修改密码' : '修改密码' }}</DialogTitle>
+      </DialogHeader>
 
-.password-strength {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-}
+      <Alert v-if="isForced" variant="warning">
+        <AlertTriangle class="size-4" />
+        <AlertDescription>首次登录需要修改默认密码以确保账户安全</AlertDescription>
+      </Alert>
 
-.strength-label {
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  white-space: nowrap;
-}
+      <form class="space-y-4" @submit.prevent="handleSubmit">
+        <div v-if="!isForced" class="space-y-1.5">
+          <Label for="old-password">旧密码</Label>
+          <div class="relative">
+            <Input
+              id="old-password"
+              v-model="form.oldPassword"
+              :type="showOldPassword ? 'text' : 'password'"
+              placeholder="请输入旧密码"
+              autocomplete="current-password"
+              class="pr-9"
+              @input="errors.oldPassword = ''"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showOldPassword = !showOldPassword"
+            >
+              <EyeOff v-if="showOldPassword" class="size-4" />
+              <Eye v-else class="size-4" />
+            </button>
+          </div>
+          <p v-if="errors.oldPassword" class="text-xs text-destructive">{{ errors.oldPassword }}</p>
+        </div>
 
-.strength-progress {
-  flex: 1;
-  max-width: 120px;
-}
+        <div class="space-y-1.5">
+          <Label for="new-password">新密码</Label>
+          <div class="relative">
+            <Input
+              id="new-password"
+              v-model="form.newPassword"
+              :type="showNewPassword ? 'text' : 'password'"
+              placeholder="请输入新密码"
+              autocomplete="new-password"
+              class="pr-9"
+              @input="handlePasswordInput"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showNewPassword = !showNewPassword"
+            >
+              <EyeOff v-if="showNewPassword" class="size-4" />
+              <Eye v-else class="size-4" />
+            </button>
+          </div>
+          <p v-if="errors.newPassword" class="text-xs text-destructive">{{ errors.newPassword }}</p>
 
-.strength-text {
-  font-size: 12px;
-  font-weight: 500;
-  min-width: 20px;
-}
+          <div v-if="form.newPassword" class="pt-1 space-y-1.5">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-muted-foreground whitespace-nowrap">密码强度：</span>
+              <Progress
+                :model-value="strengthPercentage"
+                class="h-1.5 max-w-[140px]"
+                :indicator-style="{ backgroundColor: strengthColor }"
+              />
+              <span class="text-xs font-medium" :style="{ color: strengthColor }">
+                {{ strengthLabel }}
+              </span>
+            </div>
+            <div v-if="passwordErrors.length > 0" class="space-y-1">
+              <div
+                v-for="error in passwordErrors"
+                :key="error"
+                class="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400"
+              >
+                <AlertTriangle class="size-3.5 shrink-0" />
+                <span>{{ error }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
 
-.password-errors {
-  margin-top: 8px;
-}
+        <div class="space-y-1.5">
+          <Label for="confirm-password">确认密码</Label>
+          <div class="relative">
+            <Input
+              id="confirm-password"
+              v-model="form.confirmPassword"
+              :type="showConfirmPassword ? 'text' : 'password'"
+              placeholder="请再次输入新密码"
+              autocomplete="new-password"
+              class="pr-9"
+              @input="errors.confirmPassword = ''"
+              @keyup.enter="handleSubmit"
+            />
+            <button
+              type="button"
+              class="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              @click="showConfirmPassword = !showConfirmPassword"
+            >
+              <EyeOff v-if="showConfirmPassword" class="size-4" />
+              <Eye v-else class="size-4" />
+            </button>
+          </div>
+          <p v-if="errors.confirmPassword" class="text-xs text-destructive">{{ errors.confirmPassword }}</p>
+        </div>
 
-.error-item {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--el-color-warning);
-  margin-bottom: 4px;
-}
-
-.error-item .el-icon {
-  font-size: 14px;
-}
-</style>
+        <DialogFooter class="gap-2 pt-2">
+          <Button v-if="!isForced" type="button" variant="outline" @click="handleClose">取消</Button>
+          <Button type="submit" :disabled="loading">
+            <Loader2 v-if="loading" class="animate-spin" />
+            {{ loading ? '提交中...' : '确认修改' }}
+          </Button>
+        </DialogFooter>
+      </form>
+    </DialogContent>
+  </Dialog>
+</template>
