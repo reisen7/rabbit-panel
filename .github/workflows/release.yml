@@ -98,6 +98,29 @@ jobs:
             rabbit-panel-windows-arm64-${TAG}-release/rabbit-panel-windows-arm64-${TAG}.exe \
             > sha256sums.txt
 
+      - name: Extract release notes
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          python3 <<'PY'
+          import os
+          import re
+          from pathlib import Path
+
+          tag = os.environ["TAG"]
+          text = Path(".doc/CHANGELOG.md").read_text(encoding="utf-8")
+          # 提取「## vX.Y.Z (日期)」标题到下一个「## 」标题之间的内容，去掉标题行本身
+          m = re.search(rf"^## {re.escape(tag)}\b[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+          notes = m.group(1).strip() if m else ""
+          Path("release_notes.md").write_text(notes + "\n", encoding="utf-8") if notes else Path("release_notes.md").write_text("", encoding="utf-8")
+          print(f"release notes extracted: {len(notes)} chars")
+          PY
+          PREV_TAG=$(git tag --sort=-v:refname | grep -vx "$TAG" | head -1 || true)
+          if [ -s release_notes.md ] && [ -n "$PREV_TAG" ]; then
+            printf '\n**Full Changelog**: https://github.com/%s/compare/%s...%s\n' "$REPO" "$PREV_TAG" "$TAG" >> release_notes.md
+          fi
+
       - name: Create or update release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -105,6 +128,8 @@ jobs:
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists"
+          elif [ -s release_notes.md ]; then
+            gh release create "$TAG" --title "$TAG" --notes-file release_notes.md
           else
             gh release create "$TAG" --title "$TAG" --generate-notes
           fi

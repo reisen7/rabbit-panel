@@ -24,6 +24,14 @@ services:
       # 可不填，未填时每次启动随机生成并打印到日志（重启后变化，生产建议固定）；Worker 需填入与 Master 相同的值。
       - JWT_SECRET=${JWT_SECRET:-}
       - NODE_SECRET=${NODE_SECRET:-}
+      # 面板内在线更新：compose 文件名与服务名必须与本文件一致，否则更新会落到默认 deploy 配置
+      - RABBIT_DEPLOY_MODE=docker
+      - RABBIT_IMAGE=reisen7/rabbit-panel
+      - RABBIT_IMAGE_TAG=latest
+      - RABBIT_HOST_PROJECT_DIR=/opt/rabbit-panel
+      - RABBIT_COMPOSE_FILE=docker-compose.master.yml
+      - RABBIT_SERVICE_NAME=rabbit-panel-master
+      # - RABBIT_UPDATE_CHECK_DISABLED=true  # set to true to skip the update check (no manifest fetch)
       # ===== 原生 HTTPS（默认 HTTP，需要时取消注释）=====
       # - TLS_ENABLED=true
       # - TLS_SELF_SIGNED=true            # 证书缺失时自动生成自签证书（保存到 ./data/certs）
