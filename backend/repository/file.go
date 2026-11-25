@@ -2,10 +2,31 @@ package repository
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
+
+// ValidateComposeProjectName 校验 compose 项目名，防止路径穿越。
+// 项目名会成为 compose_projects 下的目录名，因此拒绝路径分隔符、
+// ".." 片段与 NUL；允许字母数字、点、横线、下划线等常规字符以兼容存量项目。
+func ValidateComposeProjectName(name string) error {
+	if name == "" || strings.TrimSpace(name) != name {
+		return fmt.Errorf("项目名不能为空或首尾含空白")
+	}
+	if name == "." || name == ".." {
+		return fmt.Errorf("项目名非法: %q", name)
+	}
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("项目名不能包含 \"..\": %q", name)
+	}
+	if strings.ContainsAny(name, "/\\") || strings.ContainsRune(name, 0) {
+		return fmt.Errorf("项目名不能包含路径分隔符: %q", name)
+	}
+	return nil
+}
 
 // IFileRepository 文件系统操作接口
 type IFileRepository interface {
@@ -104,6 +125,9 @@ func (r *FileRepository) GetComposeProjectDir(name string) string {
 
 // ComposeProjectExists 检查项目是否存在
 func (r *FileRepository) ComposeProjectExists(name string) bool {
+	if ValidateComposeProjectName(name) != nil {
+		return false
+	}
 	path := r.GetComposeProjectDir(name)
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
@@ -111,6 +135,9 @@ func (r *FileRepository) ComposeProjectExists(name string) bool {
 
 // CreateComposeProject 创建 Compose 项目
 func (r *FileRepository) CreateComposeProject(name, content string) error {
+	if err := ValidateComposeProjectName(name); err != nil {
+		return err
+	}
 	dir := r.GetComposeProjectDir(name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -130,6 +157,9 @@ func (r *FileRepository) CreateComposeProject(name, content string) error {
 
 // GetComposeFile 获取 Compose 文件内容
 func (r *FileRepository) GetComposeFile(name string) (string, error) {
+	if err := ValidateComposeProjectName(name); err != nil {
+		return "", err
+	}
 	dir := r.GetComposeProjectDir(name)
 
 	// 尝试 .yml 或 .yaml
@@ -147,6 +177,9 @@ func (r *FileRepository) GetComposeFile(name string) (string, error) {
 
 // SaveComposeFile 保存 Compose 文件
 func (r *FileRepository) SaveComposeFile(name, content string) error {
+	if err := ValidateComposeProjectName(name); err != nil {
+		return err
+	}
 	dir := r.GetComposeProjectDir(name)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
@@ -157,6 +190,9 @@ func (r *FileRepository) SaveComposeFile(name, content string) error {
 
 // DeleteComposeProject 删除 Compose 项目
 func (r *FileRepository) DeleteComposeProject(name string) error {
+	if err := ValidateComposeProjectName(name); err != nil {
+		return err
+	}
 	dir := r.GetComposeProjectDir(name)
 	return os.RemoveAll(dir)
 }

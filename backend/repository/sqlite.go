@@ -327,10 +327,10 @@ func (r *SQLiteRepository) SaveChatMessage(role, content string) error {
 	return err
 }
 
-// GetChatHistory 获取聊天历史
+// GetChatHistory 获取聊天历史：取最近的 limit 条，按时间正序返回
 func (r *SQLiteRepository) GetChatHistory(limit int) ([]ChatHistoryRecord, error) {
 	rows, err := r.db.Query(
-		"SELECT id, role, content, created_at FROM chat_messages ORDER BY created_at ASC LIMIT ?",
+		"SELECT id, role, content, created_at FROM chat_messages ORDER BY id DESC LIMIT ?",
 		limit,
 	)
 	if err != nil {
@@ -345,6 +345,10 @@ func (r *SQLiteRepository) GetChatHistory(limit int) ([]ChatHistoryRecord, error
 			return nil, err
 		}
 		records = append(records, rec)
+	}
+	// DESC 取出后反转为正序，保持调用方看到的仍是时间升序
+	for i, j := 0, len(records)-1; i < j; i, j = i+1, j-1 {
+		records[i], records[j] = records[j], records[i]
 	}
 	return records, nil
 }

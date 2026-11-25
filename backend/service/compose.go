@@ -49,6 +49,9 @@ func (s *ComposeService) ListProjects() ([]model.ComposeProject, error) {
 
 // FetchProjectStatus 获取单个 Compose 项目状态
 func (s *ComposeService) FetchProjectStatus(name string) (*model.ComposeProject, error) {
+	if err := repository.ValidateComposeProjectName(name); err != nil {
+		return nil, err
+	}
 	return s.projectFromContainers(name), nil
 }
 
@@ -75,6 +78,9 @@ func (s *ComposeService) DeleteProject(name string) error {
 // ExecuteAction 执行 Compose 操作（up, down, restart, pull, logs）
 // ctx 取消时终止命令；writer 实时接收 stdout/stderr 输出
 func (s *ComposeService) ExecuteAction(ctx context.Context, name, action string, writer io.Writer) error {
+	if err := repository.ValidateComposeProjectName(name); err != nil {
+		return err
+	}
 	dir := s.fileRepo.GetComposeProjectDir(name)
 	composeFile := filepath.Base(resolveComposeFile(dir))
 	var cmd *exec.Cmd
