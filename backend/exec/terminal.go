@@ -1,6 +1,9 @@
 package exec
 
 import (
+	"fmt"
+	"time"
+	"strings"
 	"bytes"
 	"context"
 	"io"
@@ -114,27 +117,37 @@ func (s *TerminalService) RenameContainer(ctx context.Context, containerID, newN
 
 // RecreateContainer 重建容器
 func (s *TerminalService) RecreateContainer(ctx context.Context, req *RecreateRequest) (string, error) {
-	// Stop container
-	_ = s.dockerRepo.ContainerStop(ctx, req.ContainerID, nil)
-
-	// Remove container
-	_ = s.dockerRepo.ContainerRemove(ctx, req.ContainerID, container.RemoveOptions{Force: true})
-
-	// Create new container
-	containerConfig := &container.Config{
-		Image: req.Image,
-		Tty:   req.TTY,
+	// 以原容器配置为基底，只覆盖表单schema内的字段。
+	// 原实现白手起家重建配置，静默丢失 Cmd/Entrypoint/Labels/WorkingDir/
+	// User/Healthcheck/日志驱动/DNS 等，重建后容器行为改变甚至无法启动。
+	inspect, err := s.dockerRepo.ContainerInspect(ctx, req.ContainerID)
+	if err != nil {
+		return "", fmt.Errorf("读取原容器配置失败: %v", err)
 	}
 
-	for _, env := range req.Env {
-		if env.Key != "" {
-			containerConfig.Env = append(containerConfig.Env, env.Key+"="+env.Value)
+	containerConfig := inspect.Config
+	if containerConfig == nil {
+		containerConfig = &container.Config{}
+	}
+	if req.Image != "" {
+		containerConfig.Image = req.Image
+	}
+	containerConfig.Tty = req.TTY
+
+	if len(req.Env) > 0 {
+		containerConfig.Env = containerConfig.Env[:0]
+		for _, env := range req.Env {
+			if env.Key != "" {
+				containerConfig.Env = append(containerConfig.Env, env.Key+"="+env.Value)
+			}
 		}
 	}
 
-	hostConfig := &container.HostConfig{
-		Privileged: req.Privileged,
+	hostConfig := inspect.HostConfig
+	if hostConfig == nil {
+		hostConfig = &container.HostConfig{}
 	}
+	hostConfig.Privileged = req.Privileged
 
 	if req.Restart != "" {
 		hostConfig.RestartPolicy = container.RestartPolicy{
@@ -155,13 +168,25 @@ func (s *TerminalService) RecreateContainer(ctx context.Context, req *RecreateRe
 	}
 
 	if len(req.Ports) > 0 {
+		// 协议按原容器同端口的已有映射保留（UDP 不再静默变 TCP），缺省 tcp
+		protoOf := func(containerPort string) string {
+			if inspect.HostConfig != nil {
+				for _, proto := range []string{"udp", "sctp"} {
+					p := nat.Port(containerPort + "/" + proto)
+					if _, ok := inspect.HostConfig.PortBindings[p]; ok {
+						return proto
+					}
+				}
+			}
+			return "tcp"
+		}
 		portBindings := nat.PortMap{}
 		exposedPorts := nat.PortSet{}
 		for _, p := range req.Ports {
 			if p.Host == "" || p.Container == "" {
 				continue
 			}
-			port := nat.Port(p.Container + "/tcp")
+			port := nat.Port(p.Container + "/" + protoOf(p.Container))
 			exposedPorts[port] = struct{}{}
 			portBindings[port] = []nat.PortBinding{{
 				HostIP:   "0.0.0.0",
@@ -172,21 +197,48 @@ func (s *TerminalService) RecreateContainer(ctx context.Context, req *RecreateRe
 		hostConfig.PortBindings = portBindings
 	}
 
-	for _, v := range req.Volumes {
-		if v.Host == "" || v.Container == "" {
-			continue
+	if len(req.Volumes) > 0 {
+		hostConfig.Binds = hostConfig.Binds[:0]
+		for _, v := range req.Volumes {
+			if v.Host == "" || v.Container == "" {
+				continue
+			}
+			hostConfig.Binds = append(hostConfig.Binds, v.Host+":"+v.Container)
 		}
-		hostConfig.Binds = append(hostConfig.Binds, v.Host+":"+v.Container)
 	}
 
-	resp, err := s.dockerRepo.ContainerCreate(ctx, containerConfig, hostConfig, &network.NetworkingConfig{}, nil, req.Name)
-	if err != nil {
-		return "", err
+	// 失败回滚：先把原容器改名保留，新容器创建/启动失败时还原，
+	// 不再「先删后建」——创建失败（如镜像名错误）容器不至于直接消失。
+	if err := s.dockerRepo.ContainerStop(ctx, req.ContainerID, nil); err != nil {
+		return "", fmt.Errorf("停止原容器失败: %v", err)
 	}
 
-	if err := s.dockerRepo.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
-		return "", err
+	origName := strings.TrimPrefix(inspect.Name, "/")
+	backupName := origName + "-backup-" + time.Now().Format("20060102150405")
+	if err := s.dockerRepo.ContainerRename(ctx, req.ContainerID, backupName); err != nil {
+		return "", fmt.Errorf("备份原容器失败: %v", err)
 	}
+
+	newName := req.Name
+	if newName == "" {
+		newName = origName
+	}
+
+	resp, createErr := s.dockerRepo.ContainerCreate(ctx, containerConfig, hostConfig, &network.NetworkingConfig{}, nil, newName)
+	if createErr == nil {
+		createErr = s.dockerRepo.ContainerStart(ctx, resp.ID, container.StartOptions{})
+	}
+	if createErr != nil {
+		// 回滚：清理半成品新容器，恢复原容器名字
+		if resp.ID != "" {
+			_ = s.dockerRepo.ContainerRemove(ctx, resp.ID, container.RemoveOptions{Force: true})
+		}
+		_ = s.dockerRepo.ContainerRename(ctx, req.ContainerID, origName)
+		return "", fmt.Errorf("重建失败（原容器已保留并恢复）: %v", createErr)
+	}
+
+	// 新容器运行成功，删除备份
+	_ = s.dockerRepo.ContainerRemove(ctx, req.ContainerID, container.RemoveOptions{Force: true})
 	return resp.ID, nil
 }
 
