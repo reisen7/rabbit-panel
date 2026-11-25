@@ -62,7 +62,7 @@ func (r *Router) Register() {
 	authOrNodeMW := middleware.AuthOrNodeMiddleware(app.JWTSecret, app.NodeSecret, "/api/auth/login", "/api/health")
 
 	// Public routes (no auth, with rate limiting on login)
-	engine.GET("/api/auth/captcha", r.handleCaptcha)
+	engine.GET("/api/auth/captcha", middleware.RateLimitMiddleware(30, time.Minute), r.handleCaptcha)
 	engine.POST("/api/auth/login", middleware.RateLimitMiddleware(5, time.Minute), r.handleLogin)
 	engine.GET("/api/health", r.handleHealth)
 
@@ -487,6 +487,8 @@ func (r *Router) setAuthCookie(c *gin.Context, value string, maxAge int) {
 	secure := r.app.TLS.Enabled ||
 		c.Request.TLS != nil ||
 		strings.EqualFold(c.GetHeader("X-Forwarded-Proto"), "https")
+	// SameSite=Lax：跨站子请求不携带登录态，CSRF 纵深防御（面板 API 均为同源）
+	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie("token", value, maxAge, "/", "", secure, true)
 }
 
@@ -2186,14 +2188,28 @@ func (r *Router) handleDockerConfigUpdate(c *gin.Context) {
 }
 
 func (r *Router) handleDockerRestart(c *gin.Context) {
-	var cmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		exec.Command("net", "stop", "com.docker.service").Run()
-		cmd = exec.Command("net", "start", "com.docker.service")
-	} else {
-		cmd = exec.Command("sudo", "systemctl", "restart", "docker")
+	// 面板自身常以容器方式部署，容器内既没有 systemd 也没有 sudo，
+	// 重启 Docker 注定失败——如实返回错误而不是永远报告成功。
+	if _, err := os.Stat("/.dockerenv"); err == nil && runtime.GOOS != "windows" {
+		c.JSON(http.StatusConflict, gin.H{"error": "面板运行在容器内，无法从容器内重启宿主机 Docker，请在宿主机上执行 systemctl restart docker"})
+		return
 	}
-	cmd.Run()
+	var output []byte
+	var err error
+	if runtime.GOOS == "windows" {
+		_, _ = exec.Command("net", "stop", "com.docker.service").CombinedOutput()
+		output, err = exec.Command("net", "start", "com.docker.service").CombinedOutput()
+	} else {
+		output, err = exec.Command("sudo", "systemctl", "restart", "docker").CombinedOutput()
+	}
+	if err != nil {
+		msg := strings.TrimSpace(string(output))
+		if msg == "" {
+			msg = err.Error()
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "重启 Docker 失败: " + msg})
+		return
+	}
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 

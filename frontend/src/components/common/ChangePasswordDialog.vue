@@ -89,8 +89,8 @@ function validate(): boolean {
   errors.newPassword = ''
   errors.confirmPassword = ''
 
-  if (!isForced.value && !form.oldPassword) {
-    errors.oldPassword = '请输入旧密码'
+  if (!form.oldPassword) {
+    errors.oldPassword = isForced.value ? '请输入当前密码（默认为 admin）' : '请输入旧密码'
   }
 
   if (!form.newPassword) {
@@ -117,7 +117,7 @@ async function handleSubmit() {
   loading.value = true
   try {
     await authStore.changePassword(
-      isForced.value ? '' : form.oldPassword,
+      form.oldPassword,
       form.newPassword
     )
     toast.success('密码修改成功')
@@ -173,18 +173,18 @@ watch(visible, (newVal) => {
 
       <Alert v-if="isForced" variant="warning">
         <AlertTriangle class="size-4" />
-        <AlertDescription>首次登录需要修改默认密码以确保账户安全</AlertDescription>
+        <AlertDescription>首次登录需要修改默认密码以确保账户安全，请先输入当前密码（默认为 admin）</AlertDescription>
       </Alert>
 
       <form class="space-y-4" @submit.prevent="handleSubmit">
-        <div v-if="!isForced" class="space-y-1.5">
-          <Label for="old-password">旧密码</Label>
+        <div class="space-y-1.5">
+          <Label for="old-password">{{ isForced ? '当前密码' : '旧密码' }}</Label>
           <div class="relative">
             <Input
               id="old-password"
               v-model="form.oldPassword"
               :type="showOldPassword ? 'text' : 'password'"
-              placeholder="请输入旧密码"
+              :placeholder="isForced ? '请输入当前密码（默认为 admin）' : '请输入旧密码'"
               autocomplete="current-password"
               class="pr-9"
               @input="errors.oldPassword = ''"

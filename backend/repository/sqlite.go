@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"strings"
 	"database/sql"
 	"fmt"
 	"log"
@@ -237,11 +238,22 @@ func (r *SQLiteRepository) ChangePassword(username, oldPassword, newPassword str
 		return fmt.Errorf("查询用户失败")
 	}
 
-	if !needChangePassword {
-		err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(oldPassword))
-		if err != nil {
-			return fmt.Errorf("旧密码错误")
-		}
+	// 始终校验旧密码：need_change_password 状态的 token 被盗时，
+	// 攻击者无法直接设新密码把合法用户永久锁在门外（24h token 过期后仍能恢复）。
+	// 首次改密场景用户刚用旧密码登录过，知道旧密码（默认 admin）。
+	if err = bcrypt.CompareHashAndPassword([]byte(hash), []byte(oldPassword)); err != nil {
+		return fmt.Errorf("旧密码错误")
+	}
+
+	// 密码强度下限：「强制改密」的安全收益不能被弱密码抵消
+	if len(newPassword) < 8 {
+		return fmt.Errorf("新密码长度至少 8 位")
+	}
+	if newPassword == username {
+		return fmt.Errorf("新密码不能与用户名相同")
+	}
+	if strings.TrimSpace(newPassword) == "" {
+		return fmt.Errorf("新密码不能为空白字符")
 	}
 
 	// Generate new hash

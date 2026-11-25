@@ -148,6 +148,14 @@ func NewApp(buildInfo service.BuildInfo) (*App, error) {
 	// Create Gin engine
 	gin.SetMode(gin.ReleaseMode)
 	app.Engine = gin.New()
+	// 默认不信任任何代理头（X-Forwarded-For），ClientIP 一律取真实对端，
+	// 防止攻击者伪造头部绕过登录限流；部署在反向代理后时通过 TRUSTED_PROXIES 配置。
+	// gin 默认信任所有代理（0.0.0.0/0），等同于不设防。
+	if proxies := strings.TrimSpace(os.Getenv("TRUSTED_PROXIES")); proxies != "" {
+		_ = app.Engine.SetTrustedProxies(strings.Split(proxies, ","))
+	} else {
+		_ = app.Engine.SetTrustedProxies(nil)
+	}
 	app.Engine.Use(gin.Recovery())
 	app.Engine.Use(middleware.LoggingMiddleware())
 

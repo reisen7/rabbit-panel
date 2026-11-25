@@ -215,9 +215,9 @@ func ParseUserToken(tokenString string, jwtSecret []byte) (*JWTClaims, error) {
 // window: time window duration
 func RateLimitMiddleware(maxRequests int, window time.Duration) gin.HandlerFunc {
 	type record struct {
-		count    int
-		lastSeen time.Time
-	}
+	count       int
+	windowStart time.Time
+}
 
 	var (
 		mu      sync.Mutex
@@ -231,7 +231,7 @@ func RateLimitMiddleware(maxRequests int, window time.Duration) gin.HandlerFunc 
 			mu.Lock()
 			now := time.Now()
 			for ip, rec := range records {
-				if now.Sub(rec.lastSeen) > window {
+				if now.Sub(rec.windowStart) > window*2 {
 					delete(records, ip)
 				}
 			}
@@ -243,20 +243,13 @@ func RateLimitMiddleware(maxRequests int, window time.Duration) gin.HandlerFunc 
 		ip := c.ClientIP()
 		mu.Lock()
 		rec, exists := records[ip]
-		if !exists {
-			records[ip] = &record{count: 1, lastSeen: time.Now()}
+		// 固定窗口：windowStart 不随请求刷新，持续撞库无法让计数窗口永不过期
+		if !exists || time.Since(rec.windowStart) > window {
+			records[ip] = &record{count: 1, windowStart: time.Now()}
 			mu.Unlock()
 			c.Next()
 			return
 		}
-		if time.Since(rec.lastSeen) > window {
-			rec.count = 1
-			rec.lastSeen = time.Now()
-			mu.Unlock()
-			c.Next()
-			return
-		}
-		rec.lastSeen = time.Now()
 		rec.count++
 		count := rec.count
 		mu.Unlock()
