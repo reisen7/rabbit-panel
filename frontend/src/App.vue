@@ -57,7 +57,6 @@ watch(
 
 // Initialize on mount
 onMounted(() => {
-  authStore.initialize()
   initTheme()
   initLanguage()
   if (authStore.isAuthenticated) {

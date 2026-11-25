@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { getToken, handleUnauthorized } from '@/utils/request'
+import { handleUnauthorized } from '@/utils/request'
 import { targetNodeHeaders, withTargetNode } from '@/utils/targetNode'
 import type { ImageInfo } from '@/types'
 
@@ -45,14 +45,11 @@ export const imageApi = {
     onError: (error: string) => void,
     onComplete: () => void
   ): Promise<void> {
-    const token = getToken()
-
     try {
       const response = await fetch('/api/images/build', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
           ...targetNodeHeaders(),
         },
         body: JSON.stringify({
@@ -112,12 +109,10 @@ export const imageApi = {
    * @returns EventSource for streaming build logs
    */
   buildEventSource(imageName: string, tag: string, dockerfile: string): EventSource {
-    const token = getToken()
     const params = new URLSearchParams({
       image_name: imageName,
       tag,
       dockerfile,
-      token: token || '',
     })
     return new EventSource(withTargetNode(`/api/images/build?${params.toString()}`))
   },

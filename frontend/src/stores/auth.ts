@@ -1,22 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { authApi } from '@/api/auth'
-import { getToken, setToken, removeToken } from '@/utils/request'
 import { useUpdateStore } from '@/stores/update'
 
 /**
  * Authentication store
- * Manages user authentication state including token, username, and password change requirement
+ *
+ * 认证完全依赖 httpOnly cookie：前端 JS 不接触 token，
+ * XSS 无法窃取凭证。authenticated 只是会话状态的内存镜像，
+ * 页面刷新后由路由守卫触发 checkAuth 向服务端重建。
  */
 export const useAuthStore = defineStore('auth', () => {
   const updateStore = useUpdateStore()
   // State
-  const token = ref<string | null>(getToken())
+  const authenticated = ref(false)
+  const authChecked = ref(false)
   const username = ref<string | null>(null)
   const needChangePassword = ref(false)
 
   // Getters
-  const isAuthenticated = computed(() => !!token.value)
+  const isAuthenticated = computed(() => authenticated.value)
 
   // Actions
 
@@ -36,11 +39,9 @@ export const useAuthStore = defineStore('auth', () => {
       captcha_id: captchaId,
     })
 
-    // Store token
-    token.value = response.token
-    setToken(response.token)
-
-    // Store user info
+    // 后端已通过 Set-Cookie 写入 httpOnly 会话，这里只记录状态
+    authenticated.value = true
+    authChecked.value = true
     username.value = loginUsername
     needChangePassword.value = response.need_change_password
 
@@ -66,10 +67,9 @@ export const useAuthStore = defineStore('auth', () => {
    * Used when the session is already invalid (e.g. a 401 response)
    */
   function clearSession(): void {
-    token.value = null
+    authenticated.value = false
     username.value = null
     needChangePassword.value = false
-    removeToken()
     updateStore.resetAllState()
   }
 
@@ -79,57 +79,40 @@ export const useAuthStore = defineStore('auth', () => {
    * @param newPassword New password
    */
   async function changePassword(oldPassword: string, newPassword: string): Promise<void> {
-    const response = await authApi.changePassword({
+    await authApi.changePassword({
       old_password: oldPassword,
       new_password: newPassword,
     })
-    
-    // Update token if provided
-    if (response.token) {
-      token.value = response.token
-      setToken(response.token)
-    }
-    
+
     // Password changed, no longer need to change
     needChangePassword.value = false
   }
 
   /**
    * Check authentication status
-   * Verifies token validity by fetching current user info
+   * Verifies the cookie session by fetching current user info
    * @returns true if authenticated
    */
   async function checkAuth(): Promise<boolean> {
-    if (!token.value) {
-      return false
-    }
-
     try {
       const userInfo = await authApi.getCurrentUser()
       username.value = userInfo.username
-      needChangePassword.value = userInfo.need_change_password
+      needChangePassword.value = userInfo.need_change_password ?? false
+      authenticated.value = true
+      authChecked.value = true
       return true
     } catch {
-      // Token invalid, clear state
+      // Session invalid or absent
       clearSession()
+      authChecked.value = true
       return false
-    }
-  }
-
-  /**
-   * Initialize store from localStorage
-   * Called on app startup
-   */
-  function initialize(): void {
-    const storedToken = getToken()
-    if (storedToken) {
-      token.value = storedToken
     }
   }
 
   return {
     // State
-    token,
+    authenticated,
+    authChecked,
     username,
     needChangePassword,
     // Getters
@@ -140,6 +123,5 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession,
     changePassword,
     checkAuth,
-    initialize,
   }
 })

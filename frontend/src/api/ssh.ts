@@ -1,5 +1,4 @@
 import request from '@/utils/request'
-import { getToken } from '@/utils/request'
 import type { FileInfo } from '@/types'
 
 /**
@@ -65,9 +64,8 @@ export const sshApi = {
    * After connecting, the client sends a JSON `connect` message first.
    */
   getTerminalWsUrl(): string {
-    const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return `${protocol}//${window.location.host}/api/ssh/terminal?token=${encodeURIComponent(token || '')}`
+    return `${protocol}//${window.location.host}/api/ssh/terminal`
   },
 
   // ---- SFTP 文件管理（连接参数与终端同一套：credential_id 或明文 host/port/username/password） ----

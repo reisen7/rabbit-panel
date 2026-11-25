@@ -1,5 +1,5 @@
 import request from '@/utils/request'
-import { getToken, handleUnauthorized } from '@/utils/request'
+import { handleUnauthorized } from '@/utils/request'
 import { targetNodeHeaders, withTargetNode } from '@/utils/targetNode'
 import type {
   ContainerInfo,
@@ -55,12 +55,10 @@ export const containerApi = {
     onMessage: (entry: { type: string; message: string }) => void,
     signal?: AbortSignal
   ): Promise<{ container_id?: string }> {
-    const token = getToken()
     const response = await fetch('/api/containers/run/stream', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
         ...targetNodeHeaders(),
       },
       body: JSON.stringify(data),
@@ -114,8 +112,7 @@ export const containerApi = {
    * @returns EventSource for streaming output
    */
   createRawEventSource(containerId: string): EventSource {
-    const token = getToken()
-    const url = `/api/containers/logs?id=${encodeURIComponent(containerId)}&token=${encodeURIComponent(token || '')}`
+    const url = `/api/containers/logs?id=${encodeURIComponent(containerId)}`
     return new EventSource(url)
   },
 
@@ -132,14 +129,11 @@ export const containerApi = {
     onError: (error: string) => void,
     onComplete: () => void
   ): Promise<void> {
-    const token = getToken()
-    
     try {
       const response = await fetch('/api/containers/run/raw', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
           ...targetNodeHeaders(),
         },
         body: JSON.stringify({ command }),
@@ -195,14 +189,12 @@ export const containerApi = {
    * @returns EventSource for streaming logs
    */
   logs(containerId: string, tail: number | string = 100, follow: boolean = true): EventSource {
-    const token = getToken()
-    return new EventSource(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=${follow}&token=${encodeURIComponent(token || '')}`))
+    return new EventSource(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=${follow}`))
   },
 
   async logsOnce(containerId: string, tail: number | string = 'all'): Promise<string[]> {
-    const token = getToken()
-    const response = await fetch(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=false&token=${encodeURIComponent(token || '')}`), {
-      headers: token ? { Authorization: `Bearer ${token}`, ...targetNodeHeaders() } : targetNodeHeaders(),
+    const response = await fetch(withTargetNode(`/api/containers/logs?id=${encodeURIComponent(containerId)}&tail=${tail}&follow=false`), {
+      headers: targetNodeHeaders(),
     })
     if (response.status === 401) handleUnauthorized()
     if (!response.ok) {
@@ -357,8 +349,7 @@ export const containerApi = {
    * @returns Download URL
    */
   fileDownload(containerId: string, path: string): string {
-    const token = getToken()
-    return withTargetNode(`/api/containers/files/download?id=${encodeURIComponent(containerId)}&path=${encodeURIComponent(path)}&token=${encodeURIComponent(token || '')}`)
+    return withTargetNode(`/api/containers/files/download?id=${encodeURIComponent(containerId)}&path=${encodeURIComponent(path)}`)
   },
 
   /**
@@ -367,9 +358,8 @@ export const containerApi = {
    * @returns WebSocket URL
    */
   getTerminalWsUrl(containerId: string): string {
-    const token = getToken()
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    return withTargetNode(`${protocol}//${window.location.host}/api/containers/terminal?id=${encodeURIComponent(containerId)}&token=${encodeURIComponent(token || '')}`)
+    return withTargetNode(`${protocol}//${window.location.host}/api/containers/terminal?id=${encodeURIComponent(containerId)}`)
   },
 }
 

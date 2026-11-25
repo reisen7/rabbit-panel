@@ -47,6 +47,12 @@ const router = createRouter({
 
 router.beforeEach(async (to: RouteLocationNormalized) => {
   const authStore = useAuthStore()
+
+  // 页面刷新后内存中的会话状态为空，首次导航先向服务端确认 cookie 会话
+  if (!authStore.authChecked) {
+    await authStore.checkAuth()
+  }
+
   const requiresAuth = to.matched.some(record => record.meta.requiresAuth !== false)
 
   if (!requiresAuth || to.meta.requiresAuth === false) {
@@ -60,16 +66,6 @@ router.beforeEach(async (to: RouteLocationNormalized) => {
     return {
       name: 'login',
       query: { redirect: to.fullPath },
-    }
-  }
-
-  if (!authStore.username) {
-    const isValid = await authStore.checkAuth()
-    if (!isValid) {
-      return {
-        name: 'login',
-        query: { redirect: to.fullPath },
-      }
     }
   }
 

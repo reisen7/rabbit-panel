@@ -1,6 +1,6 @@
 import request from '@/utils/request'
 import type { ComposeProject } from '@/types'
-import { getToken, handleUnauthorized } from '@/utils/request'
+import { handleUnauthorized } from '@/utils/request'
 import { targetNodeHeaders } from '@/utils/targetNode'
 
 /**
@@ -89,13 +89,11 @@ export const composeApi = {
     callbacks: ComposeActionCallbacks
   ): AbortController {
     const controller = new AbortController()
-    const token = getToken()
-    
+
     fetch(`/api/compose/action`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
         ...targetNodeHeaders(),
       },
       body: JSON.stringify({ project, action }),

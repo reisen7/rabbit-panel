@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
-import { marked } from 'marked'
 import {
   Bot,
   Loader2,
@@ -13,27 +12,18 @@ import {
   User,
   X,
 } from 'lucide-vue-next'
-import { useToast } from '@/composables/useToast'
-import { getToken, handleUnauthorized } from '@/utils/request'
-import { getTargetNodeId } from '@/utils/targetNode'
+import { useAgentChat } from '@/composables/useAgentChat'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import AgentConfirmCard from '@/components/common/AgentConfirmCard.vue'
 
 const { t } = useI18n()
-const toast = useToast()
-
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
 
 const isOpen = ref(false)
 const isExpanded = ref(false)
-const messages = ref<Message[]>([])
 const inputMessage = ref('')
-const isThinking = ref(false)
 const connected = ref(true)
 const messagesRef = ref<HTMLElement>()
 const inputWrapperRef = ref<HTMLElement>()
@@ -62,47 +52,7 @@ const setInput = (text: string) => {
   focusInput()
 }
 
-const loadHistory = async () => {
-  const token = getToken()
-  try {
-    const response = await fetch('/api/agent/history', {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (response.status === 401) handleUnauthorized()
-    if (response.ok) {
-      const data = await response.json()
-      if (Array.isArray(data)) {
-        messages.value = data.map((m: { role: string; content: string }) => ({
-          role: m.role as 'user' | 'assistant',
-          content: m.content,
-        }))
-        scrollToBottom()
-      }
-    }
-  } catch (e) {
-    console.error('Failed to load history:', e)
-  }
-}
 
-const clearMessages = async () => {
-  const token = getToken()
-  try {
-    const response = await fetch('/api/agent/history', {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    })
-    if (response.status === 401) handleUnauthorized()
-    messages.value = []
-  } catch (e) {
-    console.error('Failed to clear history:', e)
-  }
-}
-
-const renderMarkdown = (text: string) => {
-  if (!text) return ''
-  const formattedText = text.replace(/\[\[TOOL:\s*(.*?)\]\]/g, '> 🛠️ **正在执行工具**: `$1`')
-  return marked(formattedText)
-}
 
 const scrollToBottom = () => {
   nextTick(() => {
@@ -112,117 +62,27 @@ const scrollToBottom = () => {
   })
 }
 
+const {
+  messages,
+  isThinking,
+  waitingReply,
+  confirmations,
+  renderMarkdown,
+  loadHistory,
+  clearHistory,
+  resolveConfirm,
+  sendMessage: sendChatMessage,
+} = useAgentChat(scrollToBottom)
+
+const clearMessages = clearHistory
+
 const sendMessage = async () => {
-  if (!inputMessage.value.trim() || isThinking.value) return
-
   const userMsg = inputMessage.value.trim()
-  const userMessage: Message = { role: 'user', content: userMsg }
-  messages.value.push(userMessage)
+  if (!userMsg) return
   inputMessage.value = ''
-  isThinking.value = true
-  scrollToBottom()
   focusInput()
-
-  const token = getToken()
-  try {
-    const response = await fetch('/api/agent/chat', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        message: userMsg,
-        node_id: getTargetNodeId(),
-        history: messages.value.slice(0, -1).map((m) => ({ role: m.role, content: m.content })),
-      }),
-    })
-
-    if (response.status === 401) handleUnauthorized()
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    if (!response.body) {
-      throw new Error('Response body is null')
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-
-    let started = false
-    let assistantMsgIndex = -1
-    let fullContent = ''
-    let buffer = ''
-
-    const processEvent = (eventBlock: string) => {
-      if (!eventBlock.trim()) return
-
-      const lines = eventBlock.split('\n')
-      const dataLines: string[] = []
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          dataLines.push(line.slice(6))
-        }
-      }
-
-      if (dataLines.length > 0) {
-        const content = dataLines.join('\n')
-        fullContent += content
-
-        if (!started) {
-          started = true
-          messages.value.push({ role: 'assistant', content: fullContent })
-          assistantMsgIndex = messages.value.length - 1
-        } else {
-          messages.value.splice(assistantMsgIndex, 1, {
-            role: 'assistant',
-            content: fullContent,
-          })
-        }
-        scrollToBottom()
-      }
-    }
-
-    while (true) {
-      const { done, value } = await reader.read()
-      if (done) break
-
-      buffer += decoder.decode(value, { stream: true })
-      const events = buffer.split('\n\n')
-      buffer = events.pop() || ''
-
-      for (const event of events) {
-        processEvent(event)
-      }
-    }
-
-    buffer += decoder.decode()
-    if (buffer) {
-      const events = buffer.split('\n\n')
-      for (const event of events) {
-        processEvent(event)
-      }
-    }
-
-    if (started && assistantMsgIndex >= 0) {
-      messages.value.splice(assistantMsgIndex, 1, {
-        role: 'assistant',
-        content: fullContent,
-      })
-    }
-    isThinking.value = false
-    focusInput()
-  } catch (error) {
-    console.error('Chat error:', error)
-    toast.error(t('agent.connectionError'))
-    isThinking.value = false
-    messages.value.push({
-      role: 'assistant',
-      content: `**${t('agent.error')}**: ${t('agent.responseError')}`,
-    })
-  }
+  await sendChatMessage(userMsg)
+  focusInput()
 }
 
 onMounted(() => {
@@ -321,7 +181,18 @@ onMounted(() => {
             </div>
           </div>
 
-          <div v-if="isThinking" class="flex gap-2.5 items-start">
+          <div v-for="item in confirmations" :key="item.id" class="flex gap-2.5 items-start">
+            <Avatar class="size-7 shrink-0">
+              <AvatarFallback class="bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                <Bot class="size-3.5" />
+              </AvatarFallback>
+            </Avatar>
+            <div class="max-w-[85%] flex-1">
+              <AgentConfirmCard :item="item" compact @resolve="resolveConfirm" />
+            </div>
+          </div>
+
+          <div v-if="waitingReply" class="flex gap-2.5 items-start">
             <Avatar class="size-7 shrink-0 animate-pulse">
               <AvatarFallback class="bg-secondary text-secondary-foreground">
                 <Loader2 class="size-3.5 animate-spin" />

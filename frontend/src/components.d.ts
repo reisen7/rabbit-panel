@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AgentChatFloat: typeof import('./components/common/AgentChatFloat.vue')['default']
+    AgentConfirmCard: typeof import('./components/common/AgentConfirmCard.vue')['default']
     Alert: typeof import('./components/ui/alert/Alert.vue')['default']
     AlertDescription: typeof import('./components/ui/alert/AlertDescription.vue')['default']
     AlertDialog: typeof import('./components/ui/alert-dialog/AlertDialog.vue')['default']

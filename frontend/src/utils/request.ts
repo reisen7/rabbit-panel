@@ -22,27 +22,9 @@ const request: AxiosInstance = axios.create({
   },
 })
 
-// Token storage key
-const TOKEN_KEY = 'rabbit_panel_token'
-
-// Get token from localStorage
-export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
-}
-
-// Set token to localStorage
-export function setToken(token: string): void {
-  localStorage.setItem(TOKEN_KEY, token)
-}
-
-// Remove token from localStorage
-export function removeToken(): void {
-  localStorage.removeItem(TOKEN_KEY)
-}
-
 /**
  * Centralized 401 handler shared by the axios interceptor and native fetch callers.
- * Clears the auth store (not just localStorage) so the router guard cannot bounce
+ * Clears the auth store so the router guard cannot bounce
  * /login back to the dashboard, then redirects to the login page once.
  */
 export function handleUnauthorized(): void {
@@ -59,12 +41,10 @@ export function handleUnauthorized(): void {
 }
 
 // Request interceptor
+// 认证完全依赖 httpOnly cookie（同源自动携带），不再经手 token，
+// 避免 XSS 通过 localStorage/JS 窃取凭证。
 request.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = getToken()
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
-    }
     const targetNodeId = getTargetNodeId()
     const url = (config.url || '').split('?')[0] || ''
     if (targetNodeId && config.headers && isNodeScopedPath(url)) {
