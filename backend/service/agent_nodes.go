@@ -403,12 +403,8 @@ func (s *AgentService) executeRemoteTool(ctx context.Context, address, name stri
 }
 
 func (s *AgentService) callNode(ctx context.Context, address, method, path string, query url.Values, body any) ([]byte, error) {
-	if len(s.jwtSecret) == 0 {
-		return nil, fmt.Errorf("主节点缺少 JWT 密钥，无法调用其他节点")
-	}
-	token, err := middleware.GenerateToken("rabbit-agent", false, s.jwtSecret)
-	if err != nil {
-		return nil, err
+	if s.nodeSecret == "" {
+		return nil, fmt.Errorf("主节点缺少节点密钥，无法调用其他节点")
 	}
 	scheme, host := ParseNodeAddress(address)
 	if host == "" {
@@ -427,7 +423,10 @@ func (s *AgentService) callNode(ctx context.Context, address, method, path strin
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	// 节点身份认证：时间戳 HMAC 令牌，代替原先自签 24h 用户 JWT。
+	// Worker 运维端点接受节点认证，且令牌最长 1 小时过期，泄露窗口远小于用户 JWT。
+	req.Header.Set("X-Node-ID", "master")
+	req.Header.Set("X-Node-Token", middleware.GenerateNodeToken("master", s.nodeSecret))
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}

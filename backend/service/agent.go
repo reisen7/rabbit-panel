@@ -21,7 +21,8 @@ type AgentService struct {
 	dockerRepo repository.IDockerRepository
 	registry   *RegistryService
 	nodes      *NodeService
-	jwtSecret  []byte
+	nodeSecret string
+	confirms   *confirmStore
 
 	config      AgentConfig
 	configMutex sync.RWMutex
@@ -47,6 +48,7 @@ func NewAgentService(sr *repository.SQLiteRepository, dr repository.IDockerRepos
 		sqliteRepo: sr,
 		dockerRepo: dr,
 		configPath: "./data/agent.json",
+		confirms:   newConfirmStore(),
 	}
 	if err := service.loadConfig(); err != nil {
 		log.Printf("[Agent] load config failed: %v", err)
@@ -60,9 +62,9 @@ func (s *AgentService) UseRegistry(registry *RegistryService) {
 }
 
 // UseNodes 让智能体识别并操作主节点登记的其他节点。
-func (s *AgentService) UseNodes(nodes *NodeService, jwtSecret []byte) {
+func (s *AgentService) UseNodes(nodes *NodeService, nodeSecret string) {
 	s.nodes = nodes
-	s.jwtSecret = jwtSecret
+	s.nodeSecret = nodeSecret
 }
 
 // GetConfig 获取配置
@@ -107,16 +109,22 @@ func (s *AgentService) ClearChatHistory() error {
 }
 
 // Complete 同步跑一轮对话，供微信等通道收集完整回复。
+// 非交互通道：危险操作无人确认会被安全策略自动拒绝（见 executeToolCalls）。
 func (s *AgentService) Complete(ctx context.Context, message string, history []model.ChatMessage) (string, error) {
 	var reply strings.Builder
-	err := s.StreamChat(ctx, model.AgentChatRequest{Message: message, History: history}, func(chunk string) error {
-		reply.WriteString(chunk)
+	err := s.StreamChat(ctx, model.AgentChatRequest{Message: message, History: history}, func(evt ChatEvent) error {
+		if evt.Type == "chunk" {
+			reply.WriteString(evt.Text)
+		}
 		return nil
-	})
+	}, false)
 	return strings.TrimSpace(reply.String()), err
 }
 
-func (s *AgentService) StreamChat(ctx context.Context, req model.AgentChatRequest, onChunk func(string) error) error {
+// StreamChat 流式跑一轮对话。onEvent 接收结构化事件（文本片段/确认请求/错误）；
+// interactive 为 true 时（面板聊天）危险操作会等待用户确认，
+// false 时（微信等远程通道）危险操作被安全策略自动拒绝。
+func (s *AgentService) StreamChat(ctx context.Context, req model.AgentChatRequest, onEvent func(ChatEvent) error, interactive bool) error {
 	cfg := s.GetConfig()
 	if !cfg.Enabled {
 		return fmt.Errorf("agent is disabled")
@@ -133,6 +141,10 @@ func (s *AgentService) StreamChat(ctx context.Context, req model.AgentChatReques
 	messages = append(messages, model.ChatMessage{Role: "system", Content: agent.SystemPrompt + s.nodePrompt(req.NodeID)})
 	messages = append(messages, req.History...)
 	messages = append(messages, model.ChatMessage{Role: "user", Content: req.Message})
+
+	onChunk := func(chunk string) error {
+		return onEvent(ChatEvent{Type: "chunk", Text: chunk})
+	}
 
 	for step := 0; step < 3; step++ {
 		fallback := ""
@@ -153,12 +165,12 @@ func (s *AgentService) StreamChat(ctx context.Context, req model.AgentChatReques
 		}
 		messages = append(messages, model.ChatMessage{Role: "assistant", Content: responseText})
 
-		toolResults, err := s.executeToolCalls(ctx, responseText, sink)
+		toolResults, err := s.executeToolCalls(ctx, responseText, sink, onEvent, interactive)
 		if err != nil {
 			return err
 		}
 		if len(toolResults) == 0 && fallback != "" {
-			toolResults, err = s.executeToolCalls(ctx, "[[TOOL: "+fallback+"]]", onChunk)
+			toolResults, err = s.executeToolCalls(ctx, "[[TOOL: "+fallback+"]]", onChunk, onEvent, interactive)
 			if err != nil {
 				return err
 			}

@@ -83,60 +83,75 @@ func (r *Router) Register() {
 		// System stats (supports node auth)
 		api.GET("/system/stats", r.handleSystemStats)
 	}
+	// 运维端点（容器/镜像/网络/存储卷/Compose/仓库）：Master 代理过来的请求以节点身份认证。
+	// Worker 必须信任 Master 是架构前提（Master 本就调度容器到 Worker），
+	// 因此 worker 模式下这些端点接受节点认证；master/standalone 上仍仅限用户认证，
+	// 避免 NODE_SECRET 泄露直接转化为对面板主机的写权限。
+	writeMW := authMW
+	if app.Mode == "worker" {
+		writeMW = authOrNodeMW
+	}
+	apiOps := api.Group("")
+	apiOps.Use(writeMW)
+	{
+		// Container actions
+		apiOps.POST("/containers/action", r.handleContainerAction)
+		apiOps.POST("/containers/run", r.handleContainerRun)
+		apiOps.POST("/containers/run/stream", r.handleContainerRunStream)
+		apiOps.POST("/containers/run/raw", r.handleContainerRunRaw)
+		apiOps.POST("/containers/exec", r.handleContainerExec)
+		apiOps.GET("/containers/inspect", r.handleContainerInspect)
+		apiOps.POST("/containers/update", r.handleContainerUpdate)
+		apiOps.POST("/containers/rename", r.handleContainerRename)
+		apiOps.POST("/containers/recreate", r.handleContainerRecreate)
+		apiOps.POST("/containers/files/mkdir", r.handleContainerFileMkdir)
+		apiOps.POST("/containers/files/delete", r.handleContainerFileDelete)
+		apiOps.POST("/containers/files/upload", r.handleContainerFileUpload)
+		apiOps.POST("/containers/files/write", r.handleContainerFileWrite)
+		apiOps.GET("/containers/terminal", r.handleContainerTerminalWS)
+
+		// Image routes (user-only)
+		apiOps.POST("/images/build", r.handleImagesBuild)
+		apiOps.POST("/images/pull", r.handleImagesPull)
+		apiOps.POST("/images/remove", r.handleImagesRemove)
+
+		// Network routes
+		apiOps.GET("/networks", r.handleNetworksList)
+		apiOps.POST("/networks/create", r.handleNetworksCreate)
+		apiOps.POST("/networks/remove", r.handleNetworksRemove)
+		apiOps.GET("/networks/inspect", r.handleNetworksInspect)
+		apiOps.POST("/networks/connect", r.handleNetworksConnect)
+		apiOps.POST("/networks/disconnect", r.handleNetworksDisconnect)
+
+		// Volume routes
+		apiOps.GET("/volumes", r.handleVolumesList)
+		apiOps.POST("/volumes/create", r.handleVolumesCreate)
+		apiOps.POST("/volumes/remove", r.handleVolumesRemove)
+		apiOps.POST("/volumes/prune", r.handleVolumesPrune)
+
+		// Compose routes
+		apiOps.GET("/compose/list", r.handleComposeList)
+		apiOps.POST("/compose/create", r.handleComposeCreate)
+		apiOps.GET("/compose/file", r.handleComposeFile)
+		apiOps.POST("/compose/file", r.handleComposeFile)
+		apiOps.POST("/compose/action", r.handleComposeAction)
+		apiOps.POST("/compose/delete", r.handleComposeDelete)
+		apiOps.GET("/compose/status", r.handleComposeStatus)
+		apiOps.POST("/compose/save", r.handleComposeSaveFile)
+
+		// Registry routes
+		apiOps.GET("/registries", r.handleRegistriesList)
+		apiOps.POST("/registries/create", r.handleRegistriesCreate)
+		apiOps.POST("/registries/remove", r.handleRegistriesRemove)
+		apiOps.POST("/registries/test", r.handleRegistriesTest)
+
+	}
+
+	// 面板端点（认证/SSH/智能体/设置/更新）：任何节点上都仅限用户认证，
+	// 节点认证绝不能读取 SSH 凭证、LLM API Key 或改写面板配置。
 	apiAuth := api.Group("")
 	apiAuth.Use(authMW)
 	{
-		// Container actions (user-only)
-		apiAuth.POST("/containers/action", r.handleContainerAction)
-		apiAuth.POST("/containers/run", r.handleContainerRun)
-		apiAuth.POST("/containers/run/stream", r.handleContainerRunStream)
-		apiAuth.POST("/containers/run/raw", r.handleContainerRunRaw)
-		apiAuth.POST("/containers/exec", r.handleContainerExec)
-		apiAuth.GET("/containers/inspect", r.handleContainerInspect)
-		apiAuth.POST("/containers/update", r.handleContainerUpdate)
-		apiAuth.POST("/containers/rename", r.handleContainerRename)
-		apiAuth.POST("/containers/recreate", r.handleContainerRecreate)
-		apiAuth.POST("/containers/files/mkdir", r.handleContainerFileMkdir)
-		apiAuth.POST("/containers/files/delete", r.handleContainerFileDelete)
-		apiAuth.POST("/containers/files/upload", r.handleContainerFileUpload)
-		apiAuth.POST("/containers/files/write", r.handleContainerFileWrite)
-		apiAuth.GET("/containers/terminal", r.handleContainerTerminalWS)
-
-		// Image routes (user-only)
-		apiAuth.POST("/images/build", r.handleImagesBuild)
-		apiAuth.POST("/images/pull", r.handleImagesPull)
-		apiAuth.POST("/images/remove", r.handleImagesRemove)
-
-		// Network routes
-		apiAuth.GET("/networks", r.handleNetworksList)
-		apiAuth.POST("/networks/create", r.handleNetworksCreate)
-		apiAuth.POST("/networks/remove", r.handleNetworksRemove)
-		apiAuth.GET("/networks/inspect", r.handleNetworksInspect)
-		apiAuth.POST("/networks/connect", r.handleNetworksConnect)
-		apiAuth.POST("/networks/disconnect", r.handleNetworksDisconnect)
-
-		// Volume routes
-		apiAuth.GET("/volumes", r.handleVolumesList)
-		apiAuth.POST("/volumes/create", r.handleVolumesCreate)
-		apiAuth.POST("/volumes/remove", r.handleVolumesRemove)
-		apiAuth.POST("/volumes/prune", r.handleVolumesPrune)
-
-		// Compose routes
-		apiAuth.GET("/compose/list", r.handleComposeList)
-		apiAuth.POST("/compose/create", r.handleComposeCreate)
-		apiAuth.GET("/compose/file", r.handleComposeFile)
-		apiAuth.POST("/compose/file", r.handleComposeFile)
-		apiAuth.POST("/compose/action", r.handleComposeAction)
-		apiAuth.POST("/compose/delete", r.handleComposeDelete)
-		apiAuth.GET("/compose/status", r.handleComposeStatus)
-		apiAuth.POST("/compose/save", r.handleComposeSaveFile)
-
-		// Registry routes
-		apiAuth.GET("/registries", r.handleRegistriesList)
-		apiAuth.POST("/registries/create", r.handleRegistriesCreate)
-		apiAuth.POST("/registries/remove", r.handleRegistriesRemove)
-		apiAuth.POST("/registries/test", r.handleRegistriesTest)
-
 		// Docker config routes
 		apiAuth.GET("/docker/info", r.handleDockerInfo)
 		apiAuth.GET("/docker/config", r.handleDockerConfigGet)
@@ -165,6 +180,7 @@ func (r *Router) Register() {
 
 		// Agent routes
 		apiAuth.POST("/agent/chat", r.handleAgentChat)
+		apiAuth.POST("/agent/confirm", r.handleAgentConfirm)
 		apiAuth.GET("/agent/history", r.handleAgentHistory)
 		apiAuth.POST("/agent/history", r.handleAgentHistory)
 		apiAuth.DELETE("/agent/history", r.handleAgentHistory)
@@ -481,7 +497,11 @@ func (r *Router) handleLogout(c *gin.Context) {
 
 func (r *Router) handleGetCurrentUser(c *gin.Context) {
 	username, _ := c.Get("username")
-	c.JSON(http.StatusOK, gin.H{"username": username})
+	needChangePassword, _ := c.Get("need_change_password")
+	c.JSON(http.StatusOK, gin.H{
+		"username":             username,
+		"need_change_password": needChangePassword == true,
+	})
 }
 
 // === Container Handlers ===
@@ -664,15 +684,15 @@ func (r *Router) handleContainerRunStream(c *gin.Context) {
 	}
 
 	sendLog := func(msg string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "log", "message": msg})
 		flusher.Flush()
 	}
 	sendError := func(msg string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "error", "message": msg})
 		flusher.Flush()
 	}
 	sendSuccess := func(id string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"success\",\"id\":\"%s\"}\n\n", id)
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "success", "id": id})
 		flusher.Flush()
 	}
 
@@ -780,7 +800,14 @@ func (r *Router) handleContainerRunRaw(c *gin.Context) {
 		return
 	}
 
-	if !strings.HasPrefix(cmd, "docker run ") && !strings.HasPrefix(cmd, "docker run\t") {
+	// 按 shell 词法拆分后直接 exec docker，不经过 shell 解释器：
+	// 分词之外的元字符（; | & ` $ 等）只作为普通参数传给 docker，无法形成命令注入。
+	args, err := splitShellWords(cmd)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "命令解析失败: " + err.Error()})
+		return
+	}
+	if len(args) < 2 || args[0] != "docker" || args[1] != "run" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "只支持 docker run 命令"})
 		return
 	}
@@ -797,26 +824,21 @@ func (r *Router) handleContainerRunRaw(c *gin.Context) {
 	}
 
 	sendLog := func(msg string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "log", "message": msg})
 		flusher.Flush()
 	}
 	sendError := func(msg string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"message\":\"%s\"}\n\n", strings.ReplaceAll(msg, "\"", "\\\""))
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "error", "message": msg})
 		flusher.Flush()
 	}
 	sendSuccess := func(id string) {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"success\",\"id\":\"%s\"}\n\n", id)
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "success", "id": id})
 		flusher.Flush()
 	}
 
 	sendLog(fmt.Sprintf("执行命令: %s", cmd))
 
-	var execCmd *exec.Cmd
-	if runtime.GOOS == "windows" {
-		execCmd = exec.Command("cmd", "/C", cmd)
-	} else {
-		execCmd = exec.Command("sh", "-c", cmd)
-	}
+	execCmd := exec.Command(args[0], args[1:]...)
 
 	stdout, err := execCmd.StdoutPipe()
 	if err != nil {
@@ -1331,7 +1353,7 @@ func (r *Router) handleContainerFileDelete(c *gin.Context) {
 	defer cancel()
 	execID, err := r.app.DockerRepo.ContainerExecCreate(ctx, reqBody.ContainerID, types.ExecConfig{
 		AttachStderr: true,
-		Cmd:          []string{"rm", "-rf", reqBody.Path},
+		Cmd:          []string{"rm", "-rf", cleanPath},
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1611,24 +1633,21 @@ func (r *Router) handleImagesBuild(c *gin.Context) {
 		return
 	}
 
-	fmt.Fprintf(c.Writer, "data: {\"type\":\"start\",\"message\":\"开始构建镜像 %s\"}\n\n", imageTag)
+	sseWriteJSON(c.Writer, flusher, gin.H{"type": "start", "message": fmt.Sprintf("开始构建镜像 %s", imageTag)})
 	flusher.Flush()
 
 	output, err := cmd.CombinedOutput()
 	for _, line := range strings.Split(string(output), "\n") {
 		if line = strings.TrimSpace(line); line != "" {
-			line = strings.ReplaceAll(line, "\\", "\\\\")
-			line = strings.ReplaceAll(line, "\"", "\\\"")
-			fmt.Fprintf(c.Writer, "data: {\"type\":\"log\",\"message\":\"%s\"}\n\n", line)
-			flusher.Flush()
+			sseWriteJSON(c.Writer, flusher, gin.H{"type": "log", "message": line})
 		}
 	}
 
 	r.app.CacheRepo.InvalidateImages()
 	if err != nil {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"error\",\"message\":\"构建失败: %v\"}\n\n", err)
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "error", "message": fmt.Sprintf("构建失败: %v", err)})
 	} else {
-		fmt.Fprintf(c.Writer, "data: {\"type\":\"success\",\"message\":\"镜像 %s 构建成功！\"}\n\n", imageTag)
+		sseWriteJSON(c.Writer, flusher, gin.H{"type": "success", "message": fmt.Sprintf("镜像 %s 构建成功！", imageTag)})
 	}
 	flusher.Flush()
 }
@@ -1951,6 +1970,17 @@ func (r *Router) handleComposeAction(c *gin.Context) {
 	flusher.Flush()
 }
 
+// sseWriteJSON 以正确的 JSON 编码写一条 SSE data 行并 flush，
+// 避免手工拼接转义不全（反斜杠、控制字符、换行都会破坏 JSON/SSE 格式）。
+func sseWriteJSON(w io.Writer, flusher http.Flusher, v any) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	fmt.Fprintf(w, "data: %s\n\n", data)
+	flusher.Flush()
+}
+
 // sseLogWriter 按行把命令输出转发为 SSE "log" 事件并立即 flush，
 // 让前端在执行过程中就能看到实时输出，而不是等命令结束。
 type sseLogWriter struct {
@@ -2191,33 +2221,51 @@ func (r *Router) handleAgentChat(c *gin.Context) {
 	}
 
 	var assistantReply strings.Builder
-	sendChunk := func(chunk string) error {
-		assistantReply.WriteString(chunk)
-		lines := strings.Split(chunk, "\n")
-		for _, line := range lines {
-			if _, err := fmt.Fprintf(c.Writer, "data: %s\n", line); err != nil {
-				return err
-			}
+	sendEvent := func(evt service.ChatEvent) error {
+		if evt.Type == "chunk" {
+			assistantReply.WriteString(evt.Text)
 		}
-		if _, err := fmt.Fprint(c.Writer, "\n"); err != nil {
+		data, err := json.Marshal(evt)
+		if err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(c.Writer, "data: %s\n\n", data); err != nil {
 			return err
 		}
 		flusher.Flush()
 		return nil
 	}
 
-	if err := r.app.AgentService.StreamChat(c.Request.Context(), reqBody, sendChunk); err != nil {
+	if err := r.app.AgentService.StreamChat(c.Request.Context(), reqBody, sendEvent, true); err != nil {
 		if assistantReply.Len() == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		_ = sendChunk(fmt.Sprintf("\n\n**错误**: %s", err.Error()))
+		_ = sendEvent(service.ChatEvent{Type: "chunk", Text: fmt.Sprintf("\n\n**错误**: %s", err.Error())})
 		return
 	}
 
 	if strings.TrimSpace(assistantReply.String()) != "" {
 		_ = r.app.AgentService.SaveChatMessage("assistant", assistantReply.String())
 	}
+}
+
+// handleAgentConfirm 处理面板用户对危险操作的确认/拒绝。
+// 操作在执行流中被挂起，此端点负责解除阻塞。
+func (r *Router) handleAgentConfirm(c *gin.Context) {
+	var reqBody struct {
+		ID      string `json:"id"`
+		Approve bool   `json:"approve"`
+	}
+	if err := c.ShouldBindJSON(&reqBody); err != nil || strings.TrimSpace(reqBody.ID) == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	if !r.app.AgentService.ResolveConfirm(reqBody.ID, reqBody.Approve) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "确认请求不存在或已过期"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 
 func (r *Router) handleAgentHistory(c *gin.Context) {
@@ -2396,6 +2444,18 @@ func (r *Router) handleNodeRegister(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
 		return
 	}
+	// 注册端点仅凭 NODE_SECRET 认证，必须校验自报字段：
+	// 地址决定代理转发目标，ID 进入后续所有节点操作。
+	if err := service.ValidateNodeID(node.ID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	if err := service.ValidateNodeAddress(node.Address); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// 注册通道只用于 Worker 加入集群，不允许自称 Master 混淆拓扑。
+	node.Mode = model.ModeWorker
 	r.app.NodeService.RegisterNode(&node)
 	c.JSON(http.StatusOK, gin.H{"status": "success"})
 }
@@ -2476,15 +2536,15 @@ func (r *Router) handleContainerTerminalWS(c *gin.Context) {
 		return
 	}
 
-	// Validate token
-	token := c.Query("token")
-	if token == "" {
-		c.String(http.StatusUnauthorized, "未授权")
-		return
-	}
-	if !middleware.ValidateToken(token, r.app.JWTSecret) {
-		c.String(http.StatusUnauthorized, "Token 无效")
-		return
+	// Validate token：浏览器 WS 握手自动携带同源 Cookie，
+	// 同时兼容旧的 ?token= 方式；前置 auth 中间件已校验时这里为纵深防御。
+	// Master 代理到 Worker 的终端请求没有用户凭证，由中间件以节点身份认证通过。
+	if c.GetString("node_id") == "" {
+		token := middleware.TokenFromRequest(c.Request)
+		if token == "" || !middleware.ValidateToken(token, r.app.JWTSecret) {
+			c.String(http.StatusUnauthorized, "未授权")
+			return
+		}
 	}
 
 	conn, err := ginWsUpgrader.Upgrade(c.Writer, c.Request, nil)

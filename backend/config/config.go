@@ -173,7 +173,7 @@ func (app *App) initServices() {
 	app.NotifyService = service.NewNotifyService()
 	app.AgentService = service.NewAgentService(app.SQLiteRepo, app.DockerRepo)
 	app.AgentService.UseRegistry(app.RegistryService)
-	app.AgentService.UseNodes(app.NodeService, app.JWTSecret)
+	app.AgentService.UseNodes(app.NodeService, app.NodeSecret)
 	if app.Mode != "worker" {
 		app.WeChatService = service.NewWeChatService(app.AgentService)
 	}

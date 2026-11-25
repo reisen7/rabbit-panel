@@ -70,9 +70,17 @@ func (r *Router) containerNodeProxy() gin.HandlerFunc {
 			originalDirector(req)
 			req.Host = target.Host
 			req.Header.Del("X-Target-Node")
+			// 绝不把用户凭证转发给节点地址：注册地址由节点自报，
+			// 恶意节点可借此窃取管理员 JWT 进而控制 Master。
+			// 转发请求一律改用节点身份认证（Worker 信任 Master 是架构前提）。
+			req.Header.Del("Authorization")
+			req.Header.Del("Cookie")
 			query := req.URL.Query()
 			query.Del("target_node")
+			query.Del("token")
 			req.URL.RawQuery = query.Encode()
+			req.Header.Set("X-Node-ID", "master")
+			req.Header.Set("X-Node-Token", middleware.GenerateNodeToken("master", r.app.NodeSecret))
 		}
 		proxy.ErrorHandler = func(w http.ResponseWriter, _ *http.Request, proxyErr error) {
 			w.Header().Set("Content-Type", "application/json")

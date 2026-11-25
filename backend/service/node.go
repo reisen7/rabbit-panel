@@ -3,8 +3,10 @@ package service
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -44,6 +46,78 @@ func NewNodeService(dr repository.IDockerRepository, cr repository.ICacheReposit
 	}
 	service.ensureLocalNode()
 	return service
+}
+
+// ValidateNodeAddress 校验节点自报地址的格式。
+// 注册端点只凭 NODE_SECRET 认证，地址若不校验，攻击者可借 userinfo/路径变形
+// 伪装或混淆代理目标。合法形式为 [http(s)://]host:port，不允许用户信息、路径、查询串。
+func ValidateNodeAddress(address string) error {
+	raw := strings.TrimSpace(address)
+	if raw == "" {
+		return fmt.Errorf("节点地址为空")
+	}
+	rest := raw
+	if idx := strings.Index(rest, "://"); idx >= 0 {
+		scheme := strings.ToLower(rest[:idx])
+		if scheme != "http" && scheme != "https" {
+			return fmt.Errorf("节点地址协议仅支持 http/https")
+		}
+		rest = rest[idx+3:]
+	}
+	if rest == "" {
+		return fmt.Errorf("节点地址缺少主机")
+	}
+	if strings.ContainsAny(rest, "/?#@") {
+		return fmt.Errorf("节点地址只能包含主机与端口")
+	}
+	host, port, err := net.SplitHostPort(rest)
+	if err != nil {
+		return fmt.Errorf("节点地址必须是 host:port 形式")
+	}
+	if strings.TrimSpace(host) == "" {
+		return fmt.Errorf("节点地址缺少主机")
+	}
+	p, err := strconv.Atoi(port)
+	if err != nil || p < 1 || p > 65535 {
+		return fmt.Errorf("节点端口无效")
+	}
+	if net.ParseIP(host) == nil && !validNodeHostname(host) {
+		return fmt.Errorf("节点主机名无效")
+	}
+	return nil
+}
+
+// validNodeHostname 放宽版主机名校验：字母/数字/点/连字符/下划线（兼容 docker 服务名），
+// 不允许空白与控制字符。
+func validNodeHostname(host string) bool {
+	if len(host) == 0 || len(host) > 253 {
+		return false
+	}
+	for _, r := range host {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '.', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+// ValidateNodeID 校验节点自报 ID：非空、限长、无空白与控制字符。
+func ValidateNodeID(id string) error {
+	if strings.TrimSpace(id) == "" {
+		return fmt.Errorf("节点 ID 为空")
+	}
+	if len(id) > 255 {
+		return fmt.Errorf("节点 ID 过长")
+	}
+	for _, r := range id {
+		if r < 0x20 || r == 0x7f || r == ' ' {
+			return fmt.Errorf("节点 ID 含非法字符")
+		}
+	}
+	return nil
 }
 
 // RegisterNode 注册节点

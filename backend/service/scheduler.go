@@ -3,8 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -15,6 +13,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
+	"rabbit-panel/middleware"
 	"rabbit-panel/model"
 	"rabbit-panel/repository"
 )
@@ -148,7 +147,7 @@ func (s *Scheduler) forwardToWorker(ctx context.Context, workerAddr string, req 
 	httpReq, _ := http.NewRequest("POST", workerURL, bytes.NewBuffer(jsonData))
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("X-Node-ID", "master")
-	httpReq.Header.Set("X-Node-Token", s.generateNodeToken("master"))
+	httpReq.Header.Set("X-Node-Token", middleware.GenerateNodeToken("master", s.nodeSecret))
 
 	client := NewNodeHTTPClient(30 * time.Second)
 	resp, err := client.Do(httpReq)
@@ -179,10 +178,3 @@ func (s *Scheduler) forwardToWorker(ctx context.Context, workerAddr string, req 
 	}, nil
 }
 
-// generateNodeToken generates a node authentication token using HMAC-SHA256
-func (s *Scheduler) generateNodeToken(nodeID string) string {
-	h := sha256.New()
-	h.Write([]byte(nodeID))
-	h.Write([]byte(s.nodeSecret))
-	return hex.EncodeToString(h.Sum(nil))
-}

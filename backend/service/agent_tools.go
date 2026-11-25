@@ -18,7 +18,11 @@ import (
 	"rabbit-panel/tool"
 )
 
-func (s *AgentService) executeToolCalls(ctx context.Context, responseText string, onChunk func(string) error) ([]string, error) {
+// executeToolCalls 解析并执行 LLM 输出中的工具调用。
+// 危险操作（needsConfirm）在交互式会话中先推送确认事件并阻塞等待用户答复，
+// 被拒绝/超时/流断开时不执行；非交互通道（微信等）直接拒绝执行。
+// 无论执行与否，结果都会反馈给 LLM 以便它如实告知用户。
+func (s *AgentService) executeToolCalls(ctx context.Context, responseText string, onChunk func(string) error, onEvent func(ChatEvent) error, interactive bool) ([]string, error) {
 	var toolResults []string
 	remaining := responseText
 	for {
@@ -34,14 +38,44 @@ func (s *AgentService) executeToolCalls(ctx context.Context, responseText string
 		toolCmd := strings.TrimSpace(remaining[:endIdx])
 		remaining = remaining[endIdx+2:]
 
-		toolResult := s.executeTool(ctx, toolCmd)
+		toolResult, displayHead := s.executeToolWithConfirm(ctx, toolCmd, onEvent, interactive)
 		toolResults = append(toolResults, fmt.Sprintf("工具 %s 执行结果: %s", toolCmd, toolResult))
-		displayOutput := fmt.Sprintf("\n\n> 🛠️ **系统正在执行**: `%s`\n\n%s\n", toolCmd, toolResult)
+
+		displayOutput := fmt.Sprintf("\n\n> %s: `%s`\n\n%s\n", displayHead, toolCmd, toolResult)
 		if err := onChunk(displayOutput); err != nil {
 			return nil, err
 		}
 	}
 	return toolResults, nil
+}
+
+// executeToolWithConfirm 执行单条工具命令，返回结果文本与展示标题。
+func (s *AgentService) executeToolWithConfirm(ctx context.Context, toolCmd string, onEvent func(ChatEvent) error, interactive bool) (string, string) {
+	name, args, _, ok := parseToolCommand(toolCmd)
+	if !ok || !needsConfirm(name) {
+		return s.executeTool(ctx, toolCmd), "🛠️ **系统正在执行**"
+	}
+
+	summary := confirmSummary(name, args)
+
+	// 非交互通道：无人可以确认，按安全策略拒绝并把原因反馈给 LLM
+	if !interactive {
+		return fmt.Sprintf("⚠️ 已拒绝执行「%s」：停止/重启/删除等关键操作需要用户在面板中确认，远程通道无法确认。请告知用户前往面板执行或确认。", summary), "⛔ **已按安全策略拒绝**"
+	}
+
+	pending, err := s.confirms.add(toolCmd)
+	if err != nil {
+		return "Error: 创建确认请求失败", "🛠️ **系统正在执行**"
+	}
+	// 推送确认事件后阻塞等待；用户答复经 /api/agent/confirm 到达
+	if err := onEvent(ChatEvent{Type: "confirm", ID: pending.id, Command: toolCmd, Summary: summary}); err != nil {
+		s.confirms.resolve(pending.id, false)
+		return "Error: 确认请求发送失败", "🛠️ **系统正在执行**"
+	}
+	if !s.confirms.wait(ctx, pending, confirmTimeout) {
+		return fmt.Sprintf("⚠️ 用户拒绝了「%s」或确认超时，操作未执行。请如实告知用户，不要假装执行成功。", summary), "⛔ **操作未执行**"
+	}
+	return s.executeTool(ctx, toolCmd), "🛠️ **已确认执行**"
 }
 
 func (s *AgentService) executeTool(ctx context.Context, command string) string {

@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 
+	"rabbit-panel/middleware"
 	"rabbit-panel/model"
 )
 
@@ -31,10 +32,14 @@ func TestParseToolCommandKeepsNodeSeparate(t *testing.T) {
 }
 
 func TestExecuteToolOnNamedNode(t *testing.T) {
-	var gotPath, gotAuth, gotBody string
+	var gotPath, gotNodeID, gotNodeToken, gotBody string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotPath = r.URL.Path
-		gotAuth = r.Header.Get("Authorization")
+		gotNodeID = r.Header.Get("X-Node-ID")
+		gotNodeToken = r.Header.Get("X-Node-Token")
+		if r.Header.Get("Authorization") != "" {
+			t.Errorf("must not forward user JWT to node")
+		}
 		raw, _ := io.ReadAll(r.Body)
 		gotBody = string(raw)
 		switch r.URL.Path {
@@ -59,14 +64,15 @@ func TestExecuteToolOnNamedNode(t *testing.T) {
 		Mode:    model.ModeWorker,
 		Status:  model.NodeStatusOnline,
 	})
-	svc := &AgentService{dockerRepo: dockerStub, nodes: nodes, jwtSecret: []byte("test-secret")}
+	svc := &AgentService{dockerRepo: dockerStub, nodes: nodes, nodeSecret: "test-secret"}
 
 	got := svc.executeTool(context.Background(), "list_containers(node=edge)")
 	if !strings.Contains(got, "redis") || !strings.Contains(got, "节点 edge") || strings.Contains(got, "本机") {
 		t.Fatalf("list reply %q path %s", got, gotPath)
 	}
-	if gotPath != "/api/containers" || !strings.HasPrefix(gotAuth, "Bearer ") {
-		t.Fatalf("path %s auth %s", gotPath, gotAuth)
+	if gotPath != "/api/containers" || gotNodeID != "master" ||
+		!middleware.ValidateNodeToken(gotNodeID, gotNodeToken, "test-secret") {
+		t.Fatalf("path %s node id %s token %s", gotPath, gotNodeID, gotNodeToken)
 	}
 
 	ctx := context.WithValue(context.Background(), agentNodeKey{}, "edge:3958")
@@ -91,7 +97,7 @@ func TestNodeMentionAndLocalMaster(t *testing.T) {
 	nodes.RegisterNode(&model.NodeInfo{
 		ID: "edge:3958", Name: "edge", Address: "192.0.2.8:3958", Mode: model.ModeWorker, Status: model.NodeStatusOnline,
 	})
-	svc := &AgentService{dockerRepo: dockerStub, nodes: nodes, jwtSecret: []byte("test-secret")}
+	svc := &AgentService{dockerRepo: dockerStub, nodes: nodes, nodeSecret: "test-secret"}
 	if got := svc.withMentionedNode(fallbackToolCommand("查看 edge 上有哪些容器"), "查看 edge 上有哪些容器"); got != "list_containers(node=edge)" {
 		t.Fatalf("mention %q", got)
 	}

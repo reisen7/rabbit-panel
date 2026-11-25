@@ -543,7 +543,7 @@ func TestStreamChatListsContainersWhenModelRefuses(t *testing.T) {
 		Names:  []string{"/rabbit-panel"},
 		Status: "Up 3 minutes",
 	}}}
-	svc := &AgentService{dockerRepo: dockerStub}
+	svc := &AgentService{dockerRepo: dockerStub, confirms: newConfirmStore()}
 	svc.config = normalizeAgentConfig(AgentConfig{
 		APIURL:    srv.URL + "/v1",
 		APIKey:    "sk-test",
@@ -553,10 +553,12 @@ func TestStreamChatListsContainersWhenModelRefuses(t *testing.T) {
 	})
 
 	var got strings.Builder
-	err := svc.StreamChat(context.Background(), model.AgentChatRequest{Message: "查看哪个容器运行中"}, func(chunk string) error {
-		got.WriteString(chunk)
+	err := svc.StreamChat(context.Background(), model.AgentChatRequest{Message: "查看哪个容器运行中"}, func(evt ChatEvent) error {
+		if evt.Type == "chunk" {
+			got.WriteString(evt.Text)
+		}
 		return nil
-	})
+	}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

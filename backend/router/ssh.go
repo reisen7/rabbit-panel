@@ -106,7 +106,8 @@ type sshConnectMessage struct {
 // 协议：升级 WS → 客户端先发 connect JSON → 服务端建立 SSH+PTY → 双向转发，
 // 后续 {"type":"resize"} 调整窗口尺寸，其余消息作为 stdin。
 func (r *Router) handleSshTerminalWS(c *gin.Context) {
-	token := c.Query("token")
+	// 浏览器 WS 握手自动携带同源 Cookie；同时兼容旧的 ?token= 方式。
+	token := middleware.TokenFromRequest(c.Request)
 	if token == "" || !middleware.ValidateToken(token, r.app.JWTSecret) {
 		c.String(http.StatusUnauthorized, "未授权")
 		return

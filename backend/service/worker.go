@@ -3,8 +3,6 @@ package service
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,6 +16,7 @@ import (
 
 	"github.com/docker/docker/api/types"
 
+	"rabbit-panel/middleware"
 	"rabbit-panel/model"
 	"rabbit-panel/tool"
 )
@@ -204,7 +203,7 @@ func (s *NodeService) postMaster(client *http.Client, masterURL, path string, bo
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Node-ID", s.nodeID)
-	req.Header.Set("X-Node-Token", nodeAuthToken(s.nodeID, s.nodeSecret))
+	req.Header.Set("X-Node-Token", middleware.GenerateNodeToken(s.nodeID, s.nodeSecret))
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -222,10 +221,3 @@ func (s *NodeService) postMaster(client *http.Client, masterURL, path string, bo
 	return nil
 }
 
-// nodeAuthToken 与 middleware.verifyNodeToken 使用同一算法：SHA256(nodeID + secret)。
-func nodeAuthToken(nodeID, secret string) string {
-	h := sha256.New()
-	h.Write([]byte(nodeID))
-	h.Write([]byte(secret))
-	return hex.EncodeToString(h.Sum(nil))
-}

@@ -2,7 +2,6 @@ package middleware
 
 import (
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -67,6 +66,7 @@ func AuthMiddleware(jwtSecret []byte, publicPaths ...string) gin.HandlerFunc {
 
 		// Set username in context for downstream handlers
 		c.Set("username", claims.Username)
+		c.Set("need_change_password", claims.NeedChangePassword)
 		c.Next()
 	}
 }
@@ -117,7 +117,7 @@ func NodeAuthMiddleware(nodeSecret string) gin.HandlerFunc {
 			return
 		}
 
-		if !verifyNodeToken(nodeID, nodeToken, nodeSecret) {
+		if !ValidateNodeToken(nodeID, nodeToken, nodeSecret) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "节点认证失败: Token无效"})
 			return
 		}
@@ -143,7 +143,7 @@ func AuthOrNodeMiddleware(jwtSecret []byte, nodeSecret string, publicPaths ...st
 		nodeID := c.GetHeader("X-Node-ID")
 		nodeToken := c.GetHeader("X-Node-Token")
 		if nodeID != "" && nodeToken != "" {
-			if verifyNodeToken(nodeID, nodeToken, nodeSecret) {
+			if ValidateNodeToken(nodeID, nodeToken, nodeSecret) {
 				c.Set("node_id", nodeID)
 				c.Next()
 				return
@@ -180,27 +180,11 @@ func AuthOrNodeMiddleware(jwtSecret []byte, nodeSecret string, publicPaths ...st
 		}
 
 		c.Set("username", claims.Username)
+		c.Set("need_change_password", claims.NeedChangePassword)
 		c.Next()
 	}
 }
 
-// verifyNodeToken verifies a node token using HMAC-SHA256
-func verifyNodeToken(nodeID, token, secret string) bool {
-	if nodeID == "" || token == "" {
-		return false
-	}
-	// Token format: HMAC-SHA256(nodeID, secret) as hex
-	h := sha256.New()
-	h.Write([]byte(nodeID))
-	h.Write([]byte(secret))
-	expected := hex.EncodeToString(h.Sum(nil))
-	return token == expected
-}
-
-// ValidateNodeToken validates a node token (exported for external use)
-func ValidateNodeToken(nodeID, token, secret string) bool {
-	return verifyNodeToken(nodeID, token, secret)
-}
 
 // ValidateToken validates a JWT token string and returns true if valid.
 // Useful for WebSocket handlers that can't use Gin middleware.
