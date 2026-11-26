@@ -27,7 +27,7 @@ const emit = defineEmits<{
       <span class="font-semibold" :class="compact ? 'text-xs' : 'text-sm'">
         {{ t('agent.confirmTitle') }}
       </span>
-      <Badge v-if="item.state === 'approved'" variant="success">{{ t('agent.confirmApproved') }}</Badge>
+      <Badge v-if="item.state === 'approved' || item.state === 'done'" variant="success">{{ t('agent.confirmApproved') }}</Badge>
       <Badge v-else-if="item.state === 'rejected'" variant="destructive">{{ t('agent.confirmRejected') }}</Badge>
       <Badge v-else-if="item.state === 'expired'" variant="info">{{ t('agent.confirmExpired') }}</Badge>
     </div>
@@ -55,7 +55,8 @@ const emit = defineEmits<{
 
     <template v-else>
       <p class="mt-1 flex items-center gap-1.5 text-muted-foreground" :class="compact ? 'text-xs' : 'text-sm'">
-        <Loader2 v-if="item.state === 'approved'" class="size-3 animate-spin" />
+        <Loader2 v-if="item.state === 'approved'" class="size-3 shrink-0 animate-spin" />
+        <Check v-else-if="item.state === 'done'" class="size-3 shrink-0 text-emerald-600 dark:text-emerald-400" />
         <span class="truncate">{{ item.summary }}</span>
       </p>
     </template>

@@ -11,7 +11,7 @@ export interface AgentMessage {
   content: string
 }
 
-export type ConfirmState = 'pending' | 'approved' | 'rejected' | 'expired'
+export type ConfirmState = 'pending' | 'approved' | 'done' | 'rejected' | 'expired'
 
 export interface ConfirmRequest {
   id: string
@@ -78,6 +78,7 @@ export function useAgentChat(scrollToBottom: () => void) {
       const response = await fetch('/api/agent/history', { method: 'DELETE' })
       if (response.status === 401) handleUnauthorized()
       messages.value = []
+      confirmations.value = []
     } catch (e) {
       console.error('Failed to clear history:', e)
     }
@@ -105,6 +106,13 @@ export function useAgentChat(scrollToBottom: () => void) {
     } catch (e) {
       console.error('Confirm error:', e)
       toast.error(t('agent.confirmFailed'))
+    }
+  }
+
+  // 后端在 executeTool 结束后才推下一个事件：新 chunk 出现即表示已批准的执行已完成。
+  const markApprovedDone = () => {
+    for (const item of confirmations.value) {
+      if (item.state === 'approved') item.state = 'done'
     }
   }
 
@@ -146,6 +154,7 @@ export function useAgentChat(scrollToBottom: () => void) {
       let buffer = ''
 
       const appendChunk = (text: string) => {
+        markApprovedDone()
         fullContent += text
         if (!started) {
           started = true
@@ -221,6 +230,11 @@ export function useAgentChat(scrollToBottom: () => void) {
         content: `**${t('agent.error')}**: ${t('agent.responseError')}`,
       })
     } finally {
+      markApprovedDone()
+      // SSE 流已结束，后端不再处理仍 pending 的确认，标记为过期
+      for (const item of confirmations.value) {
+        if (item.state === 'pending') item.state = 'expired'
+      }
       isThinking.value = false
       waitingReply.value = false
     }
