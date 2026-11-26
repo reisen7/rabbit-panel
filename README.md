@@ -107,22 +107,9 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 
 ## 环境变量
 
-| 变量 | 说明 |
-| --- | --- |
-| `MODE` | `master`（默认）或 `worker` |
-| `HOST` / `PORT` | 监听地址与端口，默认 `0.0.0.0` / `3958` |
-| `DOCKER_HOST` | Docker 守护进程地址，未设置时沿用 Docker CLI 当前 context（默认本机 socket） |
-| `JWT_SECRET` | 登录令牌密钥。Master / 单机可不设：**首次启动自动生成并保存到 `./data/secrets.env`（0600 权限），之后每次启动从文件读回**——重启不掉登录态、密钥固定。设置时至少 32 个字符且不能是示例值，可用 `openssl rand -hex 32` 生成。Worker 必填 |
-| `NODE_SECRET` | 节点通信密钥，规则同 `JWT_SECRET`。Worker 必填，且与 Master 一致；Master 端未设置时同样自动持久化，配置 Worker 前用 `cat ./data/secrets.env` 查看即可 |
-| `MASTER_URL` | Worker 连接的 Master 面板地址，如 `http://x.x.x.x:3958`；Master 启用 HTTPS 时写 `https://x.x.x.x:3958` |
-| `NODE_NAME` / `NODE_ADDRESS` | Worker 显示名称（如 `worker-1`）/ Master 能访问到的 Worker 地址（如 `x.x.x.x:10001`）。`NODE_ADDRESS` 可留空，此时自动探测通往 Master 的本机出口 IP；**Docker 部署必须显式设置**否则探到的是容器 IP，Master 无法回连 |
-| `RABBIT_UPDATE_CHECK_DISABLED` | 设为 `true` 跳过更新检查，界面不显示更新提示 |
-| `RABBIT_UPDATE_MANIFEST_MIRROR_URL` | 更新清单镜像源，默认 jsDelivr，设为 `off` 禁用。jsDelivr 对分支内容最长缓存约 12 小时，新版本提示可能延迟 |
-| `RABBIT_UPDATE_DOWNLOAD_PROXY` | 可选，GitHub 下载加速前缀（如 `https://ghfast.top/`），仅对 github.com 下载地址生效。二进制仍会校验 sha256，缺少 sha256 的清单会拒绝更新 |
+面板全部配置通过环境变量读取（没有配置文件和命令行参数），不同启动方式的写法见示例，变量含义查文末表格。
 
 ### 二进制启动示例
-
-面板全部配置通过环境变量读取（没有配置文件和命令行参数），不同启动方式的写法：
 
 **直接运行（Linux / macOS）**
 
@@ -179,6 +166,21 @@ PORT=10001 \
 - `JWT_SECRET`、`NODE_SECRET` 必须与 Master 完全一致且至少 32 字符，Worker 不设会拒绝启动。Master 上用 `cat ./data/secrets.env` 查看（Docker 部署时在挂载的数据目录里）
 - Master 是自签 HTTPS 时加 `NODE_TLS_INSECURE=true`
 - systemd 部署时把上面这些 `KEY=VALUE` 逐行写进 `/etc/rabbit-panel.env` 即可
+
+### 变量说明
+
+| 变量 | 说明 |
+| --- | --- |
+| `MODE` | `master`（默认）或 `worker` |
+| `HOST` / `PORT` | 监听地址与端口，默认 `0.0.0.0` / `3958` |
+| `DOCKER_HOST` | Docker 守护进程地址，未设置时沿用 Docker CLI 当前 context（默认本机 socket） |
+| `JWT_SECRET` | 登录令牌密钥。Master / 单机可不设：**首次启动自动生成并保存到 `./data/secrets.env`（0600 权限），之后每次启动从文件读回**——重启不掉登录态、密钥固定。设置时至少 32 个字符且不能是示例值，可用 `openssl rand -hex 32` 生成。Worker 必填 |
+| `NODE_SECRET` | 节点通信密钥，规则同 `JWT_SECRET`。Worker 必填，且与 Master 一致；Master 端未设置时同样自动持久化，配置 Worker 前用 `cat ./data/secrets.env` 查看即可 |
+| `MASTER_URL` | Worker 连接的 Master 面板地址，如 `http://x.x.x.x:3958`；Master 启用 HTTPS 时写 `https://x.x.x.x:3958` |
+| `NODE_NAME` / `NODE_ADDRESS` | Worker 显示名称（如 `worker-1`）/ Master 能访问到的 Worker 地址（如 `x.x.x.x:10001`）。`NODE_ADDRESS` 可留空，此时自动探测通往 Master 的本机出口 IP；**Docker 部署必须显式设置**否则探到的是容器 IP，Master 无法回连 |
+| `RABBIT_UPDATE_CHECK_DISABLED` | 设为 `true` 跳过更新检查，界面不显示更新提示 |
+| `RABBIT_UPDATE_MANIFEST_MIRROR_URL` | 更新清单镜像源，默认 jsDelivr，设为 `off` 禁用。jsDelivr 对分支内容最长缓存约 12 小时，新版本提示可能延迟 |
+| `RABBIT_UPDATE_DOWNLOAD_PROXY` | 可选，GitHub 下载加速前缀（如 `https://ghfast.top/`），仅对 github.com 下载地址生效。二进制仍会校验 sha256，缺少 sha256 的清单会拒绝更新 |
 
 ## HTTPS
 
