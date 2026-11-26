@@ -67,6 +67,9 @@ type App struct {
 
 // NewApp 创建并初始化 App 实例
 func NewApp(buildInfo service.BuildInfo) (*App, error) {
+	// 最先加载约定位置的环境变量文件（/etc/rabbit-panel.env 或 ./rabbit-panel.env），
+	// 使后续所有 getEnv 读取天然获得「真实环境变量 > env 文件 > 程序默认」的优先级。
+	loadEnvFile()
 	// 默认 HTTP。需要 HTTPS 时设置 TLS_ENABLED=true；未提供证书且 TLS_SELF_SIGNED=true 时自动生成自签证书。
 	tlsConf := TLSConfig{
 		Enabled:    getBoolEnv("TLS_ENABLED", false),
@@ -234,7 +237,7 @@ var placeholderSecrets = map[string]bool{
 func requireUserSecret(name, value string) (string, error) {
 	value = strings.TrimSpace(value)
 	if placeholderSecrets[value] || len(value) < 32 {
-		return "", fmt.Errorf("%s 未设置或仍是示例值。请自行生成后填入环境变量，例如：openssl rand -hex 32", name)
+		return "", fmt.Errorf("%s 未设置或仍是示例值。请用 openssl rand -hex 32 生成后填入环境变量，或写入 ./data/secrets.env（每行一个 KEY=VALUE）", name)
 	}
 	return value, nil
 }

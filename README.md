@@ -109,7 +109,8 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 
 面板全部配置通过环境变量读取，变量含义查「环境变量」一节表格。
 
-> **env 文件统一放 `/etc/rabbit-panel.env`**（每台机器一份，master 写 master 的配置、worker 写 worker 的配置）。二进制本身只认环境变量、不直接读文件，env 文件是给 shell `source` 或 systemd `EnvironmentFile` 用的；`./data/secrets.env` 是程序自动管理的密钥文件，两者不要混淆。
+> [!IMPORTANT]
+> **配置文件唯一约定位置：`./data/secrets.env`**（数据目录下，每行一个 `KEY=VALUE`，支持 `#` 注释）。二进制启动时**自动读取该文件**——不需要 `source`、不需要 systemd `EnvironmentFile`。优先级：显式环境变量（`docker -e`、shell export）> 文件。程序自动生成的密钥也追加存放在同一文件（不会覆盖你的配置）。路径跟随启动时的工作目录，请固定在同一个目录下启动。
 
 **直接运行（Linux / macOS）**
 
@@ -118,77 +119,55 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 ./rabbit-panel-linux-amd64
 ```
 
-首次启动会自动生成 `JWT_SECRET` / `NODE_SECRET` 并保存到 `./data/secrets.env`（仅属主可读），之后重启密钥保持不变。查看密钥：
+首次启动自动生成 `JWT_SECRET` / `NODE_SECRET` 写入 `./data/secrets.env`（0600 仅属主可读），重启密钥不变。查看：
 
 ```bash
 cat ./data/secrets.env    # 配 Worker 时取这里面的值
 ```
 
-需要固定使用自己生成的密钥时（如多机统一部署）：
+需要自定义配置时往同一个文件里写（不存在就自己建），重启生效：
 
 ```bash
-JWT_SECRET=$(openssl rand -hex 32) NODE_SECRET=$(openssl rand -hex 32) ./rabbit-panel-linux-amd64
+mkdir -p data
+cat >> data/secrets.env <<'EOF'
+TLS_ENABLED=true
+PORT=3958
+EOF
+./rabbit-panel-linux-amd64
 ```
-
-> 环境变量优先级高于 `secrets.env`：显式设置后以环境变量为准。
 
 **一键脚本部署（systemd）**
 
-环境变量统一写在 `/etc/rabbit-panel.env`（每行一个 `KEY=VALUE`），修改后重启服务生效：
-
-```bash
-cat >> /etc/rabbit-panel.env <<'EOF'
-JWT_SECRET=粘贴 openssl rand -hex 32 的输出
-TLS_ENABLED=true
-EOF
-systemctl restart rabbit-panel
-```
+配置写进 `./data/secrets.env` 后 `systemctl restart rabbit-panel` 即生效——程序启动时自己读文件，无需在 unit 里配 `EnvironmentFile`。
 
 **Windows**
 
-```powershell
-$env:JWT_SECRET="至少32个字符的随机串"; .\rabbit-panel-windows-amd64.exe
-```
+与 Linux 完全一致：配置写在 exe 同级 `data\secrets.env`（用记事本编辑即可），然后直接运行 exe。
 
 **Worker 节点示例**
 
-推荐写法——先写 env 文件再启动（避免多行命令手敲出错）：
+在 Worker 机器上把配置写进数据目录，然后直接启动：
 
 ```bash
-cat > /etc/rabbit-panel.env <<'ENVEOF'
+mkdir -p data
+cat > data/secrets.env <<'EOF'
 MODE=worker
 MASTER_URL=http://x.x.x.x:3958
 JWT_SECRET=与Master完全相同的值
 NODE_SECRET=与Master完全相同的值
 NODE_NAME=worker-1
 PORT=10001
-ENVEOF
+EOF
 
-set -a && source /etc/rabbit-panel.env && set +a
 ./rabbit-panel-linux-amd64
 ```
 
-密钥从 Master 上抄：`cat ./data/secrets.env`（Docker 部署时在挂载的数据目录里）。注意**完整复制，漏一个字符都会导致认证失败**。
-
-也可以用单行环境变量直接启动：
-
-```bash
-MODE=worker \
-MASTER_URL=http://x.x.x.x:3958 \
-JWT_SECRET=与Master完全相同的值 \
-NODE_SECRET=与Master完全相同的值 \
-NODE_NAME=worker-1 \
-PORT=10001 \
-./rabbit-panel-linux-amd64
-```
-
-> [!WARNING]
-> 多行写法每行 `\` 前**必须有空格**，否则下一行会被吞进上一行变量的值里（如 `JWT_SECRET=xxx\` 无空格时，`NODE_SECRET` 整行并入 JWT_SECRET，导致 NODE_SECRET 未设置）。
+密钥从 Master 上抄：`cat ./data/secrets.env`（Docker 部署时在宿主机挂载的数据目录里，如 `/opt/rabbit-panel/data/secrets.env`）。注意**完整复制，漏一个字符都会导致认证失败**。
 
 - `MASTER_URL` 是 Master 的地址；`NODE_ADDRESS` 是本 Worker 的地址（`IP:端口`，Worker 会自动补协议前缀），要填 Master 能访问到的地址；二进制直接部署时可留空自动探测，Docker 部署必须显式填宿主机 IP
 - `JWT_SECRET`、`NODE_SECRET` 必须与 Master 完全一致且至少 32 字符，Worker 不设会拒绝启动
 - Master 是自签 HTTPS 时加 `NODE_TLS_INSECURE=true`
-- systemd 部署时把上面这些 `KEY=VALUE` 逐行写进 `/etc/rabbit-panel.env` 即可
+- Docker 部署时用 `-e` 传参或写进挂载数据目录的 `secrets.env` 均可，`-e` 优先
 
 ## 环境变量
 
