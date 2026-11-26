@@ -25,8 +25,8 @@
     - [Docker Compose](#docker-compose)
     - [一键脚本（systemd）](#一键脚本systemd)
   - [多节点部署](#多节点部署)
+  - [二进制启动示例](#二进制启动示例)
   - [环境变量](#环境变量)
-    - [二进制启动示例](#二进制启动示例)
   - [HTTPS](#https)
   - [从源码构建](#从源码构建)
   - [常见问题](#常见问题)
@@ -105,11 +105,9 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 > - `NODE_ADDRESS` 写 `IP:端口` 即可，Worker 会自动补协议前缀。
 > - 自签证书场景需设 `NODE_TLS_INSECURE=true`，或用 `NODE_CA_FILE` 分发 CA，否则跨节点调用会因证书校验失败。
 
-## 环境变量
+## 二进制启动示例
 
-面板全部配置通过环境变量读取（没有配置文件和命令行参数），不同启动方式的写法见示例，变量含义查文末表格。
-
-### 二进制启动示例
+面板全部配置通过环境变量读取（没有配置文件和命令行参数），变量含义查「环境变量」一节表格。
 
 **直接运行（Linux / macOS）**
 
@@ -167,7 +165,7 @@ PORT=10001 \
 - Master 是自签 HTTPS 时加 `NODE_TLS_INSECURE=true`
 - systemd 部署时把上面这些 `KEY=VALUE` 逐行写进 `/etc/rabbit-panel.env` 即可
 
-### 变量说明
+## 环境变量
 
 | 变量 | 说明 |
 | --- | --- |
