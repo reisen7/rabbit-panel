@@ -43,3 +43,8 @@ build-errors.log
 .air.toml.bak
 .kiro/
 compose_projects
+
+# 密钥/环境变量文件（含测试运行残留的数据目录）
+data/secrets.env
+backend/data/secrets.env
+backend/config/data/
