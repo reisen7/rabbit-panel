@@ -55,7 +55,9 @@ func applyEnvLines(content string) int {
 				value = value[1 : len(value)-1]
 			}
 		}
-		if _, exists := os.LookupEnv(key); exists {
+		// 空串视为未设置：compose 里 ${VAR:-} 展开会产生「存在但为空」的变量，
+		// 与 getEnv 对空值回退默认的语义保持一致
+		if v, exists := os.LookupEnv(key); exists && v != "" {
 			continue
 		}
 		if os.Setenv(key, value) == nil {

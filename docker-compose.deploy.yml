@@ -16,7 +16,8 @@ services:
     environment:
       - TZ=Asia/Shanghai
       - PORT=3958
-      # 可不填，未填时每次启动随机生成并打印到日志（重启后变化，生产建议固定）。如需自行指定：openssl rand -hex 32（至少 32 字符，示例值会拒绝启动）。
+      # 可不填：未填时首次启动自动生成并保存到数据目录 secrets.env（重启不变；查看 cat /opt/rabbit-panel/data/secrets.env）。
+      # 如需自行指定：openssl rand -hex 32（至少 32 字符，示例值会拒绝启动）。
       - JWT_SECRET=${JWT_SECRET:-}
       - NODE_SECRET=${NODE_SECRET:-}
       - RABBIT_DEPLOY_MODE=docker

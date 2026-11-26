@@ -162,7 +162,7 @@ EOF
 ./rabbit-panel-linux-amd64
 ```
 
-密钥从 Master 上抄：`cat ./data/secrets.env`（Docker 部署时在宿主机挂载的数据目录里，如 `/opt/rabbit-panel/data/secrets.env`）。注意**完整复制，漏一个字符都会导致认证失败**。
+密钥从 Master 上抄：`cat ./data/secrets.env`。注意**完整复制，漏一个字符都会导致认证失败**。
 
 - `MASTER_URL` 是 Master 的地址；`NODE_ADDRESS` 是本 Worker 的地址（`IP:端口`，Worker 会自动补协议前缀），要填 Master 能访问到的地址；二进制直接部署时可留空自动探测，Docker 部署必须显式填宿主机 IP
 - `JWT_SECRET`、`NODE_SECRET` 必须与 Master 完全一致且至少 32 字符，Worker 不设会拒绝启动

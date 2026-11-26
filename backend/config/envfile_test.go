@@ -52,6 +52,19 @@ RABBIT_TEST_VALID=ok
 	}
 }
 
+func TestApplyEnvLines_EmptyEnvTreatedAsUnset(t *testing.T) {
+	// compose 的 ${VAR:-} 展开会产生存在但为空的变量，文件值应当生效
+	t.Setenv("RABBIT_TEST_EMPTY", "")
+
+	n := applyEnvLines("RABBIT_TEST_EMPTY=from-file\n")
+	if n != 1 {
+		t.Fatalf("expected 1 loaded, got %d", n)
+	}
+	if got := os.Getenv("RABBIT_TEST_EMPTY"); got != "from-file" {
+		t.Fatalf("got %q", got)
+	}
+}
+
 func TestApplyEnvLines_ExportPrefixAndQuotes(t *testing.T) {
 	os.Unsetenv("RABBIT_TEST_EXPORT")
 	os.Unsetenv("RABBIT_TEST_DQ")
