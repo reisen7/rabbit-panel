@@ -109,6 +109,8 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 
 面板全部配置通过环境变量读取，变量含义查「环境变量」一节表格。
 
+> **env 文件统一放 `/etc/rabbit-panel.env`**（每台机器一份，master 写 master 的配置、worker 写 worker 的配置）。二进制本身只认环境变量、不直接读文件，env 文件是给 shell `source` 或 systemd `EnvironmentFile` 用的；`./data/secrets.env` 是程序自动管理的密钥文件，两者不要混淆。
+
 **直接运行（Linux / macOS）**
 
 ```bash
@@ -153,7 +155,7 @@ $env:JWT_SECRET="至少32个字符的随机串"; .\rabbit-panel-windows-amd64.ex
 推荐写法——先写 env 文件再启动（避免多行命令手敲出错）：
 
 ```bash
-cat > rabbit-worker.env <<'ENVEOF'
+cat > /etc/rabbit-panel.env <<'ENVEOF'
 MODE=worker
 MASTER_URL=http://x.x.x.x:3958
 JWT_SECRET=与Master完全相同的值
@@ -162,7 +164,7 @@ NODE_NAME=worker-1
 PORT=10001
 ENVEOF
 
-set -a && source rabbit-worker.env && set +a
+set -a && source /etc/rabbit-panel.env && set +a
 ./rabbit-panel-linux-amd64
 ```
 
