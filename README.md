@@ -112,8 +112,8 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 | `MODE` | `master`（默认）或 `worker` |
 | `HOST` / `PORT` | 监听地址与端口，默认 `0.0.0.0` / `3958` |
 | `DOCKER_HOST` | Docker 守护进程地址，未设置时沿用 Docker CLI 当前 context（默认本机 socket） |
-| `JWT_SECRET` | 登录令牌密钥。Master / 单机可不设，未设置时每次启动随机生成并打印到日志（重启后会话失效）；设置时至少 32 个字符且不能是示例值，可用 `openssl rand -hex 32` 生成。Worker 必填 |
-| `NODE_SECRET` | 节点通信密钥，规则同 `JWT_SECRET`。Worker 必填，且与 Master 一致；Master 重启后随机值会变，导致 Worker 连不上，多节点请显式设置 |
+| `JWT_SECRET` | 登录令牌密钥。Master / 单机可不设：**首次启动自动生成并保存到 `./data/secrets.env`（0600 权限），之后每次启动从文件读回**——重启不掉登录态、密钥固定。设置时至少 32 个字符且不能是示例值，可用 `openssl rand -hex 32` 生成。Worker 必填 |
+| `NODE_SECRET` | 节点通信密钥，规则同 `JWT_SECRET`。Worker 必填，且与 Master 一致；Master 端未设置时同样自动持久化，配置 Worker 前用 `cat ./data/secrets.env` 查看即可 |
 | `MASTER_URL` | Worker 连接的 Master 面板地址，如 `http://x.x.x.x:3958`；Master 启用 HTTPS 时写 `https://x.x.x.x:3958` |
 | `NODE_NAME` / `NODE_ADDRESS` | Worker 显示名称（如 `worker-1`）/ Master 能访问到的 Worker 地址（如 `x.x.x.x:10001`）。`NODE_ADDRESS` 可留空，此时自动探测通往 Master 的本机出口 IP；**Docker 部署必须显式设置**否则探到的是容器 IP，Master 无法回连 |
 | `RABBIT_UPDATE_CHECK_DISABLED` | 设为 `true` 跳过更新检查，界面不显示更新提示 |
@@ -127,13 +127,23 @@ docker compose -f docker-compose.worker.yml up -d   # Worker
 **直接运行（Linux / macOS）**
 
 ```bash
-# 单行写法：变量只对这一次启动生效
-JWT_SECRET=$(openssl rand -hex 32) ./rabbit-panel-linux-amd64
-
-# 或先 export 再启动
-export JWT_SECRET=$(openssl rand -hex 32)
+# 最简启动：什么都不用配
 ./rabbit-panel-linux-amd64
 ```
+
+首次启动会自动生成 `JWT_SECRET` / `NODE_SECRET` 并保存到 `./data/secrets.env`（仅属主可读），之后重启密钥保持不变。查看密钥：
+
+```bash
+cat ./data/secrets.env    # 配 Worker 时取这里面的值
+```
+
+需要固定使用自己生成的密钥时（如多机统一部署）：
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) NODE_SECRET=$(openssl rand -hex 32) ./rabbit-panel-linux-amd64
+```
+
+> 环境变量优先级高于 `secrets.env`：显式设置后以环境变量为准。
 
 **一键脚本部署（systemd）**
 
@@ -166,7 +176,7 @@ PORT=10001 \
 ```
 
 - `MASTER_URL` 是 Master 的地址；`NODE_ADDRESS` 是本 Worker 的地址（`IP:端口`，Worker 会自动补协议前缀），要填 Master 能访问到的地址；二进制直接部署时可留空自动探测，Docker 部署必须显式填宿主机 IP
-- `JWT_SECRET`、`NODE_SECRET` 必须与 Master 完全一致且至少 32 字符，Worker 不设会拒绝启动
+- `JWT_SECRET`、`NODE_SECRET` 必须与 Master 完全一致且至少 32 字符，Worker 不设会拒绝启动。Master 上用 `cat ./data/secrets.env` 查看（Docker 部署时在挂载的数据目录里）
 - Master 是自签 HTTPS 时加 `NODE_TLS_INSECURE=true`
 - systemd 部署时把上面这些 `KEY=VALUE` 逐行写进 `/etc/rabbit-panel.env` 即可
 
