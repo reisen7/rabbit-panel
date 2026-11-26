@@ -29,6 +29,15 @@ export const imageApi = {
   },
 
   /**
+   * Pull an image onto the currently selected node.
+   * 拉取可能持续数分钟，使用 10 分钟超时覆盖默认 30s。
+   * @param name Full image reference, e.g. docker.1ms.run/library/php:latest
+   */
+  async pull(name: string): Promise<void> {
+    await request.post('/images/pull', { name }, { timeout: 10 * 60 * 1000, suppressErrorMessage: true })
+  },
+
+  /**
    * Build an image from Dockerfile content using SSE stream
    * @param imageName Image name
    * @param tag Image tag

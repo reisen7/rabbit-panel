@@ -138,6 +138,26 @@ func (r *SQLiteRepository) initTables() error {
 		return fmt.Errorf("创建 SSH 凭证表失败: %w", err)
 	}
 
+	// Image favorites table
+	_, err = r.db.Exec(`
+		CREATE TABLE IF NOT EXISTS image_favorites (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			repository_name TEXT NOT NULL,
+			registry TEXT NOT NULL DEFAULT '',
+			pull_domain TEXT NOT NULL DEFAULT '',
+			tag TEXT NOT NULL DEFAULT 'latest',
+			description TEXT NOT NULL DEFAULT '',
+			logo_url TEXT NOT NULL DEFAULT '',
+			pull_count INTEGER NOT NULL DEFAULT 0,
+			star_count INTEGER NOT NULL DEFAULT 0,
+			is_official INTEGER NOT NULL DEFAULT 0,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(repository_name, tag)
+		)`)
+	if err != nil {
+		return fmt.Errorf("创建镜像收藏表失败: %w", err)
+	}
+
 	// Check if default admin user exists
 	var count int
 	err = r.db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count)

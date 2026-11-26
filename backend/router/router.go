@@ -178,6 +178,11 @@ func (r *Router) Register() {
 		apiAuth.POST("/ssh/sftp/download", r.handleSshSftpDownload)
 		apiAuth.POST("/ssh/sftp/upload", r.handleSshSftpUpload)
 
+		// 镜像收藏（面板级数据，不经节点代理）
+		apiAuth.GET("/image-favorites", r.handleImageFavoritesList)
+		apiAuth.POST("/image-favorites", r.handleImageFavoriteUpsert)
+		apiAuth.DELETE("/image-favorites", r.handleImageFavoriteDelete)
+
 		// Agent routes
 		apiAuth.POST("/agent/chat", r.handleAgentChat)
 		apiAuth.POST("/agent/confirm", r.handleAgentConfirm)

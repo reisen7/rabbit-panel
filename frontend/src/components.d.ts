@@ -69,6 +69,8 @@ declare module 'vue' {
     FileEditor: typeof import('./components/container/FileEditor.vue')['default']
     FileExplorer: typeof import('./components/container/FileExplorer.vue')['default']
     HelloWorld: typeof import('./components/HelloWorld.vue')['default']
+    ImageSearchCard: typeof import('./components/common/ImageSearchCard.vue')['default']
+    ImageSearchFloat: typeof import('./components/common/ImageSearchFloat.vue')['default']
     Input: typeof import('./components/ui/input/Input.vue')['default']
     Label: typeof import('./components/ui/label/Label.vue')['default']
     LoadingOverlay: typeof import('./components/common/LoadingOverlay.vue')['default']

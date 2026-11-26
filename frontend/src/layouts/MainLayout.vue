@@ -39,6 +39,7 @@ import SystemMonitor from '@/components/common/SystemMonitor.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import SettingsDialog from '@/components/common/SettingsDialog.vue'
 import AgentChatFloat from '@/components/common/AgentChatFloat.vue'
+import ImageSearchFloat from '@/components/common/ImageSearchFloat.vue'
 import UpdateDialog from '@/components/common/UpdateDialog.vue'
 import ContainerCreateTaskFloat from '@/components/container/ContainerCreateTaskFloat.vue'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -557,5 +558,6 @@ onUnmounted(() => {
   <SettingsDialog v-model="showSettingsDialog" />
   <UpdateDialog v-model="showUpdateDialog" />
   <AgentChatFloat />
+  <ImageSearchFloat />
   <ContainerCreateTaskFloat />
 </template>

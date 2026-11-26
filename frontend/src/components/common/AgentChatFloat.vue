@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-vue-next'
 import { useAgentChat } from '@/composables/useAgentChat'
+import { useFloatWindowsStore } from '@/stores/floatWindows'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -20,6 +21,7 @@ import { Input } from '@/components/ui/input'
 import AgentConfirmCard from '@/components/common/AgentConfirmCard.vue'
 
 const { t } = useI18n()
+const floatWindows = useFloatWindowsStore()
 
 const isOpen = ref(false)
 const isExpanded = ref(false)
@@ -37,11 +39,20 @@ const focusInput = () => {
 
 watch(isOpen, (val) => {
   if (val) {
+    floatWindows.active = 'agent'
     loadHistory()
     focusInput()
     scrollToBottom()
   }
 })
+
+// 另一个悬浮窗（镜像搜索）展开时收起本窗口
+watch(
+  () => floatWindows.active,
+  (val) => {
+    if (val && val !== 'agent' && isOpen.value) isOpen.value = false
+  }
+)
 
 const toggleExpand = () => {
   isExpanded.value = !isExpanded.value
