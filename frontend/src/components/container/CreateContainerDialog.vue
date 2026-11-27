@@ -26,6 +26,7 @@ const store = useContainerCreateStore()
 
 const props = defineProps<{
   visible: boolean
+  initialImage?: string
 }>()
 
 const emit = defineEmits<{
@@ -98,6 +99,7 @@ watch(
       if (!store.loading && !store.isStreaming) {
         store.reset()
         Object.assign(form, initialForm())
+        form.image = props.initialImage ?? ''
         imageError.value = ''
       }
     }

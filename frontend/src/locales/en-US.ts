@@ -246,6 +246,8 @@ export default {
     title: 'Image Management',
     list: 'Image List',
     build: 'Build Image',
+    run: 'Run',
+    runTooltip: 'Create and start a container from this image',
     pull: 'Pull Image',
     remove: 'Remove Image',
     tag: 'Tag',

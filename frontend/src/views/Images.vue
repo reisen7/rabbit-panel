@@ -1,12 +1,15 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue'
-import { RefreshCw, Search, Trash2, Box } from 'lucide-vue-next'
+import { RefreshCw, Search, Trash2, Box, Play } from 'lucide-vue-next'
 import { useImageStore, type SortField } from '@/stores/images'
 import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useNodeRefresh } from '@/composables/useNodeRefresh'
 import BuildImageDialog from '@/components/image/BuildImageDialog.vue'
+import CreateContainerDialog from '@/components/container/CreateContainerDialog.vue'
+import { useContainerCreateStore } from '@/stores/containerCreate'
+import { runnableImageRef } from '@/utils/imageRun'
 import DataPagination from '@/components/common/DataPagination.vue'
 import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 import SortableTableHead from '@/components/common/SortableTableHead.vue'
@@ -36,6 +39,9 @@ const searchInput = ref('')
 const currentPageValue = ref(imageStore.currentPage)
 const pageSizeValue = ref(imageStore.pageSize)
 const showBuildDialog = ref(false)
+const showRunDialog = ref(false)
+const runImage = ref('')
+const containerCreateStore = useContainerCreateStore()
 
 watch(() => imageStore.searchQuery, (val) => { searchInput.value = val })
 watch(() => imageStore.currentPage, (val) => { currentPageValue.value = val })
@@ -90,9 +96,30 @@ function handleImageBuilt() {
   imageStore.fetchImages(true)
 }
 
+function handleRunImage(row: { id: string; name: string; tag: string }) {
+  runImage.value = runnableImageRef(row)
+  showRunDialog.value = true
+}
+
+// Usage 计数会随容器创建变化，创建成功后刷新列表
+function handleContainerCreated() {
+  imageStore.fetchImages(true)
+}
+
+// 最小化的创建任务恢复时在本页面也要能弹出对话框
+watch(
+  () => containerCreateStore.restorePending,
+  (pending) => {
+    if (pending) showRunDialog.value = true
+  }
+)
+
 useNodeRefresh(() => imageStore.fetchImages())
 
 onMounted(() => {
+  if (containerCreateStore.restorePending) {
+    showRunDialog.value = true
+  }
   imageStore.fetchImages()
 })
 </script>
@@ -208,15 +235,26 @@ onMounted(() => {
               <Badge v-else variant="info">Unused</Badge>
             </TableCell>
             <TableCell class="text-right">
-              <Button
-                variant="ghost"
-                size="sm"
-                class="text-destructive hover:text-destructive"
-                @click="confirmRemoveImage(row.id)"
-              >
-                <Trash2 />
-                {{ t('common.delete') }}
-              </Button>
+              <div class="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  :title="t('image.runTooltip')"
+                  @click="handleRunImage(row)"
+                >
+                  <Play />
+                  {{ t('image.run') }}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="text-destructive hover:text-destructive"
+                  @click="confirmRemoveImage(row.id)"
+                >
+                  <Trash2 />
+                  {{ t('common.delete') }}
+                </Button>
+              </div>
             </TableCell>
           </TableRow>
         </TableBody>
@@ -235,5 +273,6 @@ onMounted(() => {
     </div>
 
     <BuildImageDialog v-model:visible="showBuildDialog" @built="handleImageBuilt" />
+    <CreateContainerDialog v-model:visible="showRunDialog" :initial-image="runImage" @created="handleContainerCreated" />
   </div>
 </template>

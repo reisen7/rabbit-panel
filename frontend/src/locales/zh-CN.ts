@@ -246,6 +246,8 @@ export default {
     title: '镜像管理',
     list: '镜像列表',
     build: '构建镜像',
+    run: '运行',
+    runTooltip: '用此镜像创建并启动容器',
     pull: '拉取镜像',
     remove: '删除镜像',
     tag: '标签',
