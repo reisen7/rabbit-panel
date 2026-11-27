@@ -19,7 +19,6 @@ import {
   Moon,
   Building2,
   Network,
-  PackageSearch,
   Settings,
   Sun,
   User,
@@ -36,7 +35,6 @@ import { useI18n } from '@/composables/useI18n'
 import { useToast } from '@/composables/useToast'
 import { useConfirm } from '@/composables/useConfirm'
 import { useUpdateStore } from '@/stores/update'
-import { useFloatWindowsStore } from '@/stores/floatWindows'
 import SystemMonitor from '@/components/common/SystemMonitor.vue'
 import ChangePasswordDialog from '@/components/common/ChangePasswordDialog.vue'
 import SettingsDialog from '@/components/common/SettingsDialog.vue'
@@ -84,7 +82,6 @@ const volumeStore = useVolumeStore()
 const composeStore = useComposeStore()
 const registryStore = useRegistryStore()
 const updateStore = useUpdateStore()
-const floatWindows = useFloatWindowsStore()
 const { theme, toggleTheme } = useTheme()
 const { language, t, setLanguage } = useI18n()
 const toast = useToast()
@@ -144,15 +141,6 @@ function handleMenuSelect(index: string) {
   if (isMobile.value) {
     drawerVisible.value = false
   }
-}
-
-function toggleImageSearchFloat() {
-  floatWindows.active = floatWindows.active === 'imageSearch' ? null : 'imageSearch'
-}
-
-function handleImageSearchFromDrawer() {
-  toggleImageSearchFloat()
-  drawerVisible.value = false
 }
 
 async function handleLogout() {
@@ -300,36 +288,6 @@ onUnmounted(() => {
           </template>
         </nav>
 
-        <div class="border-t border-sidebar-border" :class="isCollapse ? 'flex justify-center py-2' : 'p-2'">
-          <Tooltip v-if="isCollapse">
-            <TooltipTrigger as-child>
-              <button
-                type="button"
-                class="w-full h-9 flex items-center justify-center rounded-md transition-colors cursor-pointer"
-                :class="floatWindows.active === 'imageSearch'
-                  ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-2xs'
-                  : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
-                @click="toggleImageSearchFloat"
-              >
-                <PackageSearch class="size-4 shrink-0" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">{{ t('imageSearch.title') }}</TooltipContent>
-          </Tooltip>
-          <button
-            v-else
-            type="button"
-            class="w-full h-9 px-3 flex items-center gap-2.5 rounded-md text-sm whitespace-nowrap transition-colors cursor-pointer"
-            :class="floatWindows.active === 'imageSearch'
-              ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium shadow-2xs'
-              : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
-            @click="toggleImageSearchFloat"
-          >
-            <PackageSearch class="size-4 shrink-0" />
-            <span class="truncate">{{ t('imageSearch.title') }}</span>
-          </button>
-        </div>
-
         <div
           v-if="nodesStore.isMasterMode"
           class="border-t border-sidebar-border"
@@ -400,20 +358,6 @@ onUnmounted(() => {
               <span>{{ item.title }}</span>
             </button>
           </nav>
-
-          <div class="px-2.5 py-2 border-t border-sidebar-border">
-            <button
-              type="button"
-              class="w-full h-10 px-3 flex items-center gap-3 rounded-md text-sm transition-colors cursor-pointer"
-              :class="floatWindows.active === 'imageSearch'
-                ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
-                : 'text-muted-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-foreground'"
-              @click="handleImageSearchFromDrawer"
-            >
-              <PackageSearch class="size-4 shrink-0" />
-              <span>{{ t('imageSearch.title') }}</span>
-            </button>
-          </div>
 
           <div v-if="nodesStore.isMasterMode" class="px-4 py-3 border-t border-sidebar-border space-y-1.5">
             <div class="text-xs text-muted-foreground">{{ t('node.switchNode') }}</div>
