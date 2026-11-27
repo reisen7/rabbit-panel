@@ -730,7 +730,7 @@ export default {
     searchPlaceholder: 'Search images, e.g. nginx, mysql…',
     search: 'Search',
     tagPlaceholder: 'Tag, default latest',
-    sourceMirror: 'Mirror',
+    sourceMirror: '1ms Mirror',
     sourceOrigin: 'Official',
     pull: 'Pull',
     pullTip: 'Pull to the current node',

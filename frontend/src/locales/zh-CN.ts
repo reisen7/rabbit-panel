@@ -730,7 +730,7 @@ export default {
     searchPlaceholder: '搜索镜像，例如 nginx、mysql…',
     search: '搜索',
     tagPlaceholder: '标签，默认 latest',
-    sourceMirror: '镜像加速',
+    sourceMirror: '毫秒镜像',
     sourceOrigin: '官方源',
     pull: '拉取',
     pullTip: '拉取到当前节点',
