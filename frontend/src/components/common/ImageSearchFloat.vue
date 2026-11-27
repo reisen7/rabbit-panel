@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import {
   ChevronLeft,
   ChevronRight,
@@ -13,28 +14,34 @@ import {
 } from 'lucide-vue-next'
 import { useImageSearchStore } from '@/stores/imageSearch'
 import { useFloatWindowsStore } from '@/stores/floatWindows'
+import { useContainerCreateStore } from '@/stores/containerCreate'
 import { useToast } from '@/composables/useToast'
 import { buildImageRef, buildPullCommand, isValidTag, type ImageRefSource } from '@/utils/imageRef'
 import { copyText } from '@/utils/clipboard'
+import { CATALOG_APPS, MIRROR_DOMAIN, buildDeployForm, type AppCategory, type CatalogApp } from '@/data/appCatalog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import ImageSearchCard from '@/components/common/ImageSearchCard.vue'
+import CatalogAppCard from '@/components/common/CatalogAppCard.vue'
 
 const { t } = useI18n()
 const toast = useToast()
 const store = useImageSearchStore()
 const floatWindows = useFloatWindowsStore()
+const containerCreateStore = useContainerCreateStore()
+const router = useRouter()
+const route = useRoute()
 
 const isOpen = ref(false)
 const isExpanded = ref(false)
 
 // Reka Tabs 的 modelValue 是普通 string，收窄到 store 的联合类型
-const activeTabModel = computed<'search' | 'favorites'>({
+const activeTabModel = computed<'search' | 'catalog' | 'favorites'>({
   get: () => store.activeTab,
   set: (v) => {
-    if (v === 'search' || v === 'favorites') store.activeTab = v
+    if (v === 'search' || v === 'catalog' || v === 'favorites') store.activeTab = v
   },
 })
 
@@ -93,6 +100,46 @@ const copyCommand = async (command: string) => {
     toast.error(t('imageSearch.copyFailed'))
   }
 }
+
+// ---- 常用软件目录 ----
+const catalogFilter = ref('')
+const catalogCategory = ref<AppCategory | 'all'>('all')
+
+const catalogCategories: Array<AppCategory | 'all'> = ['all', 'database', 'mq', 'web', 'devops', 'app']
+
+const catalogRefOf = (app: CatalogApp): string => {
+  return buildImageRef(
+    { repository_name: app.repository_name, registry: app.registry, pull_domain: MIRROR_DOMAIN },
+    app.tag,
+    store.source
+  )
+}
+
+const filteredCatalog = computed(() => {
+  const q = catalogFilter.value.trim().toLowerCase()
+  return CATALOG_APPS.filter((app) => {
+    if (catalogCategory.value !== 'all' && app.category !== catalogCategory.value) return false
+    if (!q) return true
+    return (
+      app.name.toLowerCase().includes(q) ||
+      app.desc.zh.toLowerCase().includes(q) ||
+      app.desc.en.toLowerCase().includes(q)
+    )
+  })
+})
+
+const copyCatalogCommand = async (app: CatalogApp) => {
+  await copyCommand(`docker pull ${catalogRefOf(app)}`)
+}
+
+const deployApp = (app: CatalogApp) => {
+  const { form, generatedPassword } = buildDeployForm(app, store.source)
+  containerCreateStore.requestPrefill(form)
+  isOpen.value = false
+  floatWindows.active = null
+  if (route.path !== '/containers') router.push('/containers')
+  if (generatedPassword) toast.info(t('catalog.passwordGenerated'))
+}
 </script>
 
 <template>
@@ -142,6 +189,7 @@ const copyCommand = async (command: string) => {
           <div class="px-3 pt-2.5">
             <TabsList class="w-full">
               <TabsTrigger value="search" class="flex-1">{{ t('imageSearch.searchTab') }}</TabsTrigger>
+              <TabsTrigger value="catalog" class="flex-1">{{ t('catalog.tab') }}</TabsTrigger>
               <TabsTrigger value="favorites" class="flex-1">
                 {{ t('imageSearch.favoritesTab', { n: store.favorites.length }) }}
               </TabsTrigger>
@@ -264,6 +312,64 @@ const copyCommand = async (command: string) => {
                 {{ t('imageSearch.next') }}
                 <ChevronRight class="size-3.5" />
               </Button>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="catalog" class="flex min-h-0 flex-1 flex-col">
+            <div class="flex items-center gap-2 px-3 pt-2">
+              <Input
+                v-model="catalogFilter"
+                :placeholder="t('catalog.filterPlaceholder')"
+                class="h-8 flex-1 text-sm"
+              />
+              <div class="flex w-36 shrink-0 rounded-md border p-0.5 text-xs">
+                <button
+                  type="button"
+                  class="flex-1 rounded px-2 py-1 transition-colors"
+                  :class="store.source === 'mirror' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'"
+                  @click="store.source = 'mirror'"
+                >
+                  {{ t('imageSearch.sourceMirror') }}
+                </button>
+                <button
+                  type="button"
+                  class="flex-1 rounded px-2 py-1 transition-colors"
+                  :class="store.source === 'origin' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'"
+                  @click="store.source = 'origin'"
+                >
+                  {{ t('imageSearch.sourceOrigin') }}
+                </button>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-1.5 px-3 pt-2">
+              <Button
+                v-for="cat in catalogCategories"
+                :key="cat"
+                :variant="catalogCategory === cat ? 'default' : 'outline'"
+                size="sm"
+                class="h-7 px-2.5 text-xs"
+                @click="catalogCategory = cat"
+              >
+                {{ t(`catalog.categories.${cat}`) }}
+              </Button>
+            </div>
+            <div class="mt-2 min-h-0 flex-1 overflow-y-auto px-3 pb-2 space-y-2">
+              <div
+                v-if="filteredCatalog.length === 0"
+                class="flex h-full items-center justify-center px-4 text-center"
+              >
+                <p class="text-sm text-muted-foreground">{{ t('catalog.empty') }}</p>
+              </div>
+              <template v-else>
+                <CatalogAppCard
+                  v-for="app in filteredCatalog"
+                  :key="app.id"
+                  :app="app"
+                  :image-ref="catalogRefOf(app)"
+                  @deploy="deployApp(app)"
+                  @copy="copyCatalogCommand(app)"
+                />
+              </template>
             </div>
           </TabsContent>
 

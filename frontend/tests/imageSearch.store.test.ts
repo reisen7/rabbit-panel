@@ -200,4 +200,24 @@ describe('imageSearch store', () => {
     expect(store.error).toBeTruthy()
     expect(store.loading).toBe(false)
   })
+
+  it('restores a persisted catalog activeTab', () => {
+    sessionStorage.setItem(
+      'rabbit-image-search',
+      JSON.stringify({ activeTab: 'catalog', query: '', page: 1, total: 0, items: [], tag: 'latest', source: 'mirror' })
+    )
+    setActivePinia(createPinia())
+    const store = useImageSearchStore()
+    expect(store.activeTab).toBe('catalog')
+  })
+
+  it('falls back to the default tab for garbage persisted values', () => {
+    sessionStorage.setItem(
+      'rabbit-image-search',
+      JSON.stringify({ activeTab: 'nonsense', query: '', page: 1, total: 0, items: [], tag: 'latest', source: 'mirror' })
+    )
+    setActivePinia(createPinia())
+    const store = useImageSearchStore()
+    expect(store.activeTab).toBe('search')
+  })
 })

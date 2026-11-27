@@ -99,8 +99,16 @@ watch(
       if (!store.loading && !store.isStreaming) {
         store.reset()
         Object.assign(form, initialForm())
-        form.image = props.initialImage ?? ''
+        const prefill = store.consumePrefill()
+        if (prefill) {
+          Object.assign(form, prefill)
+        } else {
+          form.image = props.initialImage ?? ''
+        }
         imageError.value = ''
+      } else {
+        // 任务进行中打开的对话框不能覆盖表单，丢弃预填避免下次误用
+        store.consumePrefill()
       }
     }
   }

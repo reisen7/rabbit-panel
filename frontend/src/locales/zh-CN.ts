@@ -753,4 +753,21 @@ export default {
     expand: '放大',
     shrink: '缩小',
   },
+  catalog: {
+    tab: '常用',
+    filterPlaceholder: '按名称或描述筛选…',
+    categories: {
+      all: '全部',
+      database: '数据库',
+      mq: '消息队列',
+      web: 'Web 与工具',
+      devops: '开发运维',
+      app: '应用',
+    },
+    deploy: '部署',
+    deployTip: '使用推荐配置创建容器',
+    empty: '没有匹配的常用软件',
+    passwordGenerated: '已生成随机密码，请在创建容器前复制保存',
+    copyCommand: '复制拉取命令',
+  },
 }

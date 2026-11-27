@@ -23,7 +23,7 @@ interface PersistedState {
   items: SearchItem[]
   tag: string
   source: PullSource
-  activeTab: 'search' | 'favorites'
+  activeTab: 'search' | 'catalog' | 'favorites'
 }
 
 // 收藏列表条目本身也带仓库/域名/标签字段，直接复用 ImageRefSource 即可
@@ -43,7 +43,7 @@ export const useImageSearchStore = defineStore('imageSearch', () => {
   const error = ref<string | null>(null)
   const tag = ref('latest')
   const source = ref<PullSource>('mirror')
-  const activeTab = ref<'search' | 'favorites'>('search')
+  const activeTab = ref<'search' | 'catalog' | 'favorites'>('search')
   const favorites = ref<ImageFavoriteRecord[]>([])
   const favoritesLoading = ref(false)
   const pullingKeys = ref<Set<string>>(new Set())
@@ -66,7 +66,7 @@ export const useImageSearchStore = defineStore('imageSearch', () => {
       }
       if (typeof saved.tag === 'string') tag.value = saved.tag
       if (saved.source === 'mirror' || saved.source === 'origin') source.value = saved.source
-      if (saved.activeTab === 'search' || saved.activeTab === 'favorites') activeTab.value = saved.activeTab
+      if (saved.activeTab === 'search' || saved.activeTab === 'catalog' || saved.activeTab === 'favorites') activeTab.value = saved.activeTab
     }
   } catch {
     // sessionStorage 不可用或数据损坏时忽略

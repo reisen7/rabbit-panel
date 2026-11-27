@@ -753,4 +753,21 @@ export default {
     expand: 'Expand',
     shrink: 'Shrink',
   },
+  catalog: {
+    tab: 'Apps',
+    filterPlaceholder: 'Filter by name or description…',
+    categories: {
+      all: 'All',
+      database: 'Databases',
+      mq: 'Messaging',
+      web: 'Web & Tools',
+      devops: 'DevOps',
+      app: 'Apps',
+    },
+    deploy: 'Deploy',
+    deployTip: 'Create a container with recommended settings',
+    empty: 'No matching apps',
+    passwordGenerated: 'A random password was generated — copy it before creating the container',
+    copyCommand: 'Copy pull command',
+  },
 }

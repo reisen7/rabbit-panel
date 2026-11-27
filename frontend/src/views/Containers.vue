@@ -232,10 +232,20 @@ watch(
   }
 )
 
+watch(
+  () => containerCreateStore.prefillSeq,
+  () => {
+    showCreateDialog.value = true
+  }
+)
+
 useNodeRefresh(() => containerStore.fetchContainers())
 
 onMounted(async () => {
   if (containerCreateStore.restorePending) {
+    showCreateDialog.value = true
+  }
+  if (containerCreateStore.pendingPrefill) {
     showCreateDialog.value = true
   }
   await containerStore.fetchContainers()

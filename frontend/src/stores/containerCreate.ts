@@ -25,6 +25,8 @@ export const useContainerCreateStore = defineStore('containerCreate', () => {
   const restorePending = ref(false)
   const createdSignal = ref(0)
   const lastForm = ref<ContainerCreateForm | null>(null)
+  const pendingPrefill = ref<ContainerCreateForm | null>(null)
+  const prefillSeq = ref(0)
   let abortController: AbortController | null = null
 
   const hasTaskState = computed(() => loading.value || isStreaming.value || streamLogs.value.length > 0)
@@ -86,6 +88,17 @@ export const useContainerCreateStore = defineStore('containerCreate', () => {
     return pending
   }
 
+  function requestPrefill(form: ContainerCreateForm): void {
+    pendingPrefill.value = JSON.parse(JSON.stringify(form)) as ContainerCreateForm
+    prefillSeq.value++
+  }
+
+  function consumePrefill(): ContainerCreateForm | null {
+    const pending = pendingPrefill.value
+    pendingPrefill.value = null
+    return pending
+  }
+
   function dismiss(): void {
     minimized.value = false
     streamLogs.value = []
@@ -105,6 +118,8 @@ export const useContainerCreateStore = defineStore('containerCreate', () => {
     restorePending,
     createdSignal,
     lastForm,
+    pendingPrefill,
+    prefillSeq,
     hasTaskState,
     latestLogLine,
     start,
@@ -112,6 +127,8 @@ export const useContainerCreateStore = defineStore('containerCreate', () => {
     minimize,
     restore,
     consumeRestore,
+    requestPrefill,
+    consumePrefill,
     dismiss,
     reset,
   }
