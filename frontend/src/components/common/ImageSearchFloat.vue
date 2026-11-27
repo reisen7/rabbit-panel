@@ -27,7 +27,14 @@ const toast = useToast()
 const store = useImageSearchStore()
 const floatWindows = useFloatWindowsStore()
 
-const isOpen = ref(false)
+// 展开状态由 floatWindows store 派生，侧边栏入口可直接打开本窗口
+const isOpen = computed({
+  get: () => floatWindows.active === 'imageSearch',
+  set: (v) => {
+    if (v) floatWindows.active = 'imageSearch'
+    else if (floatWindows.active === 'imageSearch') floatWindows.active = null
+  },
+})
 const isExpanded = ref(false)
 
 // Reka Tabs 的 modelValue 是普通 string，收窄到 store 的联合类型
@@ -39,19 +46,8 @@ const activeTabModel = computed<'search' | 'favorites'>({
 })
 
 watch(isOpen, (val) => {
-  if (val) {
-    floatWindows.active = 'imageSearch'
-    store.loadFavorites()
-  }
+  if (val) store.loadFavorites()
 })
-
-// 另一个悬浮窗（AI 助手）展开时收起本窗口
-watch(
-  () => floatWindows.active,
-  (val) => {
-    if (val && val !== 'imageSearch' && isOpen.value) isOpen.value = false
-  }
-)
 
 watch(
   () => store.activeTab,
@@ -96,26 +92,13 @@ const copyCommand = async (command: string) => {
 </script>
 
 <template>
-  <div class="fixed right-5 bottom-[5.25rem] z-40">
-    <!-- Floating Button -->
-    <transition name="bounce">
-      <Button
-        v-show="!isOpen"
-        size="icon"
-        class="size-13 rounded-full shadow-lg hover:scale-105 transition-transform"
-        :aria-label="t('imageSearch.title')"
-        @click="isOpen = true"
-      >
-        <PackageSearch class="size-5" />
-      </Button>
-    </transition>
-
+  <div class="fixed left-3 bottom-3 z-40">
     <!-- Search Window -->
     <transition name="chat-popup">
       <div
         v-show="isOpen"
-        class="absolute right-0 bottom-0 flex flex-col rounded-xl border bg-card text-card-foreground shadow-2xl overflow-hidden origin-bottom-right transition-all duration-200"
-        :class="isExpanded ? 'w-[min(52vw,760px)] h-[72vh]' : 'w-[420px] max-w-[calc(100vw-2.5rem)] h-[560px]'"
+        class="absolute left-0 bottom-0 flex flex-col rounded-xl border bg-card text-card-foreground shadow-2xl overflow-hidden origin-bottom-left transition-all duration-200"
+        :class="isExpanded ? 'w-[min(52vw,760px)] h-[72vh]' : 'w-[420px] max-w-[calc(100vw-1.5rem)] h-[560px]'"
       >
         <div class="flex items-center justify-between px-4 py-3 border-b bg-muted/40">
           <div class="flex items-center gap-2 font-semibold text-sm">
@@ -305,18 +288,6 @@ const copyCommand = async (command: string) => {
 </template>
 
 <style scoped>
-.bounce-enter-active {
-  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-.bounce-leave-active {
-  transition: all 0.15s ease-in;
-}
-.bounce-enter-from,
-.bounce-leave-to {
-  transform: scale(0);
-  opacity: 0;
-}
-
 .chat-popup-enter-active,
 .chat-popup-leave-active {
   transition: all 0.2s ease;
