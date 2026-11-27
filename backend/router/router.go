@@ -1896,6 +1896,10 @@ func (r *Router) handleComposeCreate(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
 		return
 	}
+	if err := repository.ValidateComposeProjectName(reqBody.Name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	err := r.app.ComposeService.CreateProject(reqBody.Name, reqBody.Content)
 	if err != nil {
@@ -1908,6 +1912,10 @@ func (r *Router) handleComposeCreate(c *gin.Context) {
 func (r *Router) handleComposeFile(c *gin.Context) {
 	name := c.Query("project")
 	if c.Request.Method == http.MethodGet {
+		if err := repository.ValidateComposeProjectName(name); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		content, err := r.app.ComposeService.GetProjectFile(name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -1926,6 +1934,10 @@ func (r *Router) handleComposeFile(c *gin.Context) {
 		targetProject := name
 		if strings.TrimSpace(targetProject) == "" {
 			targetProject = strings.TrimSpace(reqBody.Project)
+		}
+		if err := repository.ValidateComposeProjectName(targetProject); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
 		}
 		err := r.app.ComposeService.SaveProjectFile(targetProject, reqBody.Content)
 		if err != nil {
@@ -1947,6 +1959,12 @@ func (r *Router) handleComposeAction(c *gin.Context) {
 	}
 	if err := c.ShouldBindJSON(&reqBody); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
+		return
+	}
+	// 必须在写 SSE 响应头之前校验项目名：一旦进入流式响应就无法再改状态码，
+	// 非法名称应得到普通的 400 JSON 而非 SSE 流里的错误事件。
+	if err := repository.ValidateComposeProjectName(reqBody.Project); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -2039,6 +2057,10 @@ func (r *Router) handleComposeDelete(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "请求参数错误"})
 		return
 	}
+	if err := repository.ValidateComposeProjectName(reqBody.Project); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 
 	err := r.app.ComposeService.DeleteProject(reqBody.Project)
 	if err != nil {
@@ -2050,6 +2072,10 @@ func (r *Router) handleComposeDelete(c *gin.Context) {
 
 func (r *Router) handleComposeStatus(c *gin.Context) {
 	name := c.Query("project")
+	if err := repository.ValidateComposeProjectName(name); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
 	status, err := r.app.ComposeService.FetchProjectStatus(name)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

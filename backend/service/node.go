@@ -105,12 +105,19 @@ func validNodeHostname(host string) bool {
 }
 
 // ValidateNodeID 校验节点自报 ID：非空、限长、无空白与控制字符。
+// 节点 ID 是节点 map 的键，出现在 HMAC 令牌消息与 HTTP 头中，
+// 不能携带路径/URL 语义字符（/ \ @ ? # & = %），
+// 避免被用于路径穿越、URL 解析混淆或头/查询串拼接攻击。
+// 冒号、点、横线、下划线与 Unicode 字母仍然合法（如 worker-1、hostname:10001）。
 func ValidateNodeID(id string) error {
 	if strings.TrimSpace(id) == "" {
 		return fmt.Errorf("节点 ID 为空")
 	}
 	if len(id) > 255 {
 		return fmt.Errorf("节点 ID 过长")
+	}
+	if strings.ContainsAny(id, `/\@?#&=%`) {
+		return fmt.Errorf("节点 ID 含非法字符")
 	}
 	for _, r := range id {
 		if r < 0x20 || r == 0x7f || r == ' ' {

@@ -37,12 +37,16 @@ func TestValidateNodeAddress(t *testing.T) {
 }
 
 func TestValidateNodeID(t *testing.T) {
-	for _, id := range []string{"worker-1", "host:3958", "edge_node"} {
+	for _, id := range []string{"worker-1", "host:3958", "edge_node", "worker-1:10001", "node.local:3958", "节点甲"} {
 		if err := ValidateNodeID(id); err != nil {
 			t.Errorf("valid id %q rejected: %v", id, err)
 		}
 	}
-	for _, id := range []string{"", "  ", "has space", "has\nnewline", "has\ttab"} {
+	for _, id := range []string{
+		"", "  ", "has space", "has\nnewline", "has\ttab",
+		// 路径/URL 语义字符：ID 会进入 HMAC 消息与 HTTP 头，必须拒绝
+		"../x", "a/b", `a\b`, "a%2e", "a?x", "a#x", "a@x", "a&x", "a=x",
+	} {
 		if err := ValidateNodeID(id); err == nil {
 			t.Errorf("invalid id %q accepted", id)
 		}
