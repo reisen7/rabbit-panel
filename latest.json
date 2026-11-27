@@ -1,0 +1,30 @@
+{
+  "version": "v2.3.6",
+  "version_number": "2.3.6",
+  "release_url": "https://github.com/reisen7/rabbit-panel/releases/tag/v2.3.6",
+  "release_name": "v2.3.6",
+  "release_notes": "### 安全\n\n- 节点令牌改为带时间戳的 HMAC-SHA256，并用恒定时间比较；令牌 1 小时过期，旧的静态令牌不再被接受。\n- Master 代理请求到节点时剥离用户登录凭证（Authorization / Cookie / token 参数），只附带节点身份；恶意注册的节点拿不到管理员登录态。面板级接口（SSH 凭证、LLM Key、设置、更新）始终只接受用户认证，节点令牌在 Master 上不能做写操作。\n- 节点注册校验自报地址与节点 ID 的格式，并强制注册角色为 worker。AI 助手调用远程节点也改用节点身份，不再自签用户 JWT。\n- AI 助手的停止、重启、删除、清理类操作改为必须在面板里点击确认才会执行，5 分钟未确认自动拒绝；微信等无法确认的渠道直接拒绝并提示去面板操作。\n- 修复 Compose 项目名路径穿越，校验失败统一返回 400；`run/raw` 不再经过 `sh -c`，改为自带分词后直接执行 docker。\n- 前端聊天渲染增加 XSS 消毒；登录态改为 Cookie（SameSite=Lax），不再存放在 localStorage。\n- 登录限流改为按真实客户端 IP 计数（部署在反向代理后通过 `TRUSTED_PROXIES` 配置可信代理），验证码接口同样限流。\n- 修改密码必须校验旧密码（含首次强制改密），新密码至少 8 位。\n\n### 新功能\n\n- 右下角新增「镜像搜索」悬浮窗：基于毫秒镜像（1ms.run）搜索镜像，结果在切换页面或刷新后保留；可复制 `docker pull` 命令，支持毫秒镜像 / 官方源切换、自定义标签、一键拉取到当前节点。\n- 镜像收藏：收藏的镜像连同标签保存在面板数据库，可随时复制命令或直接拉取。\n- 「常用软件」：内置 MySQL、MariaDB、PostgreSQL、MongoDB、RabbitMQ、Nginx、Adminer、phpMyAdmin、Whoami、Gitea、Grafana、Uptime Kuma、Nextcloud、Vaultwarden、Jellyfin 共 15 个，一键预填创建容器对话框；需要密码的条目自动生成随机密码。\n- 镜像管理每行新增「运行」按钮，复用创建容器对话框并预填该镜像。\n\n### 部署\n\n- Master / 单机首次启动自动生成 `JWT_SECRET` / `NODE_SECRET` 并保存到 `./data/secrets.env`（0600），之后每次启动沿用，重启不再掉登录态；密钥不再打印到日志。\n- 启动时自动读取 `./data/secrets.env` 中的 `KEY=VALUE` 作为环境变量，无需 `source`；真实环境变量（含 `docker -e`）优先。\n- `docker-compose.worker.yml` 不再强制要求通过 shell 传入密钥，可直接写入挂载数据目录的 `secrets.env`。\n- README 补齐二进制启动、Worker 启动示例与环境变量说明。\n\n### 修复\n\n- 重建容器保留原有的启动命令、标签、UDP 端口等配置，失败时自动回滚到原容器。\n- 修复 AI 聊天历史取到最早消息而不是最近消息的问题；SSE 输出改用标准 JSON 编码。\n- 容器文件删除的保护路径校验与实际执行路径保持一致；`docker restart` 失败时正确返回错误。\n\n### 升级注意\n\n- **Master 与所有 Worker 必须同时升级到 v2.3.6**：节点令牌格式已变更，新旧版本之间无法互相认证，只升级一端会导致节点离线、无法操作。\n- Worker 的 `JWT_SECRET` / `NODE_SECRET` 仍须与 Master 完全一致。Master 的密钥可在 `./data/secrets.env`（Docker 部署为挂载数据目录下）查看；如果之前显式设置过密钥，沿用原值即可。\n- 登录态从 localStorage 迁移到 Cookie，升级后需要重新登录一次。\n- 部署在反向代理后的面板，如需按真实客户端 IP 限流，请设置 `TRUSTED_PROXIES`（例如 `127.0.0.1`）。\n- 修改密码现在必须输入旧密码，新密码至少 8 位。\n\n**Full Changelog**: https://github.com/reisen7/rabbit-panel/compare/v2.3.5...v2.3.6\n",
+  "published_at": "2026-11-27T08:19:53Z",
+  "docker_image": "reisen7/rabbit-panel",
+  "docker_tag": "latest",
+  "docker_tags": [
+    "v2.3.6",
+    "2.3.6",
+    "latest"
+  ],
+  "assets": {
+    "linux-amd64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/rabbit-panel-linux-amd64-v2.3.6",
+    "linux-arm64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/rabbit-panel-linux-arm64-v2.3.6",
+    "linux-armv7": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/rabbit-panel-linux-armv7-v2.3.6",
+    "windows-amd64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/rabbit-panel-windows-amd64-v2.3.6.exe",
+    "windows-arm64": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/rabbit-panel-windows-arm64-v2.3.6.exe",
+    "sha256sums": "https://github.com/reisen7/rabbit-panel/releases/download/v2.3.6/sha256sums.txt"
+  },
+  "sha256": {
+    "linux-amd64": "c4d3e71588e764c6f611a090f16452b3cbd4b1b3da1d6ecc827c8305d196ad7e",
+    "linux-arm64": "3d98ba1fd83ee4992541287a03d9b576468609a654293ea23cd08bc3a2bb0952",
+    "linux-armv7": "909380a1f0d7d3ef11f727d8e853ad2e5daf7bc9d00392589a94a1e71d741226",
+    "windows-amd64": "9a7600a1a0e66169b36d94c2067ec7abd052ba1781324fc0494689c54f4be8f0",
+    "windows-arm64": "6eb9a238a17210bdc1c6d54af3e3a6c382007e239d138ff6990cff2dacc1c000"
+  }
+}
